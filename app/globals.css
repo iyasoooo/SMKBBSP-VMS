@@ -1,0 +1,233 @@
+@import 'tailwindcss';
+
+/*
+ * Dark mode is class-driven (`<html class="dark">`) rather than
+ * media-driven, because a guard must be able to force the dark, high-contrast
+ * gate screen regardless of the tablet's system setting.
+ */
+@custom-variant dark (&:where(.dark, .dark *));
+
+@theme {
+  /* Brand: a restrained school palette. Deep navy carries the identity,
+     warm white keeps long shifts readable, and the status colours are
+     reserved strictly for meaning - never decoration. */
+  --color-navy-50: #f1f5fb;
+  --color-navy-100: #e0e9f6;
+  --color-navy-200: #c3d4ec;
+  --color-navy-300: #96b4dd;
+  --color-navy-400: #628dc9;
+  --color-navy-500: #3f6db3;
+  --color-navy-600: #2e5496;
+  --color-navy-700: #26437a;
+  --color-navy-800: #1d3564;
+  --color-navy-900: #142748;
+  --color-navy-950: #0b1a33;
+
+  --color-parchment: #fdfbf7;
+
+  --font-sans:
+    ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial,
+    sans-serif;
+  --font-mono: ui-monospace, 'Cascadia Code', 'Source Code Pro', Menlo, Consolas, monospace;
+
+  /* Guard tablet controls must never fall below a 44px touch target. */
+  --spacing-touch: 2.75rem;
+}
+
+/*
+ * Semantic surface tokens. Components reference these instead of raw palette
+ * values so light and dark stay in lockstep and contrast is tuned in one place.
+ */
+@layer base {
+  :root {
+    --surface-page: #f6f7fa;
+    --surface-card: #ffffff;
+    --surface-muted: #eef1f6;
+    --surface-inset: #f8fafc;
+
+    --text-strong: #0b1a33;
+    --text-body: #1f2b41;
+    --text-muted: #5a6b85;
+    --text-inverse: #ffffff;
+
+    --line-soft: #dfe4ed;
+    --line-strong: #c3ccdb;
+
+    --accent: #26437a;
+    --accent-hover: #1d3564;
+    --accent-soft: #e0e9f6;
+    --accent-text: #ffffff;
+
+    --ok: #047857;
+    --ok-soft: #d1fae5;
+    --ok-text: #065f46;
+
+    --warn: #b45309;
+    --warn-soft: #fef3c7;
+    --warn-text: #92400e;
+
+    --danger: #b91c1c;
+    --danger-soft: #fee2e2;
+    --danger-text: #991b1b;
+
+    --info: #1d4ed8;
+    --info-soft: #dbeafe;
+    --info-text: #1e40af;
+
+    --focus-ring: #2563eb;
+  }
+
+  .dark {
+    --surface-page: #0a1526;
+    --surface-card: #101f37;
+    --surface-muted: #16294a;
+    --surface-inset: #0d1c31;
+
+    --text-strong: #f1f5fb;
+    --text-body: #dce5f2;
+    --text-muted: #93a5c0;
+    --text-inverse: #0b1a33;
+
+    --line-soft: #22375c;
+    --line-strong: #33507f;
+
+    --accent: #628dc9;
+    --accent-hover: #96b4dd;
+    --accent-soft: #1d3564;
+    --accent-text: #071021;
+
+    --ok: #34d399;
+    --ok-soft: #06301f;
+    --ok-text: #6ee7b7;
+
+    --warn: #fbbf24;
+    --warn-soft: #38250a;
+    --warn-text: #fcd34d;
+
+    --danger: #f87171;
+    --danger-soft: #3d1111;
+    --danger-text: #fca5a5;
+
+    --info: #60a5fa;
+    --info-soft: #10254a;
+    --info-text: #93c5fd;
+
+    --focus-ring: #7dd3fc;
+  }
+
+  * {
+    border-color: var(--line-soft);
+  }
+
+  html {
+    -webkit-text-size-adjust: 100%;
+  }
+
+  body {
+    background-color: var(--surface-page);
+    color: var(--text-body);
+    font-family: var(--font-sans);
+    -webkit-font-smoothing: antialiased;
+  }
+
+  h1,
+  h2,
+  h3,
+  h4 {
+    color: var(--text-strong);
+    font-weight: 600;
+    letter-spacing: -0.011em;
+  }
+
+  /* A visible, high-contrast focus ring is a hard accessibility requirement;
+     it is never removed, only restyled. */
+  :focus-visible {
+    outline: 2px solid var(--focus-ring);
+    outline-offset: 2px;
+    border-radius: 4px;
+  }
+
+  ::selection {
+    background: var(--accent-soft);
+    color: var(--text-strong);
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.01ms !important;
+      scroll-behavior: auto !important;
+    }
+  }
+}
+
+@layer utilities {
+  .surface-card {
+    background-color: var(--surface-card);
+    border: 1px solid var(--line-soft);
+  }
+
+  .text-muted {
+    color: var(--text-muted);
+  }
+
+  /* Screen-reader-only text that becomes visible on keyboard focus. */
+  .skip-link {
+    position: absolute;
+    left: -9999px;
+    top: 0;
+    z-index: 100;
+  }
+  .skip-link:focus {
+    left: 8px;
+    top: 8px;
+    padding: 10px 16px;
+    background: var(--accent);
+    color: var(--accent-text);
+    border-radius: 6px;
+  }
+}
+
+/*
+ * Print rules.
+ *
+ * Badges and the emergency list are printed on ordinary school A4 paper, so
+ * navigation, buttons and background fills must disappear entirely and text
+ * must fall back to black on white.
+ */
+@media print {
+  @page {
+    size: A4;
+    margin: 12mm;
+  }
+
+  .no-print,
+  nav,
+  header[data-app-header],
+  footer[data-app-footer] {
+    display: none !important;
+  }
+
+  body {
+    background: #fff !important;
+    color: #000 !important;
+  }
+
+  .print-page {
+    break-after: page;
+  }
+  .print-page:last-child {
+    break-after: auto;
+  }
+
+  .print-avoid-break {
+    break-inside: avoid;
+  }
+
+  a[href]::after {
+    content: '';
+  }
+}

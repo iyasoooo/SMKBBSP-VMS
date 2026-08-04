@@ -1,0 +1,171 @@
+import type { Metadata } from 'next';
+import { Role } from '@prisma/client';
+import { prisma } from '@/lib/db/prisma';
+import { requireAdmin } from '@/lib/auth/authorize';
+import { resetPasswordAction, setUserActiveAction } from '@/app/admin/actions';
+import { formatDateTime } from '@/lib/time';
+import { Alert, Card, PageHeading, Pill, TableScroll } from '@/components/ui/surface';
+import { ActionForm } from '@/components/action-form';
+import { Input } from '@/components/ui/field';
+import { CreateUserForm } from './create-form';
+
+export const metadata: Metadata = { title: 'Staff accounts' };
+export const dynamic = 'force-dynamic';
+
+const ROLE_TONE = {
+  ADMIN: 'danger',
+  GUARD: 'info',
+  TEACHER: 'success',
+} as const;
+
+export default async function UsersPage() {
+  const currentUser = await requireAdmin('/admin/users');
+
+  const [users, activeAdminCount] = await Promise.all([
+    prisma.user.findMany({
+      include: {
+        teacherProfile: { select: { department: true, staffCode: true, isAcceptingVisits: true } },
+        _count: { select: { sessions: { where: { revokedAt: null } } } },
+      },
+      orderBy: [{ role: 'asc' }, { name: 'asc' }],
+    }),
+    prisma.user.count({ where: { role: Role.ADMIN, isActive: true } }),
+  ]);
+
+  return (
+    <>
+      <PageHeading
+        title="Staff accounts"
+        description="Deactivating an account or resetting its password ends all of its active sessions immediately."
+      />
+
+      {activeAdminCount === 1 ? (
+        <div className="mb-5">
+          <Alert tone="warning" title="Only one active administrator">
+            The last active administrator cannot be deactivated, because doing so would lock
+            everyone out of user management. Create a second administrator before making changes.
+          </Alert>
+        </div>
+      ) : null}
+
+      <div className="grid gap-5 lg:grid-cols-[1.6fr_1fr]">
+        <Card>
+          <div className="border-b border-[var(--line-soft)] px-5 py-4">
+            <h2 className="text-base font-semibold">Accounts</h2>
+          </div>
+
+          <TableScroll>
+            <table className="w-full text-left text-sm">
+              <caption className="sr-only">Staff accounts</caption>
+              <thead className="border-b border-[var(--line-soft)] text-xs tracking-wide text-muted uppercase">
+                <tr>
+                  <th scope="col" className="px-4 py-3 font-medium">Name</th>
+                  <th scope="col" className="px-4 py-3 font-medium">Role</th>
+                  <th scope="col" className="px-4 py-3 font-medium">Last login</th>
+                  <th scope="col" className="px-4 py-3 font-medium">Sessions</th>
+                  <th scope="col" className="px-4 py-3 font-medium">Status</th>
+                  <th scope="col" className="px-4 py-3 font-medium">
+                    <span className="sr-only">Actions</span>
+                  </th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-[var(--line-soft)]">
+                {users.map((user) => {
+                  const isSelf = user.id === currentUser.id;
+                  const isLastAdmin =
+                    user.role === Role.ADMIN && user.isActive && activeAdminCount === 1;
+
+                  return (
+                    <tr key={user.id} className="align-top">
+                      <td className="px-4 py-3">
+                        <span className="block font-medium text-[var(--text-strong)]">
+                          {user.name}
+                          {isSelf ? <span className="ml-1 text-xs text-muted">(you)</span> : null}
+                        </span>
+                        <span className="block text-xs text-muted">{user.email}</span>
+                        {user.teacherProfile ? (
+                          <span className="block text-xs text-muted">
+                            {user.teacherProfile.staffCode} &middot;{' '}
+                            {user.teacherProfile.department}
+                            {user.teacherProfile.isAcceptingVisits ? '' : ' · not accepting visits'}
+                          </span>
+                        ) : null}
+                      </td>
+                      <td className="px-4 py-3">
+                        <Pill tone={ROLE_TONE[user.role]}>{user.role}</Pill>
+                      </td>
+                      <td className="px-4 py-3 text-xs whitespace-nowrap">
+                        {user.lastLoginAt ? formatDateTime(user.lastLoginAt) : 'Never'}
+                      </td>
+                      <td className="px-4 py-3 text-center tabular-nums">
+                        {user._count.sessions}
+                      </td>
+                      <td className="px-4 py-3">
+                        <Pill tone={user.isActive ? 'success' : 'neutral'}>
+                          {user.isActive ? 'Active' : 'Disabled'}
+                        </Pill>
+                      </td>
+                      <td className="px-4 py-3">
+                        <div className="flex flex-col gap-3">
+                          {user.isActive ? (
+                            isLastAdmin ? (
+                              <span className="text-xs text-muted">
+                                Last active administrator
+                              </span>
+                            ) : (
+                              <ActionForm
+                                action={setUserActiveAction}
+                                hidden={{ userId: user.id, isActive: 'false' }}
+                                submitLabel="Deactivate"
+                                variant="secondary"
+                                confirm={`Deactivate ${user.name}? Their active sessions will end immediately.`}
+                              />
+                            )
+                          ) : (
+                            <ActionForm
+                              action={setUserActiveAction}
+                              hidden={{ userId: user.id, isActive: 'true' }}
+                              submitLabel="Reactivate"
+                              variant="secondary"
+                              confirm={`Reactivate ${user.name}?`}
+                            />
+                          )}
+
+                          <ActionForm
+                            action={resetPasswordAction}
+                            hidden={{ userId: user.id }}
+                            submitLabel="Reset password"
+                            variant="ghost"
+                            confirm={`Reset the password for ${user.name}? All of their sessions will end.`}
+                            successMessage="Password reset. Give the new password to the user directly."
+                            className="flex flex-col gap-2"
+                          >
+                            <Input
+                              name="newPassword"
+                              type="text"
+                              minLength={10}
+                              maxLength={200}
+                              required
+                              placeholder="New password (min 10)"
+                              aria-label={`New password for ${user.name}`}
+                              className="h-9 text-xs"
+                            />
+                          </ActionForm>
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </TableScroll>
+        </Card>
+
+        <Card className="p-5">
+          <h2 className="text-base font-semibold">Create an account</h2>
+          <CreateUserForm />
+        </Card>
+      </div>
+    </>
+  );
+}

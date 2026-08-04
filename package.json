@@ -1,0 +1,73 @@
+{
+  "name": "smkbbsp-visitorpass",
+  "version": "1.0.0",
+  "private": true,
+  "description": "SMKBBSP VisitorPass - Smart Visitor Management System with QR Code and Appointment-Based Access Control",
+  "engines": {
+    "node": ">=22.0.0"
+  },
+  "scripts": {
+    "dev": "next dev",
+    "build": "prisma generate && next build",
+    "start": "next start",
+    "lint": "eslint .",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:e2e": "tsx scripts/prepare-e2e-db.ts && playwright test",
+    "db:migrate": "prisma migrate dev",
+    "db:deploy": "prisma migrate deploy",
+    "db:seed": "tsx prisma/seed.ts",
+    "db:reset": "prisma migrate reset --force",
+    "db:studio": "prisma studio",
+    "db:up": "docker compose up -d",
+    "db:down": "docker compose down",
+    "local:pg": "tsx scripts/local-postgres.ts",
+    "local:mail": "tsx scripts/local-mail.ts",
+    "postinstall": "prisma generate",
+    "ocr:assets": "tsx scripts/sync-ocr-assets.ts"
+  },
+  "prisma": {
+    "seed": "tsx prisma/seed.ts"
+  },
+  "dependencies": {
+    "@prisma/client": "^6.19.3",
+    "@zxing/browser": "^0.1.5",
+    "@zxing/library": "^0.21.3",
+    "clsx": "^2.1.1",
+    "exceljs": "^4.4.0",
+    "next": "^15.5.22",
+    "nodemailer": "^9.0.3",
+    "pdf-lib": "^1.17.1",
+    "qrcode": "^1.5.4",
+    "react": "^19.2.8",
+    "react-dom": "^19.2.8",
+    "recharts": "^3.10.1",
+    "tesseract.js": "^6.0.1",
+    "zod": "^4.4.3"
+  },
+  "devDependencies": {
+    "@eslint/eslintrc": "^3.3.6",
+    "@playwright/test": "^1.62.1",
+    "@tailwindcss/postcss": "^4.3.3",
+    "@types/mailparser": "^3.4.6",
+    "@types/node": "^22.20.1",
+    "@types/nodemailer": "^7.0.12",
+    "@types/qrcode": "^1.5.6",
+    "@types/react": "^19.2.18",
+    "@types/react-dom": "^19.2.4",
+    "@types/smtp-server": "^3.5.13",
+    "embedded-postgres": "^16.14.0-beta.17",
+    "eslint": "^9.39.5",
+    "eslint-config-next": "^15.5.22",
+    "mailparser": "^3.9.14",
+    "postcss": "^8.5.25",
+    "prisma": "^6.19.3",
+    "smtp-server": "^3.19.2",
+    "tailwindcss": "^4.3.3",
+    "tsx": "^4.23.5",
+    "typescript": "^5.9.3",
+    "vite-tsconfig-paths": "^5.1.4",
+    "vitest": "^3.2.7"
+  }
+}
