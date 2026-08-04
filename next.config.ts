@@ -1,46 +1,11 @@
 import type { NextConfig } from 'next';
 
-/**
- * Security headers applied to every response.
- *
- * The CSP is intentionally explicit rather than permissive. `'unsafe-inline'`
- * is required for styles because Next.js injects inline style tags for
- * streaming and Tailwind's runtime layer; scripts avoid it by relying on
- * Next.js nonce-free bundling of first-party code only. No third-party origin
- * is allowed: fonts, scripts, and images are all first-party or data URIs
- * (QR codes are rendered as data URIs at presentation time).
- */
-const contentSecurityPolicy = [
-  "default-src 'self'",
-  /*
-   * `'wasm-unsafe-eval'` is required by the optional IC OCR panel, which
-   * compiles the Tesseract WASM module in the browser. It is far narrower than
-   * `'unsafe-eval'`: it permits WebAssembly compilation only and still forbids
-   * `eval()` and `new Function()` on JavaScript.
-   *
-   * `blob:` is needed because tesseract.js starts its worker from a Blob URL.
-   * Both the worker script and the WASM binary are served from this origin
-   * (see `public/ocr/`), so no third-party script origin is allowed.
-   */
-  process.env.NODE_ENV === 'production'
-    ? "script-src 'self' 'wasm-unsafe-eval' blob:"
-    : "script-src 'self' 'unsafe-eval' 'unsafe-inline' blob:",
-  "worker-src 'self' blob:",
-  "style-src 'self' 'unsafe-inline'",
-  "img-src 'self' data: blob:",
-  "font-src 'self' data:",
-  // blob: + mediastream are needed by the guard camera QR scanner.
-  "media-src 'self' blob: mediastream:",
-  "connect-src 'self'",
-  "object-src 'none'",
-  "base-uri 'self'",
-  "form-action 'self'",
-  "frame-ancestors 'none'",
-  'upgrade-insecure-requests',
-].join('; ');
-
 const securityHeaders = [
-  { key: 'Content-Security-Policy', value: contentSecurityPolicy },
+  // Content-Security-Policy is deliberately NOT set here. It is issued
+  // per-request by `middleware.ts` so it can carry a fresh nonce; a static
+  // header cannot. Declaring it in both places would make the browser enforce
+  // the intersection of the two, which would block Next.js's own inline
+  // scripts again and undo the fix.
   { key: 'X-Content-Type-Options', value: 'nosniff' },
   { key: 'X-Frame-Options', value: 'DENY' },
   { key: 'Referrer-Policy', value: 'strict-origin-when-cross-origin' },
