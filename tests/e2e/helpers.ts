@@ -1,4 +1,5 @@
 import { expect, type Page } from '@playwright/test';
+import { PrismaClient } from '@prisma/client';
 
 /** Demo credentials created by the seed. Development-only values. */
 export const ACCOUNTS = {
@@ -7,8 +8,32 @@ export const ACCOUNTS = {
   teacher: { email: 'teacher@smkbbsp.test', password: 'Teacher#Demo2025' },
 } as const;
 
+/**
+ * Clear the database-backed login rate limiter.
+ *
+ * The suite signs the same three accounts in and out well over twenty times
+ * across its two projects, which legitimately exceeds the production limit of
+ * eight attempts per five minutes per address. That is the limiter behaving
+ * correctly - the *tests* are the unusual client - so the counter is reset here
+ * rather than by loosening the control the application ships with.
+ *
+ * A dedicated client is opened and closed per call: Playwright workers are
+ * separate processes from the application under test, so they cannot share its
+ * connection pool.
+ */
+async function clearLoginRateLimit(): Promise<void> {
+  const prisma = new PrismaClient();
+  try {
+    await prisma.rateLimitCounter.deleteMany({ where: { bucket: { startsWith: 'login:' } } });
+  } finally {
+    await prisma.$disconnect();
+  }
+}
+
 export async function login(page: Page, account: keyof typeof ACCOUNTS): Promise<void> {
   const { email, password } = ACCOUNTS[account];
+
+  await clearLoginRateLimit();
 
   await page.goto('/login');
   await page.getByLabel('Email address').fill(email);

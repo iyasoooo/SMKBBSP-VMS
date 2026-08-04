@@ -17,6 +17,7 @@ import { normalizeEmail, normalizeName, normalizePhone } from '@/lib/domain/cont
 import { checkBlacklist } from '@/lib/domain/blacklist';
 import { getSettings, type SchoolSettings } from '@/lib/domain/settings';
 import { queueEmail } from '@/lib/email/outbox';
+import { queueInAppNotification } from '@/lib/domain/in-app-notifications';
 import { recordAudit } from '@/lib/audit';
 import { AUDIT_ACTIONS, PUBLIC_TOKEN_TRAILING_DAYS } from '@/lib/constants';
 import {
@@ -337,7 +338,7 @@ export async function createAppointmentRequest(
       // because a review outcome may end with the request never reaching them.
       const admins = await tx.user.findMany({
         where: { role: Role.ADMIN, isActive: true },
-        select: { email: true },
+        select: { id: true, email: true },
       });
 
       for (const admin of admins) {
@@ -356,6 +357,19 @@ export async function createAppointmentRequest(
             },
             tx,
           ),
+        );
+
+        // In-app copy, so an administrator already signed in sees it without
+        // checking their inbox. No reason or blacklist detail is included.
+        await queueInAppNotification(
+          {
+            userId: admin.id,
+            type: 'admin.review_required',
+            title: 'A visit request needs review',
+            body: `Reference ${referenceNumber}, requested for ${scheduledAt}.`,
+            link: `/admin/appointments/${appointment.id}`,
+          },
+          tx,
         );
       }
     } else {
@@ -379,6 +393,17 @@ export async function createAppointmentRequest(
           },
           tx,
         ),
+      );
+
+      await queueInAppNotification(
+        {
+          userId: teacher.id,
+          type: 'teacher.new_request',
+          title: 'New visit request awaiting your decision',
+          body: `${fullName} has asked to meet you on ${scheduledAt}.`,
+          link: `/teacher/requests/${appointment.id}`,
+        },
+        tx,
       );
     }
 

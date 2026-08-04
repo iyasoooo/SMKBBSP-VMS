@@ -1,5 +1,11 @@
 import { afterAll, beforeEach, describe, expect, it } from 'vitest';
-import { AppointmentStatus, BlacklistStatus, IdentityType, MatchPolicy } from '@prisma/client';
+import {
+  AppointmentStatus,
+  BlacklistStatus,
+  IdentityType,
+  MatchPolicy,
+  NotificationChannel,
+} from '@prisma/client';
 import {
   createTestVisitor,
   nextSchoolSlot,
@@ -70,11 +76,24 @@ describe('createAppointmentRequest', () => {
     expect(appointment?.visitor.phone).toBe('+60123456789');
     expect(appointment?.visitor.email).toBe('nurul.huda@contoh.test');
 
-    const notifications = await testDb.notification.findMany({ orderBy: { type: 'asc' } });
-    expect(notifications.map((n) => n.type)).toEqual([
+    // Two emails: the visitor acknowledgement and the teacher's notification.
+    const emails = await testDb.notification.findMany({
+      where: { channel: NotificationChannel.EMAIL },
+      orderBy: { type: 'asc' },
+    });
+    expect(emails.map((n) => n.type)).toEqual([
       'teacher.new_request',
       'visitor.request_received',
     ]);
+
+    // Plus an in-app copy for the teacher, so a signed-in host sees it without
+    // checking their inbox. It belongs to the host and starts unread.
+    const inApp = await testDb.notification.findMany({
+      where: { channel: NotificationChannel.IN_APP },
+    });
+    expect(inApp).toHaveLength(1);
+    expect(inApp[0]?.userId).toBe(fixtures.teacher.id);
+    expect(inApp[0]?.readAt).toBeNull();
   });
 
   it('AT-009 / AT-027: persists no plaintext identity and only a token hash', async () => {

@@ -154,6 +154,7 @@ model User {
   blacklistCreated     BlacklistEntry[] @relation("BlacklistCreatedBy")
   blacklistReviewed    BlacklistEntry[] @relation("BlacklistReviewedBy")
   credentialsRevoked   QrCredential[]   @relation("CredentialRevokedBy")
+  notifications        Notification[]
 
   @@index([role, isActive])
   @@map("users")
@@ -463,10 +464,19 @@ model Notification {
   id          String              @id @default(cuid())
   type        String
   channel     NotificationChannel @default(EMAIL)
+  /// Email address for EMAIL, or a short label for IN_APP.
   recipient   String
   templateKey String
   /// Render inputs only. Must never contain a raw identity value or raw token.
   payload     Json
+
+  /// Set for IN_APP notifications, which belong to a specific staff member.
+  /// Null for EMAIL, whose audience is identified by `recipient`.
+  userId String?
+  /// When the owning user marked it read. Null means unread.
+  readAt DateTime?
+  /// Where selecting the notification should take the user.
+  link   String?
 
   status        NotificationStatus @default(PENDING)
   attempts      Int                @default(0)
@@ -476,8 +486,11 @@ model Notification {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
+  user User? @relation(fields: [userId], references: [id], onDelete: Cascade)
+
   @@index([status, createdAt])
   @@index([type])
+  @@index([userId, readAt, createdAt])
   @@map("notifications")
 }
 
