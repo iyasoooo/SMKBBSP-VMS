@@ -786,12 +786,23 @@ async function main(): Promise<void> {
     `  totals: ${counts.appointments} appointments, ${counts.visits} visits, ${counts.credentials} live passes`,
   );
 
-  console.log('\nDone. Demo accounts (local development only):');
-  console.log('  admin@smkbbsp.test    /  ' + (process.env.SEED_ADMIN_PASSWORD ?? 'Admin#Demo2025'));
-  console.log('  guard@smkbbsp.test    /  ' + (process.env.SEED_GUARD_PASSWORD ?? 'Guard#Demo2025'));
-  console.log(
-    '  teacher@smkbbsp.test  /  ' + (process.env.SEED_TEACHER_PASSWORD ?? 'Teacher#Demo2025'),
-  );
+  // Passwords are printed for local convenience only. On CI the same output
+  // would be written into a downloadable build log, which is a habit worth not
+  // having even for demonstration credentials.
+  if (process.env.CI === 'true') {
+    console.log('\nDone. Demo accounts seeded; passwords not printed on CI.');
+  } else {
+    console.log('\nDone. Demo accounts (local development only):');
+    console.log(
+      '  admin@smkbbsp.test    /  ' + (process.env.SEED_ADMIN_PASSWORD ?? 'Admin#Demo2025'),
+    );
+    console.log(
+      '  guard@smkbbsp.test    /  ' + (process.env.SEED_GUARD_PASSWORD ?? 'Guard#Demo2025'),
+    );
+    console.log(
+      '  teacher@smkbbsp.test  /  ' + (process.env.SEED_TEACHER_PASSWORD ?? 'Teacher#Demo2025'),
+    );
+  }
 }
 
 main()
