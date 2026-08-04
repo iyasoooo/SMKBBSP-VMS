@@ -55,10 +55,23 @@ export default defineConfig({
   ],
 
   webServer: {
-    command: 'npm run dev -- --port 3100',
+    /*
+     * A production build, not `next dev`.
+     *
+     * The dev server compiles each route on first request. Once the optional
+     * OCR panel was added, that first compile pulled in a multi-megabyte WASM
+     * module and pushed the initial navigation past the test's timeout, so the
+     * suite failed on whichever test happened to hit a cold route first -
+     * failures that had nothing to do with the behaviour under test.
+     *
+     * Building once up front removes that variable entirely and exercises the
+     * same output a demonstration would run.
+     */
+    command: 'npm run build && npm run start -- --port 3100',
     url: BASE_URL,
     reuseExistingServer: !process.env.CI,
-    timeout: 120_000,
+    // Generous: this now includes a full production build.
+    timeout: 300_000,
     env: {
       DATABASE_URL: E2E_DATABASE_URL,
       APP_URL: BASE_URL,
