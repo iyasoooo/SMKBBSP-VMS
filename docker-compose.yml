@@ -1,0 +1,52 @@
+# Local development infrastructure for SMKBBSP VisitorPass.
+#
+#   npm run db:up     start PostgreSQL 16 + Mailpit
+#   npm run db:down   stop them
+#
+# Nothing here is a production deployment topology, and the named volume is
+# NOT a backup. See README "Backup and restore" for pg_dump instructions.
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: smkbbsp_postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: visitorpass
+      POSTGRES_PASSWORD: visitorpass_local_dev
+      POSTGRES_DB: visitorpass
+      # Deterministic collation so ORDER BY matches across machines.
+      POSTGRES_INITDB_ARGS: '--encoding=UTF8 --locale=C'
+      TZ: UTC
+    ports:
+      - '5432:5432'
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U visitorpass -d visitorpass']
+      interval: 5s
+      timeout: 5s
+      retries: 12
+      start_period: 10s
+
+  mailpit:
+    image: axllent/mailpit:latest
+    container_name: smkbbsp_mailpit
+    restart: unless-stopped
+    environment:
+      MP_SMTP_AUTH_ACCEPT_ANY: 1
+      MP_SMTP_AUTH_ALLOW_INSECURE: 1
+      MP_MAX_MESSAGES: 5000
+    ports:
+      - '1025:1025' # SMTP
+      - '8025:8025' # web UI  ->  http://localhost:8025
+    healthcheck:
+      test: ['CMD', 'wget', '-qO-', 'http://localhost:8025/readyz']
+      interval: 5s
+      timeout: 5s
+      retries: 12
+      start_period: 5s
+
+volumes:
+  postgres_data:
+    name: smkbbsp_postgres_data

@@ -1,18 +1,38 @@
 # Dependencies
 node_modules/
 vendor/
+.pnp
+.pnp.js
 
-# Environment / secrets
+# Environment / secrets - never commit real values
 .env
 .env.local
 .env.*.local
+!.env.example
 *.pem
 *.key
+
+# Next.js
+.next/
+next-env.d.ts
 
 # Build output
 dist/
 build/
 out/
+
+# Local runtime state (embedded postgres data dir, captured mail)
+.local/
+
+# Testing
+coverage/
+playwright-report/
+test-results/
+blob-report/
+.playwright/
+
+# Generated export artifacts
+tmp/
 
 # Logs
 *.log
@@ -28,3 +48,6 @@ Desktop.ini
 .vscode/
 .idea/
 *.swp
+
+# TypeScript
+*.tsbuildinfo
