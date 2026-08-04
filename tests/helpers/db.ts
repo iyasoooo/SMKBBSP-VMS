@@ -1,8 +1,26 @@
-import { IdentityType, PrismaClient, Role, type Destination, type User, type VisitType } from '@prisma/client';
+import {
+  AppointmentSource,
+  AppointmentStatus,
+  IdentityType,
+  PrismaClient,
+  Role,
+  VisitStatus,
+  type Destination,
+  type User,
+  type VisitType,
+} from '@prisma/client';
 import { buildIdentityFields } from '@/lib/crypto/identity';
 import { hashPassword } from '@/lib/crypto/password';
+import {
+  deriveFallbackCode,
+  generateToken,
+  hashFallbackCode,
+  hashToken,
+} from '@/lib/crypto/tokens';
+import { allocateBadgeNumber } from '@/lib/domain/badges';
 import { ensureSettingDefaults } from '@/lib/domain/settings';
 import { CONSENT_VERSION } from '@/lib/constants';
+import { toIsoDayString } from '@/lib/time';
 
 /**
  * Integration-test database helpers.
@@ -142,6 +160,75 @@ export async function createTestVisitor(options: {
       consentedAt: new Date(),
     },
   });
+}
+
+/**
+ * An appointment already in its approved state, with a live pass.
+ *
+ * Built directly rather than by driving the public form and the approval
+ * service, so tests about what happens *after* approval are not coupled to how
+ * approval got there. Returns the raw token, which production code never
+ * stores, so a test can assert that rotating it breaks the old link.
+ */
+export async function createApprovedAppointment(
+  fixtures: BaseFixtures,
+  options: { visitorEmail?: string | null } = {},
+): Promise<{ appointmentId: string; visitId: string; rawToken: string; fallbackCode: string }> {
+  const visitor = await createTestVisitor({
+    email: options.visitorEmail === undefined ? 'visitor@contoh.test' : options.visitorEmail,
+  });
+
+  const rawToken = generateToken();
+  const tokenHash = hashToken(rawToken);
+  const fallbackCode = deriveFallbackCode(tokenHash);
+
+  const start = new Date(Date.now() + 2 * 60 * 60 * 1000);
+  const end = new Date(start.getTime() + 30 * 60_000);
+
+  const appointment = await testDb.appointment.create({
+    data: {
+      referenceNumber: `VP-TEST-${Math.random().toString(36).slice(2, 6).toUpperCase()}`,
+      source: AppointmentSource.ONLINE,
+      visitorId: visitor.id,
+      teacherId: fixtures.teacher.id,
+      destinationId: fixtures.destination.id,
+      visitTypeId: fixtures.visitType.id,
+      scheduledStart: start,
+      scheduledEnd: end,
+      purpose: 'Integration test appointment',
+      partySize: 1,
+      status: AppointmentStatus.APPROVED,
+      decidedAt: new Date(),
+      decidedById: fixtures.teacher.id,
+      publicTokenHash: tokenHash,
+      publicTokenExpiresAt: new Date(end.getTime() + 7 * 24 * 60 * 60 * 1000),
+    },
+  });
+
+  await testDb.qrCredential.create({
+    data: {
+      appointmentId: appointment.id,
+      tokenHash,
+      fallbackCodeHash: hashFallbackCode(fallbackCode),
+      validFrom: new Date(start.getTime() - 30 * 60_000),
+      expiresAt: new Date(end.getTime() + 30 * 60_000),
+    },
+  });
+
+  const visit = await testDb.visit.create({
+    data: {
+      appointmentId: appointment.id,
+      visitorId: visitor.id,
+      teacherId: fixtures.teacher.id,
+      destinationId: fixtures.destination.id,
+      status: VisitStatus.EXPECTED,
+      badgeNumber: await allocateBadgeNumber(testDb, 'V', toIsoDayString(start)),
+      expectedStart: start,
+      expectedEnd: end,
+    },
+  });
+
+  return { appointmentId: appointment.id, visitId: visit.id, rawToken, fallbackCode };
 }
 
 /**

@@ -23,6 +23,11 @@ export interface SafeVisitor {
   identityMasked: string;
   emailMasked: string;
   phoneMasked: string;
+  /**
+   * Whether a contactable email exists, without disclosing the address.
+   * Lets a screen warn that a reissued pass cannot be delivered.
+   */
+  hasEmail: boolean;
   /** Present only where an operational need exists (host arrival contact). */
   category: string;
 }
@@ -40,6 +45,7 @@ export function toSafeVisitor(visitor: VisitorLike): SafeVisitor {
     identityMasked: maskIdentity(visitor.identityType, visitor.identityLast4),
     emailMasked: maskEmail(visitor.email),
     phoneMasked: maskPhone(visitor.phone),
+    hasEmail: Boolean(visitor.email),
     category: visitor.visitorCategory,
   };
 }

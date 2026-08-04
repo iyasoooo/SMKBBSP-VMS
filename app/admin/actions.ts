@@ -17,6 +17,7 @@ import {
   setUserActive,
 } from '@/lib/domain/admin';
 import { approveAppointment, DecisionError } from '@/lib/domain/decisions';
+import { CredentialError, reissuePass, revokePass } from '@/lib/domain/credentials';
 import {
   SETTING_DEFINITIONS,
   validateSettingValue,
@@ -37,6 +38,7 @@ function handle(error: unknown, fallbackMessage: string): ActionResult<never> {
   if (error instanceof AuthorizationError) return fail(error.message);
   if (error instanceof AdminError) return fail(error.message, { code: error.code });
   if (error instanceof DecisionError) return fail(error.message, { code: error.code });
+  if (error instanceof CredentialError) return fail(error.message, { code: error.code });
   console.error('[admin] action failed', error instanceof Error ? error.message : error);
   return fail(fallbackMessage);
 }
@@ -481,6 +483,58 @@ export async function retryNotificationAction(
     return delivered ? ok() : fail('Delivery failed again. Check that the mail server is running.');
   } catch (error) {
     return handle(error, 'The retry could not be completed.');
+  }
+}
+
+/**
+ * Revoke a visitor's active pass without replacing it.
+ *
+ * Kept separate from reissue so the destructive half can be used on its own -
+ * for a pass that was forwarded to someone else, the right response is to kill
+ * it immediately and decide about a replacement afterwards.
+ */
+export async function revokePassAction(
+  _previous: ActionResult<undefined> | null,
+  formData: FormData,
+): Promise<ActionResult<undefined>> {
+  try {
+    const user = await admin();
+    const appointmentId = String(formData.get('appointmentId') ?? '');
+    if (!appointmentId) return fail('That appointment could not be found.');
+
+    await revokePass({ appointmentId, actorUserId: user.id });
+
+    revalidatePath(`/admin/appointments/${appointmentId}`);
+    revalidatePath('/admin/appointments');
+    return ok();
+  } catch (error) {
+    return handle(error, 'The pass could not be revoked.');
+  }
+}
+
+/** Retire the current pass, issue a replacement, and email the new link. */
+export async function reissuePassAction(
+  _previous: ActionResult<{ emailed: boolean }> | null,
+  formData: FormData,
+): Promise<ActionResult<{ emailed: boolean }>> {
+  try {
+    const user = await admin();
+    const appointmentId = String(formData.get('appointmentId') ?? '');
+    if (!appointmentId) return fail('That appointment could not be found.');
+
+    const result = await reissuePass({
+      appointmentId,
+      actorUserId: user.id,
+      appUrl: getEnv().APP_URL,
+    });
+
+    flushNotificationsInBackground(result.notificationIds);
+
+    revalidatePath(`/admin/appointments/${appointmentId}`);
+    revalidatePath('/admin/appointments');
+    return ok({ emailed: result.emailed });
+  } catch (error) {
+    return handle(error, 'A new pass could not be issued.');
   }
 }
 

@@ -1,10 +1,15 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
-import { AppointmentStatus } from '@prisma/client';
+import { AppointmentStatus, VisitStatus } from '@prisma/client';
 import { prisma } from '@/lib/db/prisma';
 import { requireAdmin } from '@/lib/auth/authorize';
-import { adminApproveAction, resolveReviewAction } from '@/app/admin/actions';
+import {
+  adminApproveAction,
+  reissuePassAction,
+  resolveReviewAction,
+  revokePassAction,
+} from '@/app/admin/actions';
 import {
   SAFE_VISITOR_SELECT,
   identityTypeLabel,
@@ -46,6 +51,13 @@ export default async function AdminAppointmentDetailPage({
   const visitor = toSafeVisitor(appointment.visitor);
   const underReview = appointment.status === AppointmentStatus.REVIEW_REQUIRED;
   const activeCredential = appointment.credentials.find((c) => !c.revokedAt);
+
+  // Passes are only manageable while the visitor is still expected. Once they
+  // have arrived, been denied, or the visit is closed, the pass is history and
+  // the buttons would do nothing useful.
+  const canManagePass =
+    appointment.status === AppointmentStatus.APPROVED &&
+    (!appointment.visit || appointment.visit.status === VisitStatus.EXPECTED);
 
   return (
     <>
@@ -227,6 +239,50 @@ export default async function AdminAppointmentDetailPage({
                 No active pass. {appointment.credentials.length > 0 ? 'All passes have been withdrawn.' : ''}
               </p>
             )}
+
+            {/*
+              Manual pass control. Only offered while the visitor is still
+              expected: once they are at the gate the pass has done its job, and
+              withdrawing it would confuse the guard rather than help.
+            */}
+            {canManagePass ? (
+              <div className="mt-4 flex flex-col gap-3 border-t border-[var(--line-soft)] pt-4">
+                {activeCredential ? (
+                  <ActionForm
+                    action={revokePassAction}
+                    submitLabel="Withdraw this pass"
+                    busyLabel="Withdrawing..."
+                    variant="danger"
+                    confirm="Withdraw this pass? The visitor's QR code and manual code will stop working immediately."
+                    successMessage="The pass has been withdrawn."
+                    hidden={{ appointmentId: appointment.id }}
+                  >
+                    <p className="mb-3 text-sm text-muted">
+                      Use this if the pass has been shared with someone else or sent to the wrong
+                      address. The appointment stays approved.
+                    </p>
+                  </ActionForm>
+                ) : null}
+
+                <ActionForm
+                  action={reissuePassAction}
+                  submitLabel={activeCredential ? 'Replace with a new pass' : 'Issue a new pass'}
+                  busyLabel="Issuing..."
+                  variant="secondary"
+                  confirm="Issue a new pass? Any earlier link will stop working."
+                  successMessage="A new pass was issued and emailed to the visitor."
+                  hidden={{ appointmentId: appointment.id }}
+                >
+                  <p className="mb-3 text-sm text-muted">
+                    Issues a fresh QR code and manual code, and emails the visitor a new private
+                    link. Any earlier link stops working.
+                    {visitor.hasEmail
+                      ? ''
+                      : ' This visitor has no email address on file, so you will need to give them the new link another way.'}
+                  </p>
+                </ActionForm>
+              </div>
+            ) : null}
           </Card>
         </div>
       </div>
