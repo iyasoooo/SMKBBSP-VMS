@@ -74,6 +74,25 @@ npm run db:up
 Starts PostgreSQL 16 on `localhost:5432` and Mailpit on `localhost:1025` (SMTP), with the Mailpit
 inbox at <http://localhost:8025>.
 
+**Running the whole system in containers.** `docker compose` also builds and runs the application
+itself, which is the simplest way to operate it beyond development:
+
+```bash
+docker compose up -d --build
+```
+
+That starts PostgreSQL and Mailpit, waits for both to report healthy, runs `prisma migrate deploy`
+to completion, and only then starts the app on <http://localhost:3000>. Load the demonstration data
+once with:
+
+```bash
+docker compose run --rm app npm run db:seed
+```
+
+Secrets are read from `.env` at run time and are never baked into the image — compose refuses to
+start if `SESSION_SECRET`, `IDENTITY_ENCRYPTION_KEY` or `IDENTITY_HMAC_KEY` are missing. Steps 3 and
+4 below are only needed when running the app outside a container.
+
 > **Windows + WSL2 installs.** Some Docker Desktop installations provision the CLI *only* inside WSL
 > and leave no `docker.exe` on Windows, which makes `npm run db:up` fail from PowerShell even though
 > the engine is running. Check with `wsl -e docker version` — if it prints a `Server:` block, drive

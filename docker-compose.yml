@@ -1,10 +1,15 @@
-# Local development infrastructure for SMKBBSP VisitorPass.
+# SMKBBSP VisitorPass - full stack.
 #
-#   npm run db:up     start PostgreSQL 16 + Mailpit
-#   npm run db:down   stop them
+#   docker compose up -d --build     build and start everything
+#   docker compose logs -f app       follow the application log
+#   docker compose down              stop (data survives in the named volume)
 #
-# Nothing here is a production deployment topology, and the named volume is
-# NOT a backup. See README "Backup and restore" for pg_dump instructions.
+# Services start in dependency order: PostgreSQL and Mailpit become healthy,
+# then `migrate` runs to completion, then `app` starts. That ordering means the
+# application never comes up against a schema that has not been applied yet.
+#
+# Secrets are read from `.env` and are never baked into the image. The named
+# volume is NOT a backup - see README "Backup and restore" for pg_dump.
 
 services:
   postgres:
@@ -12,9 +17,9 @@ services:
     container_name: smkbbsp_postgres
     restart: unless-stopped
     environment:
-      POSTGRES_USER: visitorpass
-      POSTGRES_PASSWORD: visitorpass_local_dev
-      POSTGRES_DB: visitorpass
+      POSTGRES_USER: ${POSTGRES_USER:-visitorpass}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-visitorpass_local_dev}
+      POSTGRES_DB: ${POSTGRES_DB:-visitorpass}
       # Deterministic collation so ORDER BY matches across machines.
       POSTGRES_INITDB_ARGS: '--encoding=UTF8 --locale=C'
       TZ: UTC
@@ -23,7 +28,8 @@ services:
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
-      test: ['CMD-SHELL', 'pg_isready -U visitorpass -d visitorpass']
+      test:
+        ['CMD-SHELL', 'pg_isready -U ${POSTGRES_USER:-visitorpass} -d ${POSTGRES_DB:-visitorpass}']
       interval: 5s
       timeout: 5s
       retries: 12
@@ -46,6 +52,61 @@ services:
       timeout: 5s
       retries: 12
       start_period: 5s
+
+  # One-shot schema migration. Runs to completion and exits; `app` waits for it.
+  # Kept separate from the app so that scaling the app to more than one replica
+  # could never have two containers racing to migrate the same database.
+  migrate:
+    build:
+      context: .
+      target: runtime
+    image: smkbbsp-visitorpass:latest
+    container_name: smkbbsp_migrate
+    restart: 'no'
+    command: ['npx', 'prisma', 'migrate', 'deploy']
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER:-visitorpass}:${POSTGRES_PASSWORD:-visitorpass_local_dev}@postgres:5432/${POSTGRES_DB:-visitorpass}?schema=public
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  app:
+    build:
+      context: .
+      target: runtime
+    image: smkbbsp-visitorpass:latest
+    container_name: smkbbsp_app
+    restart: unless-stopped
+    ports:
+      - '3000:3000'
+    environment:
+      NODE_ENV: production
+      PORT: 3000
+      # Container-internal hostnames replace localhost.
+      DATABASE_URL: postgresql://${POSTGRES_USER:-visitorpass}:${POSTGRES_PASSWORD:-visitorpass_local_dev}@postgres:5432/${POSTGRES_DB:-visitorpass}?schema=public
+      SMTP_HOST: mailpit
+      SMTP_PORT: 1025
+      SMTP_SECURE: 'false'
+      APP_URL: ${APP_URL:-http://localhost:3000}
+      APP_TIMEZONE: ${APP_TIMEZONE:-Asia/Kuala_Lumpur}
+      # No defaults for the secrets on purpose: compose fails fast with a clear
+      # message rather than starting the app with a placeholder key.
+      SESSION_SECRET: ${SESSION_SECRET:?set SESSION_SECRET in .env}
+      IDENTITY_ENCRYPTION_KEY: ${IDENTITY_ENCRYPTION_KEY:?set IDENTITY_ENCRYPTION_KEY in .env}
+      IDENTITY_HMAC_KEY: ${IDENTITY_HMAC_KEY:?set IDENTITY_HMAC_KEY in .env}
+      IDENTITY_KEY_VERSION: ${IDENTITY_KEY_VERSION:-1}
+      MAIL_FROM_NAME: ${MAIL_FROM_NAME:-SMKBBSP VisitorPass}
+      MAIL_FROM_ADDRESS: ${MAIL_FROM_ADDRESS:-visitorpass@smkbbsp.test}
+      SEED_ADMIN_PASSWORD: ${SEED_ADMIN_PASSWORD:-Admin#Demo2025}
+      SEED_GUARD_PASSWORD: ${SEED_GUARD_PASSWORD:-Guard#Demo2025}
+      SEED_TEACHER_PASSWORD: ${SEED_TEACHER_PASSWORD:-Teacher#Demo2025}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      mailpit:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
 
 volumes:
   postgres_data:

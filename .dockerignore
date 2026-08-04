@@ -1,0 +1,45 @@
+# Keep the build context small and never copy local state or secrets into an image.
+
+.git
+.gitignore
+
+node_modules
+.next
+out
+dist
+build
+
+# Local runtime state (embedded PostgreSQL data, captured mail)
+.local
+
+# Secrets: the image must never contain a real .env. Values arrive at runtime.
+.env
+.env.local
+.env.*.local
+*.pem
+*.key
+
+# Test and report output
+coverage
+playwright-report
+test-results
+blob-report
+.playwright
+tmp
+
+# The OCR runtime is fetched during the build (npm run ocr:assets) rather than
+# copied, so a stale local copy cannot end up in the image.
+public/ocr
+
+# Editor / OS
+.vscode
+.idea
+.DS_Store
+Thumbs.db
+*.log
+*.tsbuildinfo
+
+# Docs are not needed to run the app
+docs
+*.md
+!README.md
