@@ -12,6 +12,10 @@ that physical identification was sighted, checks the visitor in, and prints a ba
 > that they did so. There is no MyDigitalID integration, no biometrics, no machine-learning anomaly
 > detection, no plate recognition and no location tracking. See `docs/spec/FYP_SCOPE_REVISION.md`.
 
+> **Working on this with an AI assistant?** Point it at [`docs/llms.txt`](docs/llms.txt) first. It is a
+> compact map of the architecture, the invariants that must not be broken, and the traps that have
+> already cost someone a debugging session.
+
 ---
 
 ## Contents

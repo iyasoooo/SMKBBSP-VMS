@@ -1,0 +1,156 @@
+# SMKBBSP VisitorPass
+
+> A school visitor management system for SMK Bandar Baru Sri Petaling. A visitor requests an
+> appointment without an account, the host teacher approves it, and an approved visitor receives an
+> expiring QR pass by email. At the gate a guard scans the pass, records that physical
+> identification was sighted, checks the visitor in, and prints a badge. Next.js App Router,
+> TypeScript strict, PostgreSQL 16 via Prisma.
+
+This file orients a language model working in this repository. Read it before making changes.
+It is a map and a list of invariants, not a tutorial — the authoritative documents are linked below
+and win any disagreement with this file.
+
+## Read these first
+
+- [docs/spec/PROJECT_SPEC.md](spec/PROJECT_SPEC.md): the product and technical contract. Highest authority.
+- [docs/spec/ACCEPTANCE_TESTS.md](spec/ACCEPTANCE_TESTS.md): the executable definition of done (AT-001 to AT-030).
+- [docs/spec/IMPLEMENTATION_PLAN.md](spec/IMPLEMENTATION_PLAN.md): build order and completion checklist.
+- [docs/spec/FYP_SCOPE_REVISION.md](spec/FYP_SCOPE_REVISION.md): why the scope excludes what it excludes. Read before claiming any capability.
+- [CLAUDE.md](../CLAUDE.md) and [AGENTS.md](../AGENTS.md): the engineering contract for agents.
+
+On conflict, the priority is PROJECT_SPEC, then ACCEPTANCE_TESTS, then IMPLEMENTATION_PLAN, then
+other prose.
+
+## What this system deliberately is not
+
+Do not add, simulate, or claim any of these. They were removed from the original proposal on
+feasibility grounds and their absence is a graded property of the project:
+
+MyDigitalID or any national identity SSO, Keycloak, biometrics of any kind, machine-learning
+anomaly detection, licence-plate recognition, geofencing or location tracking, chatbots, paid
+services required for the local demo, and production deployment.
+
+**The single most important claim boundary:** the QR pass authorises *an approved appointment*.
+It does not verify who the holder is. Identity assurance comes from a guard visually sighting
+physical identification, which the system records as *a guard's declaration* — never as proof. OCR
+reads text from a photograph to save typing; it does not verify identity and cannot detect a
+forgery. Any wording that blurs this is a defect, including in comments and UI copy.
+
+## Invariants that must not be broken
+
+These are the rules most likely to be violated by an otherwise reasonable change.
+
+**Identity data.** There is deliberately no column capable of holding a plaintext NRIC. Identity
+numbers are stored as AES-256-GCM ciphertext plus a keyed HMAC (for blacklist matching and
+de-duplication) plus the last four characters. Everything outside one explicit, audited admin
+reveal shows the masked form. Build every identity column through `buildIdentityFields`
+(`lib/crypto/identity.ts`) so normalisation, hashing and encryption cannot drift apart.
+
+**Tokens.** Public, QR and session tokens are ≥256 bits of CSPRNG output and only ever stored
+hashed. A QR encodes nothing but a pass URL whose variable part is an opaque token — no name,
+identity number, host, purpose, or database id. The manual fallback code is *derived* from the
+token hash (`deriveFallbackCode`) rather than stored, which is how the database keeps only a hash
+while the pass page can still display the code.
+
+**Authorization is server-side.** Hiding a navigation link is not access control. Every protected
+page and every mutation calls a helper from `lib/auth/authorize.ts` *before* fetching protected
+data, so a denied request cannot briefly stream it. Teacher-scoped queries filter by `teacherId` in
+the query itself, so a valid id belonging to another teacher matches nothing.
+
+**Transactions and idempotency.** Approval, check-in, check-out and walk-in each write their status
+change, visit, credential, outbox rows and audit entry in one transaction, or none of them. Repeating
+any of them returns the existing result rather than creating a second visit, badge, credential or
+email.
+
+**The outbox.** Notification rows are written inside the business transaction; delivery happens
+after commit. Never send mail inside a transaction — an SMTP outage must not roll back a check-in.
+
+**Time.** Instants are stored in UTC and displayed in `Asia/Kuala_Lumpur`. Every "today", date range
+and school-hours decision is evaluated against the Malaysian calendar day via `lib/time.ts`, never
+the server's local day.
+
+**Logging.** Never call `console` in application code; lint forbids it. Use `lib/logger.ts`, which
+silences `debug`/`info` outside development and redacts every context object through the same
+code the audit trail uses (`lib/redact.ts`). That redaction is what stops a casual
+`log.debug('checking in', { visitor })` from leaking an identity number.
+
+**Blacklist disclosure.** A guard sees only `CLEAR`, `REVIEW` or `BLOCKED` — never a reason,
+category, or which field matched. A blocked visitor is shown a neutral "contact an administrator"
+message. Name alone is never an automatic match.
+
+## Where things live
+
+```
+app/                Next.js App Router. Server Components for reads,
+                    server actions (`actions.ts` per area) for mutations.
+  (public)          /, /login, /visit/request, /visit/status, /v/[token]
+  teacher/          own queue and decisions only
+  guard/            tablet-first gate operations, scan, walk-in, badge, emergency
+  admin/            analytics, history, blacklist, users, settings, audit, reports
+lib/
+  auth/             session.ts (DB-backed, revocable), authorize.ts (role guards), login.ts
+  crypto/           identity.ts (AES-GCM + HMAC), password.ts (scrypt), tokens.ts
+  domain/           business services — the layer that owns transitions.
+                    appointments, decisions, gate, credentials, blacklist, badges,
+                    admin, analytics, settings, presenters, in-app-notifications
+  email/            outbox.ts (transactional), templates.ts
+  reports/          query.ts shared by screen, pdf.ts and xlsx.ts
+  redact.ts         one redactor, shared by audit and logger
+  time.ts           UTC storage, Kuala Lumpur presentation
+prisma/             schema.prisma, migrations/, seed.ts (deterministic, fictional)
+tests/unit          pure logic: crypto, time, tokens, masking, parsing, escaping
+tests/integration   real PostgreSQL, real transactions — no mocks
+tests/e2e           Playwright, against a production build
+scripts/            operational helpers, not application code
+```
+
+Domain services must not import React components. Keep business transitions in `lib/domain`, not in
+pages.
+
+## Commands
+
+```bash
+npm run dev            # development server
+npm run lint           # ESLint
+npm run typecheck      # tsc --noEmit
+npm test               # Vitest: unit + integration (needs PostgreSQL)
+npm run test:e2e       # prepares the E2E database, then Playwright
+npm run build          # production build
+npm run db:migrate     # create and apply a migration
+npm run db:seed        # deterministic demonstration data
+npm run ocr:assets     # fetch the self-hosted OCR runtime into public/ocr
+```
+
+Run `lint`, `typecheck`, `test` and `build` before claiming any change is complete.
+
+## Traps that have already caught someone
+
+Each of these cost real debugging time. They are recorded so they cost it only once.
+
+**A build, unit tests and `curl` all execute zero client JavaScript.** A strict `script-src 'self'`
+once blocked every inline script Next.js uses to stream its RSC payload, so React never hydrated and
+no server action could submit — while every check still reported green. The CSP is now issued
+per-request with a nonce from `middleware.ts`; a static CSP header cannot carry a nonce. If you
+change it, load a real page in a real browser against a **production** build.
+
+**A blank screenshot in a failing browser test means hydration or CSP, not a bad selector.**
+
+**Three databases** share one server: `visitorpass` (development), `visitorpass_test` (integration),
+`visitorpass_e2e` (Playwright). A fresh volume contains only the first.
+
+**Badge numbers** are unique but only random within a day. Allocate through `allocateBadgeNumber`,
+which checks for collisions inside the transaction. A four-digit tail collides more often than
+intuition suggests.
+
+**The build must not need a database.** Routes reading settings or the session are `force-dynamic`
+so nothing is prerendered against a database that may not exist.
+
+**The lockfile is generated on Windows** and lacks Linux/musl variants of sharp's optional
+dependencies, so Docker and CI use `npm install` rather than `npm ci`.
+
+## Data and privacy in this repository
+
+All seeded people, contacts and identity numbers are invented. Email addresses use the reserved
+`.test` TLD, which cannot resolve on the public internet. No real staff member, student or parent
+appears anywhere. Keep it that way: use fictional data in fixtures, tests, screenshots and reports,
+and never commit a real `.env`.
