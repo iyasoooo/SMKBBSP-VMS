@@ -2,6 +2,13 @@ import type { Metadata } from 'next';
 import { getSettings } from '@/lib/domain/settings';
 import { Alert, Card } from '@/components/ui/surface';
 import { ButtonLink } from '@/components/ui/button';
+/**
+ * Rendered per request. These read school settings and the session from the
+ * database, so prerendering them would both bake in values an administrator
+ * can change and make the build require a live database - which it should not.
+ */
+export const dynamic = 'force-dynamic';
+
 
 export const metadata: Metadata = { title: 'Check your request' };
 

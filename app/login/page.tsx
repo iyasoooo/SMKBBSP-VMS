@@ -7,6 +7,13 @@ import { getSettings } from '@/lib/domain/settings';
 import { getTheme } from '@/lib/theme';
 import { ThemeToggle } from '@/components/theme-toggle';
 import { LoginForm } from './login-form';
+/**
+ * Rendered per request. These read school settings and the session from the
+ * database, so prerendering them would both bake in values an administrator
+ * can change and make the build require a live database - which it should not.
+ */
+export const dynamic = 'force-dynamic';
+
 
 export const metadata: Metadata = { title: 'Staff login' };
 

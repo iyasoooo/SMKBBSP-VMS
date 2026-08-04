@@ -5,6 +5,13 @@ import { homeForRole } from '@/lib/auth/authorize';
 import { getTheme } from '@/lib/theme';
 import { ButtonLink } from '@/components/ui/button';
 import { ThemeToggle } from '@/components/theme-toggle';
+/**
+ * Rendered per request. These read school settings and the session from the
+ * database, so prerendering them would both bake in values an administrator
+ * can change and make the build require a live database - which it should not.
+ */
+export const dynamic = 'force-dynamic';
+
 
 export default async function HomePage() {
   const [settings, user, theme] = await Promise.all([getSettings(), getCurrentUser(), getTheme()]);

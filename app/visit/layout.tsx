@@ -2,6 +2,13 @@ import Link from 'next/link';
 import { getSettings } from '@/lib/domain/settings';
 import { getTheme } from '@/lib/theme';
 import { ThemeToggle } from '@/components/theme-toggle';
+/**
+ * Rendered per request. These read school settings and the session from the
+ * database, so prerendering them would both bake in values an administrator
+ * can change and make the build require a live database - which it should not.
+ */
+export const dynamic = 'force-dynamic';
+
 
 /** Shell for the public, account-free visitor journey. */
 export default async function VisitLayout({ children }: { children: React.ReactNode }) {
