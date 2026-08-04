@@ -19,6 +19,8 @@ const config = [
       'next-env.d.ts',
       '.local/**',
       'lib/db/generated/**',
+      // Vendored OCR runtime: minified third-party bundles, not our source.
+      'public/ocr/**',
     ],
   },
   ...compat.extends('next/core-web-vitals', 'next/typescript'),

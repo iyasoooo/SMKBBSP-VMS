@@ -6,6 +6,7 @@ import { submitAppointmentRequest } from './actions';
 import { Button } from '@/components/ui/button';
 import { Checkbox, Field, Input, Select, Textarea, fieldAria } from '@/components/ui/field';
 import { Alert } from '@/components/ui/surface';
+import { IcScanAssist } from '@/components/ocr/ic-scan-assist';
 import { MAX_PARTY_SIZE } from '@/lib/constants';
 import type { ActionResult } from '@/lib/result';
 
@@ -64,6 +65,10 @@ export function RequestForm({
   );
 
   const [identityType, setIdentityType] = useState('NRIC');
+  // Controlled only so the optional OCR panel can populate them. They remain
+  // ordinary editable inputs; nothing here depends on OCR having run.
+  const [fullName, setFullName] = useState('');
+  const [identityNumber, setIdentityNumber] = useState('');
   const [visitTypeId, setVisitTypeId] = useState(visitTypes[0]?.id ?? '');
   const [destinationId, setDestinationId] = useState('');
 
@@ -92,6 +97,20 @@ export function RequestForm({
           About you
         </legend>
 
+        {/*
+          Optional assistance, offered before the fields it fills. It is never
+          required: every field below can be typed directly, and the form does
+          not know or care whether OCR was used.
+        */}
+        {identityType === 'NRIC' ? (
+          <IcScanAssist
+            onApply={(fields) => {
+              if (fields.fullName) setFullName(fields.fullName);
+              if (fields.identityNumber) setIdentityNumber(fields.identityNumber);
+            }}
+          />
+        ) : null}
+
         <Field id="fullName" label="Full name" required error={errors.fullName}>
           <Input
             {...fieldAria('fullName', { error: errors.fullName })}
@@ -99,6 +118,8 @@ export function RequestForm({
             autoComplete="name"
             maxLength={120}
             required
+            value={fullName}
+            onChange={(event) => setFullName(event.target.value)}
             hasError={Boolean(errors.fullName)}
           />
         </Field>
@@ -162,6 +183,8 @@ export function RequestForm({
               autoComplete="off"
               maxLength={30}
               required
+              value={identityNumber}
+              onChange={(event) => setIdentityNumber(event.target.value)}
               hasError={Boolean(errors.identityNumber)}
             />
           </Field>

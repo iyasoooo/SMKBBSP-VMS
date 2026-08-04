@@ -12,10 +12,20 @@ import type { NextConfig } from 'next';
  */
 const contentSecurityPolicy = [
   "default-src 'self'",
-  // Next.js dev tooling needs eval; production does not.
+  /*
+   * `'wasm-unsafe-eval'` is required by the optional IC OCR panel, which
+   * compiles the Tesseract WASM module in the browser. It is far narrower than
+   * `'unsafe-eval'`: it permits WebAssembly compilation only and still forbids
+   * `eval()` and `new Function()` on JavaScript.
+   *
+   * `blob:` is needed because tesseract.js starts its worker from a Blob URL.
+   * Both the worker script and the WASM binary are served from this origin
+   * (see `public/ocr/`), so no third-party script origin is allowed.
+   */
   process.env.NODE_ENV === 'production'
-    ? "script-src 'self'"
-    : "script-src 'self' 'unsafe-eval' 'unsafe-inline'",
+    ? "script-src 'self' 'wasm-unsafe-eval' blob:"
+    : "script-src 'self' 'unsafe-eval' 'unsafe-inline' blob:",
+  "worker-src 'self' blob:",
   "style-src 'self' 'unsafe-inline'",
   "img-src 'self' data: blob:",
   "font-src 'self' data:",

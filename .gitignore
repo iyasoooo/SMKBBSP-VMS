@@ -51,3 +51,7 @@ Desktop.ini
 
 # TypeScript
 *.tsbuildinfo
+
+# OCR runtime: copied from node_modules and a pinned upstream model.
+# Reproduce with: npm run ocr:assets
+public/ocr/
