@@ -25,7 +25,8 @@
     "local:pg": "tsx scripts/local-postgres.ts",
     "local:mail": "tsx scripts/local-mail.ts",
     "postinstall": "prisma generate",
-    "ocr:assets": "tsx scripts/sync-ocr-assets.ts"
+    "ocr:assets": "tsx scripts/sync-ocr-assets.ts",
+    "pwa:icons": "tsx scripts/generate-pwa-icons.ts"
   },
   "prisma": {
     "seed": "tsx prisma/seed.ts"

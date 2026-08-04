@@ -1,5 +1,6 @@
 import type { Metadata, Viewport } from 'next';
 import { getTheme, getLocale } from '@/lib/theme';
+import { ServiceWorkerRegistration } from '@/components/service-worker';
 import './globals.css';
 
 export const metadata: Metadata = {
@@ -10,7 +11,20 @@ export const metadata: Metadata = {
   description:
     'Appointment-based visitor management for SMK Bandar Baru Sri Petaling: request a visit, get teacher approval, and check in at the gate with a QR pass.',
   robots: { index: false, follow: false },
-  icons: { icon: '/icon.svg' },
+  icons: {
+    icon: '/icon.svg',
+    // Safari ignores the manifest icons for the home screen and composites onto
+    // white, so it gets its own pre-branded icon.
+    apple: '/icons/apple-touch-icon.png',
+  },
+  manifest: '/manifest.webmanifest',
+  appleWebApp: {
+    // Launches without Safari chrome once added to the home screen. iOS has no
+    // install prompt, so this only takes effect via Share > Add to Home Screen.
+    capable: true,
+    title: 'VisitorPass',
+    statusBarStyle: 'default',
+  },
 };
 
 export const viewport: Viewport = {
@@ -18,6 +32,13 @@ export const viewport: Viewport = {
   initialScale: 1,
   // Guards zoom the gate screen in bright sunlight; do not lock scaling.
   maximumScale: 5,
+  // Tints the browser and installed-app chrome. Two entries so an installed app
+  // matches the theme the user actually has, rather than forcing navy onto a
+  // dark-mode device.
+  themeColor: [
+    { media: '(prefers-color-scheme: light)', color: '#26437a' },
+    { media: '(prefers-color-scheme: dark)', color: '#0a1526' },
+  ],
 };
 
 export default async function RootLayout({ children }: { children: React.ReactNode }) {
@@ -26,9 +47,16 @@ export default async function RootLayout({ children }: { children: React.ReactNo
   return (
     <html lang={locale} className={theme === 'dark' ? 'dark' : undefined} suppressHydrationWarning>
       <body className="min-h-screen antialiased">
+        {/*
+          Next emits the modern `mobile-web-app-capable`, but iOS before 17 only
+          honours Apple's original spelling, and a school tablet or phone may
+          well be older than that. React hoists this into <head>.
+        */}
+        <meta name="apple-mobile-web-app-capable" content="yes" />
         <a href="#main" className="skip-link">
           Skip to main content
         </a>
+        <ServiceWorkerRegistration />
         {children}
       </body>
     </html>
