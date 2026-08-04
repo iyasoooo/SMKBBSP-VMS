@@ -1,0 +1,544 @@
+// SMKBBSP VisitorPass - database schema
+//
+// Design rules enforced here:
+//   * Public identifiers are CUIDs. A sequential database id is never a token.
+//   * Secrets (session tokens, QR tokens, fallback codes) are stored hashed.
+//   * Identity numbers are stored as ciphertext + keyed HMAC + last4 only.
+//     There is deliberately no column that can hold a plaintext NRIC.
+//   * Audit and visit-event tables are append-oriented: the application
+//     exposes no update or delete path for them.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ---------------------------------------------------------------------------
+// Enums
+// ---------------------------------------------------------------------------
+
+enum Role {
+  ADMIN
+  GUARD
+  TEACHER
+}
+
+enum IdentityType {
+  NRIC
+  PASSPORT
+  DRIVING_LICENCE
+  OTHER
+}
+
+enum VisitorCategory {
+  PARENT
+  GUARDIAN
+  CONTRACTOR
+  OFFICIAL
+  VENDOR
+  ALUMNI
+  OTHER
+}
+
+enum AppointmentSource {
+  ONLINE
+  WALK_IN
+}
+
+enum AppointmentStatus {
+  PENDING
+  REVIEW_REQUIRED
+  APPROVED
+  REJECTED
+  CANCELLED
+  EXPIRED
+}
+
+enum VisitStatus {
+  EXPECTED
+  CHECKED_IN
+  CHECKED_OUT
+  CANCELLED
+  NO_SHOW
+  DENIED
+}
+
+enum BlacklistStatus {
+  ACTIVE
+  INACTIVE
+  EXPIRED
+}
+
+/// BLOCK stops approval and check-in outright. REVIEW routes the request to an
+/// administrator without telling the visitor or guard why.
+enum MatchPolicy {
+  BLOCK
+  REVIEW
+}
+
+enum BlacklistCategory {
+  SECURITY_INCIDENT
+  TRESPASS
+  HARASSMENT
+  COURT_ORDER
+  CUSTODY_DISPUTE
+  OTHER
+}
+
+enum NotificationChannel {
+  EMAIL
+  IN_APP
+}
+
+enum NotificationStatus {
+  PENDING
+  SENT
+  FAILED
+}
+
+enum VisitEventType {
+  CREATED
+  CHECKED_IN
+  CHECKED_OUT
+  DENIED
+  CANCELLED
+  MARKED_NO_SHOW
+  ID_SIGHTED
+  BADGE_PRINTED
+  NOTE_ADDED
+}
+
+enum SettingType {
+  STRING
+  INT
+  BOOL
+  TIME
+  JSON
+}
+
+// ---------------------------------------------------------------------------
+// Identity and access
+// ---------------------------------------------------------------------------
+
+model User {
+  id                String    @id @default(cuid())
+  /// Stored lower-cased and trimmed; uniqueness is on the normalized form.
+  email             String    @unique
+  name              String
+  passwordHash      String
+  role              Role
+  isActive          Boolean   @default(true)
+  preferredLocale   String    @default("en")
+  lastLoginAt       DateTime?
+  /// Sessions issued before this instant are rejected, which is how a
+  /// password change or admin reset revokes access everywhere at once.
+  passwordChangedAt DateTime  @default(now())
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+
+  teacherProfile TeacherProfile?
+  sessions       Session[]
+
+  appointmentsHosted   Appointment[] @relation("AppointmentTeacher")
+  appointmentsDecided  Appointment[] @relation("AppointmentDecidedBy")
+  visitsHosted         Visit[]       @relation("VisitTeacher")
+  visitsCheckedIn      Visit[]       @relation("VisitCheckedInBy")
+  visitsCheckedOut     Visit[]       @relation("VisitCheckedOutBy")
+  visitsIdSighted      Visit[]       @relation("VisitIdSightedBy")
+  visitEvents          VisitEvent[]
+  auditLogs            AuditLog[]
+  blacklistCreated     BlacklistEntry[] @relation("BlacklistCreatedBy")
+  blacklistReviewed    BlacklistEntry[] @relation("BlacklistReviewedBy")
+  credentialsRevoked   QrCredential[]   @relation("CredentialRevokedBy")
+
+  @@index([role, isActive])
+  @@map("users")
+}
+
+model Session {
+  id        String    @id @default(cuid())
+  userId    String
+  /// SHA-256 of (raw token + SESSION_SECRET). The raw token exists only in
+  /// the user's cookie.
+  tokenHash String    @unique
+  expiresAt DateTime
+  revokedAt DateTime?
+  /// Coarse, non-tracking context to help an admin recognise a stray session.
+  userAgentLabel String?
+  ipPrefix       String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([expiresAt])
+  @@map("sessions")
+}
+
+model TeacherProfile {
+  id                String   @id @default(cuid())
+  userId            String   @unique
+  staffCode         String   @unique
+  department        String
+  phone             String?
+  /// Cleared by a teacher on leave; hides them from the public host list.
+  isAcceptingVisits Boolean  @default(true)
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([isAcceptingVisits])
+  @@map("teacher_profiles")
+}
+
+// ---------------------------------------------------------------------------
+// Reference data
+// ---------------------------------------------------------------------------
+
+model Destination {
+  id             String   @id @default(cuid())
+  code           String   @unique
+  nameEn         String
+  nameMs         String
+  instructionsEn String?
+  instructionsMs String?
+  isActive       Boolean  @default(true)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  appointments Appointment[]
+  visits       Visit[]
+
+  @@index([isActive])
+  @@map("destinations")
+}
+
+model VisitType {
+  id                     String   @id @default(cuid())
+  code                   String   @unique
+  nameEn                 String
+  nameMs                 String
+  /// When true the guard must declare physical ID was sighted before check-in.
+  requiresIdSighted      Boolean  @default(true)
+  defaultDurationMinutes Int      @default(60)
+  isActive               Boolean  @default(true)
+  createdAt              DateTime @default(now())
+  updatedAt              DateTime @updatedAt
+
+  appointments Appointment[]
+
+  @@index([isActive])
+  @@map("visit_types")
+}
+
+// ---------------------------------------------------------------------------
+// Visitors and identity
+// ---------------------------------------------------------------------------
+
+model Visitor {
+  id       String  @id @default(cuid())
+  fullName String
+  /// Normalized (lower-cased) for matching; may be absent for walk-ins.
+  email    String?
+  /// Normalized to digits with a +60 country prefix where derivable.
+  phone    String?
+
+  visitorCategory VisitorCategory @default(OTHER)
+  identityType    IdentityType
+
+  /// AES-256-GCM ciphertext of the normalized identity number, with its IV,
+  /// auth tag and the key version used, so keys can be rotated later.
+  identityCiphertext String
+  identityIv         String
+  identityTag        String
+  identityKeyVersion Int    @default(1)
+  /// Keyed HMAC-SHA-256 of the normalized value, for equality and blacklist
+  /// matching without decryption. Not unique: a person may legitimately have
+  /// several visitor records over time, and dedupe is an explicit decision.
+  identityHmac       String
+  /// Last four characters, the only fragment shown outside an audited reveal.
+  identityLast4      String
+
+  consentVersion String
+  consentedAt    DateTime
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  appointments Appointment[]
+  visits       Visit[]
+
+  @@index([identityHmac])
+  @@index([email])
+  @@index([phone])
+  @@index([fullName])
+  @@map("visitors")
+}
+
+// ---------------------------------------------------------------------------
+// Appointments, visits, credentials
+// ---------------------------------------------------------------------------
+
+model Appointment {
+  id              String            @id @default(cuid())
+  /// Human-friendly, shown publicly and used in email subjects. Carries no PII.
+  referenceNumber String            @unique
+  source          AppointmentSource @default(ONLINE)
+
+  visitorId     String
+  teacherId     String
+  destinationId String?
+  visitTypeId   String
+
+  scheduledStart DateTime
+  scheduledEnd   DateTime
+  purpose        String
+  partySize      Int      @default(1)
+  vehicleNumber  String?
+
+  status       AppointmentStatus @default(PENDING)
+  /// Visitor-safe text. Never contains blacklist reasons or internal notes.
+  decisionNote String?
+  decidedAt    DateTime?
+  decidedById  String?
+  cancelledAt  DateTime?
+
+  /// SHA-256 of the raw private-link token. The raw value is emailed once and
+  /// lives only in the visitor's URL.
+  publicTokenHash      String    @unique
+  publicTokenExpiresAt DateTime
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  visitor     Visitor      @relation(fields: [visitorId], references: [id])
+  teacher     User         @relation("AppointmentTeacher", fields: [teacherId], references: [id])
+  destination Destination? @relation(fields: [destinationId], references: [id])
+  visitType   VisitType    @relation(fields: [visitTypeId], references: [id])
+  decidedBy   User?        @relation("AppointmentDecidedBy", fields: [decidedById], references: [id])
+
+  visit       Visit?
+  credentials QrCredential[]
+
+  @@index([status, scheduledStart])
+  @@index([teacherId, status])
+  @@index([scheduledStart])
+  @@index([visitorId])
+  @@map("appointments")
+}
+
+model Visit {
+  id            String  @id @default(cuid())
+  /// One visit per appointment. Walk-ins still create an appointment row
+  /// (source = WALK_IN) so every visit has a consistent parent.
+  appointmentId String? @unique
+  visitorId     String
+  teacherId     String
+  destinationId String?
+
+  status      VisitStatus @default(EXPECTED)
+  badgeNumber String      @unique
+
+  expectedStart DateTime
+  expectedEnd   DateTime
+
+  checkedInAt    DateTime?
+  checkedInById  String?
+  checkedOutAt   DateTime?
+  checkedOutById String?
+
+  idSightedAt   DateTime?
+  idSightedById String?
+
+  /// Short machine code explaining a DENIED outcome; never a blacklist reason.
+  denialCode String?
+  /// Operational note written by a guard. Reviewed as visitor-visible text.
+  guardNote  String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  appointment  Appointment? @relation(fields: [appointmentId], references: [id])
+  visitor      Visitor      @relation(fields: [visitorId], references: [id])
+  teacher      User         @relation("VisitTeacher", fields: [teacherId], references: [id])
+  destination  Destination? @relation(fields: [destinationId], references: [id])
+  checkedInBy  User?        @relation("VisitCheckedInBy", fields: [checkedInById], references: [id])
+  checkedOutBy User?        @relation("VisitCheckedOutBy", fields: [checkedOutById], references: [id])
+  idSightedBy  User?        @relation("VisitIdSightedBy", fields: [idSightedById], references: [id])
+
+  events VisitEvent[]
+
+  @@index([status, expectedStart])
+  @@index([status, checkedInAt])
+  @@index([teacherId, status])
+  @@index([checkedInAt])
+  @@index([expectedStart])
+  @@index([visitorId])
+  @@map("visits")
+}
+
+model QrCredential {
+  id            String @id @default(cuid())
+  appointmentId String
+
+  /// SHA-256 of the raw pass token. Shares its value with the appointment's
+  /// private-link token: the visitor page renders its own URL as the QR, so
+  /// the raw token never needs to be stored or re-derived server-side.
+  tokenHash        String @unique
+  /// SHA-256 of the uppercased 8-character manual fallback code.
+  fallbackCodeHash String @unique
+
+  validFrom   DateTime
+  expiresAt   DateTime
+  firstUsedAt DateTime?
+  revokedAt   DateTime?
+  revokedById String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  appointment Appointment @relation(fields: [appointmentId], references: [id], onDelete: Cascade)
+  revokedBy   User?       @relation("CredentialRevokedBy", fields: [revokedById], references: [id])
+
+  @@index([appointmentId])
+  @@index([expiresAt])
+  @@index([revokedAt])
+  @@map("qr_credentials")
+}
+
+// ---------------------------------------------------------------------------
+// Blacklist
+// ---------------------------------------------------------------------------
+
+model BlacklistEntry {
+  id     String          @id @default(cuid())
+  status BlacklistStatus @default(ACTIVE)
+
+  /// At least one match value must be present; enforced in the service layer
+  /// because Prisma cannot express the CHECK constraint portably.
+  identityHmac String?
+  matchPhone   String?
+  matchEmail   String?
+  /// Display-only. Name alone is never an automatic block.
+  displayName  String
+
+  matchPolicy MatchPolicy       @default(REVIEW)
+  category    BlacklistCategory @default(OTHER)
+  /// Restricted internal text. Never rendered to guards or teachers and never
+  /// included in ordinary exports.
+  reason      String
+
+  validFrom  DateTime  @default(now())
+  validUntil DateTime?
+
+  createdById  String
+  reviewedById String?
+  reviewedAt   DateTime?
+  reviewNote   String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  createdBy  User  @relation("BlacklistCreatedBy", fields: [createdById], references: [id])
+  reviewedBy User? @relation("BlacklistReviewedBy", fields: [reviewedById], references: [id])
+
+  @@index([status, identityHmac])
+  @@index([status, matchPhone])
+  @@index([status, matchEmail])
+  @@index([status, validFrom, validUntil])
+  @@map("blacklist_entries")
+}
+
+// ---------------------------------------------------------------------------
+// Messaging, events, audit, settings
+// ---------------------------------------------------------------------------
+
+model Notification {
+  id          String              @id @default(cuid())
+  type        String
+  channel     NotificationChannel @default(EMAIL)
+  recipient   String
+  templateKey String
+  /// Render inputs only. Must never contain a raw identity value or raw token.
+  payload     Json
+
+  status        NotificationStatus @default(PENDING)
+  attempts      Int                @default(0)
+  lastErrorCode String?
+  sentAt        DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([status, createdAt])
+  @@index([type])
+  @@map("notifications")
+}
+
+model VisitEvent {
+  id          String         @id @default(cuid())
+  visitId     String
+  type        VisitEventType
+  actorUserId String?
+  metadata    Json?
+  createdAt   DateTime       @default(now())
+
+  visit Visit @relation(fields: [visitId], references: [id], onDelete: Cascade)
+  actor User? @relation(fields: [actorUserId], references: [id])
+
+  @@index([visitId, createdAt])
+  @@index([type])
+  @@map("visit_events")
+}
+
+model AuditLog {
+  id          String   @id @default(cuid())
+  actorUserId String?
+  action      String
+  targetType  String
+  targetId    String?
+  /// Safe metadata only: ids, counts, filter summaries, status transitions.
+  metadata    Json?
+  createdAt   DateTime @default(now())
+
+  actor User? @relation(fields: [actorUserId], references: [id])
+
+  @@index([createdAt])
+  @@index([action, createdAt])
+  @@index([actorUserId, createdAt])
+  @@index([targetType, targetId])
+  @@map("audit_logs")
+}
+
+model Setting {
+  key         String      @id
+  value       String
+  type        SettingType @default(STRING)
+  label       String
+  description String?
+  category    String      @default("general")
+  updatedAt   DateTime    @updatedAt
+
+  @@map("settings")
+}
+
+/// Fixed-window counters for public endpoints. Database-backed so the limit
+/// holds across the dev server's worker processes. Documented in the README as
+/// a single-instance approach that would need shared storage to scale out.
+model RateLimitCounter {
+  id          String   @id @default(cuid())
+  bucket      String
+  windowStart DateTime
+  count       Int      @default(0)
+  expiresAt   DateTime
+
+  @@unique([bucket, windowStart])
+  @@index([expiresAt])
+  @@map("rate_limit_counters")
+}
