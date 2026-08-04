@@ -13,9 +13,9 @@ on:
 
 env:
   NEXT_TELEMETRY_DISABLED: '1'
-  # Matches docker-compose.yml so the same DATABASE_URL shape works everywhere.
-  PGUSER: visitorpass
-  PGPASSWORD: visitorpass_local_dev
+  # Nothing credential-shaped belongs here. Workflow-level `env` is printed in
+  # the environment block of *every* step's log, so a value placed here is
+  # published dozens of times per run whether any step uses it or not.
 
 concurrency:
   # A newer push supersedes an in-flight run on the same ref.
@@ -40,6 +40,12 @@ jobs:
           --health-interval 5s --health-timeout 5s --health-retries 12
 
     steps:
+      - name: Mask the throwaway database password
+        # Defence in depth. The value is a disposable local credential that is
+        # already public in docker-compose.yml, but masking keeps it out of
+        # step logs so nobody has to judge that on sight.
+        run: echo "::add-mask::visitorpass_local_dev"
+
       - uses: actions/checkout@v4
 
       - uses: actions/setup-node@v4
@@ -103,6 +109,12 @@ jobs:
         ports: ['1025:1025', '8025:8025']
 
     steps:
+      - name: Mask the throwaway database password
+        # Defence in depth. The value is a disposable local credential that is
+        # already public in docker-compose.yml, but masking keeps it out of
+        # step logs so nobody has to judge that on sight.
+        run: echo "::add-mask::visitorpass_local_dev"
+
       - uses: actions/checkout@v4
 
       - uses: actions/setup-node@v4
@@ -166,6 +178,12 @@ jobs:
       packages: write
 
     steps:
+      - name: Mask the throwaway database password
+        # Defence in depth. The value is a disposable local credential that is
+        # already public in docker-compose.yml, but masking keeps it out of
+        # step logs so nobody has to judge that on sight.
+        run: echo "::add-mask::visitorpass_local_dev"
+
       - uses: actions/checkout@v4
 
       - name: Resolve a lowercase image name
