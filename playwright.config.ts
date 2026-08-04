@@ -44,6 +44,8 @@ export default defineConfig({
   projects: [
     {
       name: 'desktop',
+      // The responsive suite is phone-only; running it here would prove nothing.
+      testIgnore: /responsive\.spec\.ts/,
       use: { ...devices['Desktop Chrome'], viewport: { width: 1280, height: 900 } },
     },
     {
@@ -51,6 +53,26 @@ export default defineConfig({
       name: 'guard-tablet',
       testMatch: /guard-.*\.spec\.ts/,
       use: { ...devices['Galaxy Tab S4 landscape'] },
+    },
+    {
+      /*
+       * 360x780 is a Galaxy S24 in portrait, and close to the narrowest screen
+       * anyone will realistically use. An iPhone 16 is 393px wide, so passing
+       * here covers it with room to spare.
+       *
+       * Scoped to the responsive spec on purpose. Re-running the whole suite at
+       * a third viewport would triple the runtime to re-prove logic that has
+       * nothing to do with screen width; what actually needs checking at this
+       * size is layout.
+       */
+      name: 'phone',
+      testMatch: /responsive\.spec\.ts/,
+      use: {
+        ...devices['Desktop Chrome'],
+        viewport: { width: 360, height: 780 },
+        isMobile: true,
+        hasTouch: true,
+      },
     },
   ],
 
