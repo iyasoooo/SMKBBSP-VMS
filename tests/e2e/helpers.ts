@@ -1,4 +1,5 @@
 import { expect, type Page } from '@playwright/test';
+import { step } from './steps';
 
 /** Demo credentials created by the seed. Development-only values. */
 export const ACCOUNTS = {
@@ -10,18 +11,22 @@ export const ACCOUNTS = {
 export async function login(page: Page, account: keyof typeof ACCOUNTS): Promise<void> {
   const { email, password } = ACCOUNTS[account];
 
+  // The account name is safe to log; the password never is.
+  await step(`Sign in as ${account}`, async () => {
+    await page.goto('/login');
+    await page.getByLabel('Email address').fill(email);
+    await page.getByLabel('Password').fill(password);
+    await page.getByRole('button', { name: 'Sign in' }).click();
 
-  await page.goto('/login');
-  await page.getByLabel('Email address').fill(email);
-  await page.getByLabel('Password').fill(password);
-  await page.getByRole('button', { name: 'Sign in' }).click();
-
-  await page.waitForURL((url) => !url.pathname.startsWith('/login'), { timeout: 20_000 });
+    await page.waitForURL((url) => !url.pathname.startsWith('/login'), { timeout: 20_000 });
+  });
 }
 
 export async function logout(page: Page): Promise<void> {
-  await page.getByRole('button', { name: 'Sign out' }).click();
-  await page.waitForURL('**/login', { timeout: 20_000 });
+  await step('Sign out', async () => {
+    await page.getByRole('button', { name: 'Sign out' }).click();
+    await page.waitForURL('**/login', { timeout: 20_000 });
+  });
 }
 
 /**
@@ -84,43 +89,52 @@ export async function submitVisitRequest(
   const nric = options.nric ?? uniqueNric();
   const slot = futureSchoolSlot();
 
-  await page.goto('/visit/request');
+  await step('Open the public request form', async () => {
+    await page.goto('/visit/request');
+  });
 
-  await page.getByLabel('Full name').fill(options.visitorName);
-  await page.getByLabel('Email address').fill('e2e.visitor@contoh.test');
-  await page.getByLabel('Phone number').fill('012-345 6789');
-  await page.getByLabel('Identification number').fill(nric);
+  await step('Fill the visitor details', async () => {
+    await page.getByLabel('Full name').fill(options.visitorName);
+    await page.getByLabel('Email address').fill('e2e.visitor@contoh.test');
+    await page.getByLabel('Phone number').fill('012-345 6789');
+    await page.getByLabel('Identification number').fill(nric);
+  });
 
-  await page.getByLabel('Teacher you wish to meet').selectOption({ label: HOST_TEACHER_OPTION });
+  await step('Choose the host teacher and visit type', async () => {
+    await page.getByLabel('Teacher you wish to meet').selectOption({ label: HOST_TEACHER_OPTION });
 
-  // The option text carries the duration too ("Parent meeting (30 min)"), so
-  // resolve the value by partial text rather than matching a full label.
-  const visitTypeSelect = page.getByLabel('Type of visit');
-  const visitTypeValue = await visitTypeSelect
-    .locator('option')
-    .filter({ hasText: ID_SIGHTED_VISIT_TYPE })
-    .first()
-    .getAttribute('value');
-  expect(visitTypeValue).toBeTruthy();
-  await visitTypeSelect.selectOption(visitTypeValue ?? '');
+    // The option text carries the duration too ("Parent meeting (30 min)"), so
+    // resolve the value by partial text rather than matching a full label.
+    const visitTypeSelect = page.getByLabel('Type of visit');
+    const visitTypeValue = await visitTypeSelect
+      .locator('option')
+      .filter({ hasText: ID_SIGHTED_VISIT_TYPE })
+      .first()
+      .getAttribute('value');
+    expect(visitTypeValue).toBeTruthy();
+    await visitTypeSelect.selectOption(visitTypeValue ?? '');
+  });
 
-  await page.getByLabel('Date of visit').fill(slot.date);
-  await page.getByLabel('Arrival time').fill(slot.time);
-  await page
-    .getByLabel('Reason for your visit')
-    .fill(options.purpose ?? 'End to end test of the appointment workflow');
+  await step(`Choose the slot ${slot.date} ${slot.time} and give a reason`, async () => {
+    await page.getByLabel('Date of visit').fill(slot.date);
+    await page.getByLabel('Arrival time').fill(slot.time);
+    await page
+      .getByLabel('Reason for your visit')
+      .fill(options.purpose ?? 'End to end test of the appointment workflow');
+  });
 
-  await page
-    .getByLabel(/I have read the notice above/)
-    .check();
+  await step('Accept the privacy notice and submit', async () => {
+    await page.getByLabel(/I have read the notice above/).check();
+    await page.getByRole('button', { name: 'Submit request' }).click();
+    await page.waitForURL('**/visit/request/success**', { timeout: 20_000 });
+  });
 
-  await page.getByRole('button', { name: 'Submit request' }).click();
-  await page.waitForURL('**/visit/request/success**', { timeout: 20_000 });
+  return step('Read the reference from the confirmation page', async () => {
+    const reference = (
+      await page.locator('p.font-mono').filter({ hasText: /^VP-/ }).first().textContent()
+    )?.trim();
 
-  const reference = (
-    await page.locator('p.font-mono').filter({ hasText: /^VP-/ }).first().textContent()
-  )?.trim();
-
-  expect(reference).toBeTruthy();
-  return { reference: reference ?? '', visitorName: options.visitorName, nric };
+    expect(reference).toBeTruthy();
+    return { reference: reference ?? '', visitorName: options.visitorName, nric };
+  });
 }

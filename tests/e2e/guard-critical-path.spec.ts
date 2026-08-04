@@ -1,5 +1,6 @@
 import { expect, test } from '@playwright/test';
 import { HOST_TEACHER_OPTION, login, logout, submitVisitRequest, uniqueNric } from './helpers';
+import { mark } from './steps';
 
 
 /**
@@ -22,6 +23,8 @@ test('AT-003/006/010/016/017/018 full appointment to check-out journey', async (
   const visitorName = `E2E Journey ${Date.now().toString().slice(-6)}`;
 
   // --- 1. Visitor submits -------------------------------------------------
+
+  await mark('1. Visitor submits');
   const submitted = await submitVisitRequest(page, { visitorName });
   expect(submitted.reference).toMatch(/^VP-[A-Z0-9]{4}-[A-Z0-9]{4}$/);
   await expect(page.getByRole('heading', { name: 'Request submitted' })).toBeVisible();
@@ -31,6 +34,8 @@ test('AT-003/006/010/016/017/018 full appointment to check-out journey', async (
   expect(new URL(page.url()).searchParams.get('ref')).toBe(submitted.reference);
 
   // --- 2. Teacher approves ------------------------------------------------
+
+  await mark('2. Teacher approves');
   await login(page, 'teacher');
   await page.goto('/teacher/requests?filter=pending');
 
@@ -58,6 +63,8 @@ test('AT-003/006/010/016/017/018 full appointment to check-out journey', async (
   await logout(page);
 
   // --- 3. The guard can find them, but the pass is not valid yet ----------
+
+  await mark('3. The guard can find them, but the pass is not valid yet');
   await login(page, 'guard');
   await page.goto('/guard');
 
@@ -91,6 +98,8 @@ test('AT-003/006/010/016/017/018 full appointment to check-out journey', async (
   ).toBeVisible();
 
   // --- 4. Gate lifecycle, driven by a walk-in that is valid right now ------
+
+  await mark('4. Gate lifecycle, driven by a walk-in that is valid right now');
   const gateVisitor = `E2E Gate ${Date.now().toString().slice(-6)}`;
 
   await page.goto('/guard/walk-in');
@@ -103,6 +112,8 @@ test('AT-003/006/010/016/017/018 full appointment to check-out journey', async (
   await page.getByRole('button', { name: 'Register and check in' }).click();
 
   // --- 5. Badge renders with the right fields, and without the wrong ones --
+
+  await mark('5. Badge renders with the right fields, and without the wrong ones');
   await expect(page).toHaveURL(/\/guard\/badge\//);
   await expect(page.getByText('VISITOR', { exact: true })).toBeVisible();
   await expect(page.getByText(gateVisitor).first()).toBeVisible();
@@ -115,6 +126,8 @@ test('AT-003/006/010/016/017/018 full appointment to check-out journey', async (
   expect(badgeText).not.toMatch(/\b\d{12}\b/);
 
   // --- 6. Emergency list includes them ------------------------------------
+
+  await mark('6. Emergency list includes them');
   await page.goto('/guard/emergency');
   await expect(page.getByRole('cell', { name: gateVisitor })).toBeVisible();
 
@@ -124,6 +137,8 @@ test('AT-003/006/010/016/017/018 full appointment to check-out journey', async (
   expect(emergencyText).not.toMatch(/\b\d{12}\b/);
 
   // --- 7. Check out -------------------------------------------------------
+
+  await mark('7. Check out');
   await page.goto('/guard/active');
   await page
     .getByRole('row')
@@ -139,6 +154,8 @@ test('AT-003/006/010/016/017/018 full appointment to check-out journey', async (
   await expect(page.getByText('Visit already completed')).toBeVisible();
 
   // --- 8. Emergency list excludes them ------------------------------------
+
+  await mark('8. Emergency list excludes them');
   await page.goto('/guard/emergency');
   await expect(page.getByRole('cell', { name: gateVisitor })).toBeHidden();
 });
