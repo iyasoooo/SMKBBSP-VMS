@@ -61,6 +61,18 @@ export interface SubmittedRequest {
   nric: string;
 }
 
+/**
+ * Visit type used by the end-to-end journeys.
+ *
+ * Selected explicitly rather than relying on the form's default. The default is
+ * simply the first option in an alphabetically ordered list, so renaming or
+ * adding a visit type could silently switch it to one with
+ * `requiresIdSighted: false` - and the gate journey asserts that check-in stays
+ * disabled until the ID declaration is ticked, a control that only exists when
+ * ID sighting is required. Pinning the type keeps that precondition true.
+ */
+export const ID_SIGHTED_VISIT_TYPE = 'Parent meeting';
+
 /** Complete the public request form and return the reference shown. */
 export async function submitVisitRequest(
   page: Page,
@@ -79,6 +91,17 @@ export async function submitVisitRequest(
   await page.getByLabel('Identification number').fill(nric);
 
   await page.getByLabel('Teacher you wish to meet').selectOption({ label: HOST_TEACHER_OPTION });
+
+  // The option text carries the duration too ("Parent meeting (30 min)"), so
+  // resolve the value by partial text rather than matching a full label.
+  const visitTypeSelect = page.getByLabel('Type of visit');
+  const visitTypeValue = await visitTypeSelect
+    .locator('option')
+    .filter({ hasText: ID_SIGHTED_VISIT_TYPE })
+    .first()
+    .getAttribute('value');
+  expect(visitTypeValue).toBeTruthy();
+  await visitTypeSelect.selectOption(visitTypeValue ?? '');
 
   await page.getByLabel('Date of visit').fill(slot.date);
   await page.getByLabel('Arrival time').fill(slot.time);

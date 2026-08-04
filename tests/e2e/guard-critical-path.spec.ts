@@ -65,10 +65,19 @@ test('AT-003/006/010/016/017/018 full appointment to check-out journey', async (
   await page.getByRole('button', { name: 'Search', exact: true }).click();
 
   await page.getByRole('link', { name: new RegExp(visitorName) }).first().click();
+
+  // Wait for the detail route itself before asserting on its controls. Without
+  // this the heading check below can be satisfied while the search results are
+  // still on screen, and the assertions that follow then run against a page
+  // that has no gate actions on it at all.
+  await page.waitForURL(/\/guard\/visits\/[^/]+$/, { timeout: 20_000 });
   await expect(page.getByRole('heading', { name: visitorName })).toBeVisible();
 
-  // Check-in stays disabled until the ID declaration is ticked.
+  // Check-in stays disabled until the ID declaration is ticked. This only holds
+  // because the request pinned a visit type that requires ID sighting; without
+  // that the checkbox is not rendered and the button starts enabled.
   const checkInButton = page.getByRole('button', { name: 'Check in', exact: true });
+  await expect(checkInButton).toBeVisible();
   await expect(checkInButton).toBeDisabled();
 
   await page.getByLabel(/I have seen the visitor/).check();
