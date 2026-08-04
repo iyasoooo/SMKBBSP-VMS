@@ -4,6 +4,9 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { parseIcText, type ParsedIcFields } from '@/lib/ocr/parse-ic';
 import { Button } from '@/components/ui/button';
 import { Alert } from '@/components/ui/surface';
+import { createLogger } from '@/lib/logger';
+
+const log = createLogger('ocr');
 
 /**
  * Optional OCR assistance for Malaysian identity cards.
@@ -145,7 +148,7 @@ export function IcScanAssist({ onApply, locale = 'en' }: IcScanAssistProps) {
         workerRef.current = null;
       } catch (error) {
         // Never surface the underlying error: it can contain local file paths.
-        console.error('[ocr] recognition failed', error instanceof Error ? error.message : error);
+        log.error('recognition failed', undefined, error);
         setStatus('error');
       } finally {
         // Release the image immediately, whatever happened.

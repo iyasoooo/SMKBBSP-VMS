@@ -29,6 +29,9 @@ import { recordAudit } from '@/lib/audit';
 import { AUDIT_ACTIONS, PASSWORD_MIN_LENGTH_HINT } from '@/lib/constants';
 import { getEnv } from '@/lib/env';
 import { fail, ok, toFieldErrors, type ActionResult } from '@/lib/result';
+import { createLogger } from '@/lib/logger';
+
+const log = createLogger('admin');
 
 async function admin() {
   return authorizeMutation(Role.ADMIN);
@@ -39,7 +42,7 @@ function handle(error: unknown, fallbackMessage: string): ActionResult<never> {
   if (error instanceof AdminError) return fail(error.message, { code: error.code });
   if (error instanceof DecisionError) return fail(error.message, { code: error.code });
   if (error instanceof CredentialError) return fail(error.message, { code: error.code });
-  console.error('[admin] action failed', error instanceof Error ? error.message : error);
+  log.error('action failed', undefined, error);
   return fail(fallbackMessage);
 }
 

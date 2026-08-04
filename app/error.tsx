@@ -2,6 +2,9 @@
 
 import { useEffect } from 'react';
 import { Button, ButtonLink } from '@/components/ui/button';
+import { createLogger } from '@/lib/logger';
+
+const log = createLogger('app');
 
 /**
  * Root error boundary.
@@ -19,7 +22,7 @@ export default function GlobalError({
   reset: () => void;
 }) {
   useEffect(() => {
-    console.error('[app] unhandled error', error.digest ?? error.message);
+    log.error('unhandled error', { digest: error.digest }, error);
   }, [error]);
 
   return (

@@ -8,6 +8,9 @@ import { approveAppointment, DecisionError, rejectAppointment } from '@/lib/doma
 import { flushNotificationsInBackground } from '@/lib/email/outbox';
 import { getEnv } from '@/lib/env';
 import { fail, ok, toFieldErrors, type ActionResult } from '@/lib/result';
+import { createLogger } from '@/lib/logger';
+
+const log = createLogger('teacher');
 
 /**
  * Teacher decision on their own pending request.
@@ -74,7 +77,7 @@ export async function decideRequestAction(
     if (error instanceof DecisionError) {
       return fail(error.message, { code: error.code });
     }
-    console.error('[teacher] decision failed', error instanceof Error ? error.message : error);
+    log.error('decision failed', undefined, error);
     return fail('We could not record that decision. Please try again.');
   }
 }

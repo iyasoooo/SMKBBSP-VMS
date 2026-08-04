@@ -20,6 +20,9 @@ import { walkInSchema } from '@/lib/validation/appointment';
 import { flushNotificationsInBackground } from '@/lib/email/outbox';
 import { DENIAL_CODES } from '@/lib/constants';
 import { fail, ok, toFieldErrors, type ActionResult } from '@/lib/result';
+import { createLogger } from '@/lib/logger';
+
+const log = createLogger('guard');
 
 const GUARD_ROLES = [Role.GUARD, Role.ADMIN];
 
@@ -104,7 +107,7 @@ export async function lookupPassAction(
     const result = mode === 'code' ? await lookupPassByCode(value) : await lookupPassByToken(value);
     return ok(toPayload(result));
   } catch (error) {
-    console.error('[guard] lookup failed', error instanceof Error ? error.message : error);
+    log.error('lookup failed', undefined, error);
     return fail('The lookup failed. Please try again.');
   }
 }
@@ -151,7 +154,7 @@ export async function checkInAction(
     return ok({ badgeNumber: result.badgeNumber, visitId: result.visitId });
   } catch (error) {
     if (error instanceof GateError) return fail(error.message, { code: error.code });
-    console.error('[guard] check-in failed', error instanceof Error ? error.message : error);
+    log.error('check-in failed', undefined, error);
     return fail('The check-in did not complete. Please try again.');
   }
 }
@@ -182,7 +185,7 @@ export async function checkOutAction(
     return ok({ badgeNumber: result.badgeNumber });
   } catch (error) {
     if (error instanceof GateError) return fail(error.message, { code: error.code });
-    console.error('[guard] check-out failed', error instanceof Error ? error.message : error);
+    log.error('check-out failed', undefined, error);
     return fail('The check-out did not complete. Please try again.');
   }
 }
@@ -215,7 +218,7 @@ export async function denyEntryAction(
     return ok();
   } catch (error) {
     if (error instanceof GateError) return fail(error.message, { code: error.code });
-    console.error('[guard] deny failed', error instanceof Error ? error.message : error);
+    log.error('deny failed', undefined, error);
     return fail('That did not work. Please try again.');
   }
 }
@@ -269,7 +272,7 @@ export async function walkInAction(
     flushNotificationsInBackground(result.notificationIds);
   } catch (error) {
     if (error instanceof GateError) return fail(error.message, { code: error.code });
-    console.error('[guard] walk-in failed', error instanceof Error ? error.message : error);
+    log.error('walk-in failed', undefined, error);
     return fail('The registration did not complete. Please try again.');
   }
 

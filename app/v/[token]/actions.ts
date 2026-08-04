@@ -7,6 +7,9 @@ import { hashToken } from '@/lib/crypto/tokens';
 import { cancelAppointmentByToken } from '@/lib/domain/decisions';
 import { flushNotificationsInBackground } from '@/lib/email/outbox';
 import { fail, ok, type ActionResult } from '@/lib/result';
+import { createLogger } from '@/lib/logger';
+
+const log = createLogger('visitor-pass');
 
 const cancelSchema = z.object({
   token: z.string().trim().min(20).max(200),
@@ -41,7 +44,7 @@ export async function cancelRequestAction(
 
     flushNotificationsInBackground(result.notificationIds);
   } catch (error) {
-    console.error('[v/token] cancel failed', error instanceof Error ? error.message : error);
+    log.error('cancel failed', undefined, error);
     return fail('We could not cancel the request just now. Please try again in a moment.');
   }
 

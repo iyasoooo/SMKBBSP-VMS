@@ -5,6 +5,9 @@ import { Role } from '@prisma/client';
 import { authorizeMutation, AuthorizationError } from '@/lib/auth/authorize';
 import { markAllInAppRead, markInAppRead } from '@/lib/domain/in-app-notifications';
 import { fail, ok, type ActionResult } from '@/lib/result';
+import { createLogger } from '@/lib/logger';
+
+const log = createLogger('notifications');
 
 /**
  * Every staff role has a notification centre, so these are open to all three.
@@ -27,7 +30,7 @@ export async function markNotificationReadAction(
     return ok();
   } catch (error) {
     if (error instanceof AuthorizationError) return fail(error.message);
-    console.error('[notifications] mark read failed', error instanceof Error ? error.message : error);
+    log.error('mark read failed', undefined, error);
     return fail('That notification could not be updated.');
   }
 }
@@ -42,7 +45,7 @@ export async function markAllNotificationsReadAction(
     return ok({ count });
   } catch (error) {
     if (error instanceof AuthorizationError) return fail(error.message);
-    console.error('[notifications] mark all failed', error instanceof Error ? error.message : error);
+    log.error('mark all failed', undefined, error);
     return fail('The notifications could not be updated.');
   }
 }

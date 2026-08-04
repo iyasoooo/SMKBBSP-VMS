@@ -37,12 +37,16 @@ const config = [
         { prefer: 'type-imports', fixStyle: 'inline-type-imports' },
       ],
       eqeqeq: ['error', 'always', { null: 'ignore' }],
-      'no-console': ['error', { allow: ['warn', 'error'] }],
+      // Application code logs through `lib/logger`, which redacts context and
+      // silences tracing outside development. A bare `console` call bypasses
+      // both, so it is banned outright rather than merely discouraged.
+      'no-console': 'error',
     },
   },
   {
-    // Operational scripts and seeds legitimately write to stdout.
-    files: ['scripts/**/*.ts', 'prisma/seed.ts', 'prisma/seed/**/*.ts'],
+    // Operational scripts and seeds legitimately write to stdout, and
+    // lib/logger is the one module allowed to reach console directly.
+    files: ['scripts/**/*.ts', 'prisma/seed.ts', 'prisma/seed/**/*.ts', 'lib/logger.ts'],
     rules: { 'no-console': 'off' },
   },
   {

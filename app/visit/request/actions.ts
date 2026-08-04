@@ -13,6 +13,9 @@ import {
 } from '@/lib/domain/appointments';
 import { flushNotificationsInBackground } from '@/lib/email/outbox';
 import { fail, toFieldErrors, type ActionResult } from '@/lib/result';
+import { createLogger } from '@/lib/logger';
+
+const log = createLogger('visit-request');
 
 /**
  * Public appointment submission.
@@ -84,7 +87,7 @@ export async function submitAppointmentRequest(
       return fail(error.message, { fieldErrors: { teacherId: error.message } });
     }
 
-    console.error('[visit/request] submission failed', error instanceof Error ? error.message : error);
+    log.error('submission failed', undefined, error);
     return fail('We could not submit your request just now. Please try again in a moment.');
   }
 

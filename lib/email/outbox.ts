@@ -3,6 +3,9 @@ import { NotificationChannel, NotificationStatus, type Prisma } from '@prisma/cl
 import { prisma, type Db } from '@/lib/db/prisma';
 import { getEnv } from '@/lib/env';
 import { renderEmail, type TemplateKey, type TemplatePayload } from '@/lib/email/templates';
+import { createLogger } from '@/lib/logger';
+
+const log = createLogger('outbox');
 
 /**
  * Transactional outbox.
@@ -123,7 +126,7 @@ export async function deliverNotification(notificationId: string): Promise<boole
     });
 
     // Logged without the recipient address or message body.
-    console.error('[outbox] delivery failed', {
+    log.error('delivery failed', {
       notificationId: notification.id,
       templateKey: notification.templateKey,
       code,
@@ -169,7 +172,7 @@ export async function flushNotifications(ids: string[]): Promise<void> {
 export function flushNotificationsInBackground(ids: string[]): void {
   if (ids.length === 0) return;
   void flushNotifications(ids).catch((error: unknown) => {
-    console.error('[outbox] background flush failed', error instanceof Error ? error.message : error);
+    log.error('background flush failed', undefined, error);
   });
 }
 
