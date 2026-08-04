@@ -12,7 +12,12 @@ export function Card({
   className?: string;
   as?: 'section' | 'div' | 'article';
 }) {
-  return <Tag className={clsx('surface-card rounded-xl', className)}>{children}</Tag>;
+  /*
+   * `min-w-0` for the same reason as TableScroll: cards are routinely placed in
+   * a grid, and a grid item that cannot shrink below its content will push the
+   * page wider than the screen rather than letting its contents wrap or scroll.
+   */
+  return <Tag className={clsx('surface-card min-w-0 rounded-xl', className)}>{children}</Tag>;
 }
 
 export function CardHeader({
@@ -157,7 +162,16 @@ export function DetailRow({
  * sideways on a tablet, so the overflow is confined here.
  */
 export function TableScroll({ children }: { children: ReactNode }) {
-  return <div className="w-full overflow-x-auto">{children}</div>;
+  /*
+   * `min-w-0` is what makes the horizontal scroll actually work.
+   *
+   * A grid or flex item defaults to `min-width: auto`, meaning it refuses to
+   * shrink below its content's intrinsic width. Without this, a wide table
+   * stretches this container past the viewport instead of scrolling inside it,
+   * and the whole page scrolls sideways - which is invisible on a desktop and
+   * obvious on a phone.
+   */
+  return <div className="w-full min-w-0 overflow-x-auto">{children}</div>;
 }
 
 export function PageHeading({

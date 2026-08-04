@@ -137,8 +137,13 @@ export default async function AuditPage({
                       ) : null}
                     </td>
                     <td className="px-4 py-3">
+                      {/*
+                        max-w-md is 448px, which is wider than a phone, so the
+                        width is capped by the viewport first and only widens
+                        once there is room.
+                      */}
                       {entry.metadata ? (
-                        <pre className="max-w-md overflow-x-auto rounded bg-[var(--surface-inset)] p-2 text-xs">
+                        <pre className="w-full max-w-full min-w-0 overflow-x-auto rounded bg-[var(--surface-inset)] p-2 text-xs sm:max-w-md">
                           {JSON.stringify(entry.metadata, null, 1)}
                         </pre>
                       ) : (
