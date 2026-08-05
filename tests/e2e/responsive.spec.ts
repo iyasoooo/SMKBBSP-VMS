@@ -41,21 +41,47 @@ async function reportOverflowingElements(page: Page): Promise<string[]> {
     const limit = document.documentElement.clientWidth;
     const guilty: string[] = [];
 
+    /**
+     * True only when a *strict ancestor* scrolls horizontally.
+     *
+     * Deliberately not `closest()`, which matches the element itself: a
+     * horizontal scroller that is itself wider than the viewport is exactly the
+     * bug being hunted, and treating it as exempt hides it completely. Computed
+     * style is used rather than the class name so a hand-rolled scroller counts
+     * the same as one built with the utility.
+     */
+    const insideScroller = (el: HTMLElement): boolean => {
+      let parent = el.parentElement;
+      while (parent && parent !== document.body) {
+        const overflowX = getComputedStyle(parent).overflowX;
+        if (overflowX === 'auto' || overflowX === 'scroll') return true;
+        parent = parent.parentElement;
+      }
+      return false;
+    };
+
     for (const el of Array.from(document.querySelectorAll<HTMLElement>('body *'))) {
       const rect = el.getBoundingClientRect();
       if (rect.width === 0 || rect.height === 0) continue;
       if (rect.right <= limit + 1) continue;
+      if (insideScroller(el)) continue;
 
-      // Ignore anything inside a deliberate horizontal scroller.
-      const scroller = el.closest('.overflow-x-auto, [data-allow-overflow]');
-      if (scroller) continue;
+      const style = getComputedStyle(el);
+      const scrolls = style.overflowX === 'auto' || style.overflowX === 'scroll';
 
       const id = el.id ? `#${el.id}` : '';
       const cls = typeof el.className === 'string' ? `.${el.className.split(/\s+/)[0]}` : '';
-      guilty.push(`${el.tagName.toLowerCase()}${id}${cls} -> ${Math.round(rect.right)}px`);
+      // Reporting own width and content width separates the two failure modes:
+      // an element that is too wide, versus one sized correctly whose content
+      // simply cannot be reached because scrolling is not enabled.
+      guilty.push(
+        `${el.tagName.toLowerCase()}${id}${cls}` +
+          ` right=${Math.round(rect.right)} w=${Math.round(rect.width)}` +
+          ` content=${el.scrollWidth}${scrolls ? ' [scroller]' : ''}`,
+      );
     }
 
-    return [...new Set(guilty)].slice(0, 10);
+    return [...new Set(guilty)].slice(0, 12);
   });
 }
 
@@ -63,6 +89,8 @@ async function checkPage(page: Page, path: string, label: string): Promise<void>
   await step(`${label} fits 360px`, async () => {
     await page.goto(path);
     const offenders = await reportOverflowingElements(page);
+    // Report elements first: the message names the culprit, whereas a bare
+    // sideways-scroll number only says the page is too wide somewhere.
     expect(offenders, `overflowing elements on ${label}: ${offenders.join(', ')}`).toEqual([]);
     await expectNoSidewaysScroll(page, label);
   });
