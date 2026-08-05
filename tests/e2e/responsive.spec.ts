@@ -25,11 +25,54 @@ import { step } from './steps';
  * A single pixel of tolerance absorbs sub-pixel rounding.
  */
 async function expectNoSidewaysScroll(page: Page, label: string): Promise<void> {
-  const overflowBy = await page.evaluate(
-    () => document.documentElement.scrollWidth - document.documentElement.clientWidth,
-  );
+  const report = await page.evaluate(() => {
+    const root = document.documentElement;
+    const overflowBy = root.scrollWidth - root.clientWidth;
+    if (overflowBy <= 1) return { overflowBy, culprits: [] as string[] };
 
-  expect(overflowBy, `${label} scrolls sideways by ${overflowBy}px at 360px wide`).toBeLessThanOrEqual(1);
+    const viewport = root.clientWidth;
+    const culprits: string[] = [];
+
+    /*
+     * Two distinct causes, and a rect-based check only sees the first.
+     *
+     *   1. The box itself is too wide  -> rect.right exceeds the viewport.
+     *   2. The box fits, but its content escapes it because overflow is
+     *      visible -> the rect is innocent while the painted overflow still
+     *      extends the document's scrollable area.
+     *
+     * The second is invisible to `getBoundingClientRect`, which is why the
+     * element check kept coming back empty while the page still scrolled.
+     */
+    for (const el of Array.from(document.querySelectorAll<HTMLElement>('body *'))) {
+      const rect = el.getBoundingClientRect();
+      if (rect.width === 0 && rect.height === 0) continue;
+
+      const style = getComputedStyle(el);
+      const scrolls = style.overflowX === 'auto' || style.overflowX === 'scroll';
+      const contentEscapes = !scrolls && el.scrollWidth > Math.ceil(rect.width) + 1;
+      const boxTooWide = rect.right > viewport + 1;
+
+      if (!contentEscapes && !boxTooWide) continue;
+
+      const id = el.id ? `#${el.id}` : '';
+      const cls = typeof el.className === 'string' ? `.${el.className.trim().split(/\s+/)[0]}` : '';
+      culprits.push(
+        `${el.tagName.toLowerCase()}${id}${cls}` +
+          ` w=${Math.round(rect.width)} content=${el.scrollWidth} right=${Math.round(rect.right)}` +
+          ` overflowX=${style.overflowX}` +
+          `${contentEscapes ? ' ESCAPES' : ''}${boxTooWide ? ' TOO-WIDE' : ''}`,
+      );
+    }
+
+    return { overflowBy, culprits: culprits.slice(0, 12) };
+  });
+
+  expect(
+    report.overflowBy,
+    `${label} scrolls sideways by ${report.overflowBy}px at 360px wide.\n` +
+      `Culprits:\n  ${report.culprits.join('\n  ') || '(none identified)'}`,
+  ).toBeLessThanOrEqual(1);
 }
 
 /**
