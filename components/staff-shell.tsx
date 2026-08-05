@@ -78,7 +78,9 @@ export async function StaffShell({
         </div>
 
         <nav aria-label="Primary" className="border-t border-[var(--line-soft)]">
-          <ul className={`mx-auto flex ${container} min-w-0 gap-1 overflow-x-auto px-2 py-1`}>
+          <ul
+            className={`relative mx-auto flex ${container} min-w-0 gap-1 overflow-x-auto px-2 py-1`}
+          >
             {nav.map((item) => (
               <li key={item.href}>
                 <Link

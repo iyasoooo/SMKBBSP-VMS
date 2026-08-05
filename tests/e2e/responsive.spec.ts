@@ -50,6 +50,28 @@ async function expectNoSidewaysScroll(page: Page, label: string): Promise<void> 
 
       const style = getComputedStyle(el);
       const scrolls = style.overflowX === 'auto' || style.overflowX === 'scroll';
+
+      /*
+       * Content inside a scroller is legitimately wider than the viewport -
+       * that is the entire point of a scroller - so reporting it buries the
+       * real culprit under table cells and nav tabs. The exception is an
+       * absolutely positioned descendant, which a static scroller does not
+       * clip and which therefore does extend the document.
+       */
+      let clippedByAncestor = false;
+      let parent = el.parentElement;
+      while (parent && parent !== document.body) {
+        const parentStyle = getComputedStyle(parent);
+        const parentScrolls =
+          parentStyle.overflowX === 'auto' || parentStyle.overflowX === 'scroll';
+        if (parentScrolls && (style.position !== 'absolute' || parentStyle.position !== 'static')) {
+          clippedByAncestor = true;
+          break;
+        }
+        parent = parent.parentElement;
+      }
+      if (clippedByAncestor) continue;
+
       const contentEscapes = !scrolls && el.scrollWidth > Math.ceil(rect.width) + 1;
       const boxTooWide = rect.right > viewport + 1;
 

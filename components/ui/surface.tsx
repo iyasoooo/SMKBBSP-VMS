@@ -171,7 +171,16 @@ export function TableScroll({ children }: { children: ReactNode }) {
    * and the whole page scrolls sideways - which is invisible on a desktop and
    * obvious on a phone.
    */
-  return <div className="w-full min-w-0 overflow-x-auto">{children}</div>;
+  /*
+   * `relative` is not cosmetic here. `overflow` does not clip absolutely
+   * positioned descendants unless the scroll container is also their
+   * containing block. Screen-reader-only text inside these tables is
+   * `position: absolute`, so without this it escapes the scroller entirely and
+   * stretches the document sideways - invisibly, since the spans are 1px and
+   * clipped from view. Every visible element stays put, which is why this
+   * looked like a phantom for several rounds of debugging.
+   */
+  return <div className="relative w-full min-w-0 overflow-x-auto">{children}</div>;
 }
 
 export function PageHeading({

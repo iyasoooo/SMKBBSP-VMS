@@ -85,7 +85,7 @@ export default async function EmergencyListPage() {
           <EmptyState title={t.noOneOnSite} />
         </div>
       ) : (
-        <div className="surface-card min-w-0 overflow-x-auto rounded-xl">
+        <div className="surface-card relative min-w-0 overflow-x-auto rounded-xl">
           <table className="w-full text-left text-sm">
             <caption className="sr-only">
               {t.emergencyHeading} - {formatDateTime(now)}
