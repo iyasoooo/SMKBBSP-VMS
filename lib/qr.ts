@@ -38,7 +38,7 @@ export async function renderQrDataUrl(
     errorCorrectionLevel: ERROR_CORRECTION,
     margin: options.margin ?? 2,
     width: options.width ?? 320,
-    color: { dark: '#0b1a33ff', light: '#ffffffff' },
+    color: { dark: '#1a1512ff', light: '#ffffffff' },
   });
 }
 

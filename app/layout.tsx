@@ -33,11 +33,11 @@ export const viewport: Viewport = {
   // Guards zoom the gate screen in bright sunlight; do not lock scaling.
   maximumScale: 5,
   // Tints the browser and installed-app chrome. Two entries so an installed app
-  // matches the theme the user actually has, rather than forcing navy onto a
-  // dark-mode device.
+  // matches the theme the user actually has, rather than forcing crest crimson
+  // onto a dark-mode device.
   themeColor: [
-    { media: '(prefers-color-scheme: light)', color: '#26437a' },
-    { media: '(prefers-color-scheme: dark)', color: '#0a1526' },
+    { media: '(prefers-color-scheme: light)', color: '#a50e26' },
+    { media: '(prefers-color-scheme: dark)', color: '#101311' },
   ],
 };
 

@@ -71,19 +71,19 @@ function layout(options: {
   return `<!doctype html>
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width">
 <title>${escapeHtml(options.heading)}</title></head>
-<body style="margin:0;padding:0;background:#f6f7fa;font-family:Segoe UI,system-ui,-apple-system,Arial,sans-serif;color:#1f2b41;">
-  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#f6f7fa;padding:24px 12px;">
+<body style="margin:0;padding:0;background:#f7f6f3;font-family:Segoe UI,system-ui,-apple-system,Arial,sans-serif;color:#2c2724;">
+  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#f7f6f3;padding:24px 12px;">
     <tr><td align="center">
-      <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:560px;background:#ffffff;border:1px solid #dfe4ed;border-radius:12px;overflow:hidden;">
-        <tr><td style="background:#26437a;padding:18px 24px;color:#ffffff;">
+      <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:560px;background:#ffffff;border:1px solid #e4e0d8;border-radius:12px;overflow:hidden;">
+        <tr><td style="background:#a50e26;padding:18px 24px;color:#ffffff;">
           <div style="font-size:15px;font-weight:600;">VisitorPass</div>
           <div style="font-size:12px;opacity:.85;">${escapeHtml(options.schoolName)}</div>
         </td></tr>
         <tr><td style="padding:24px;">
-          <h1 style="margin:0 0 14px;font-size:18px;color:#0b1a33;">${escapeHtml(options.heading)}</h1>
+          <h1 style="margin:0 0 14px;font-size:18px;color:#1a1512;">${escapeHtml(options.heading)}</h1>
           ${options.bodyHtml}
         </td></tr>
-        <tr><td style="padding:16px 24px;background:#f8fafc;border-top:1px solid #dfe4ed;font-size:12px;color:#5a6b85;">
+        <tr><td style="padding:16px 24px;background:#faf9f6;border-top:1px solid #e4e0d8;font-size:12px;color:#6b625c;">
           ${escapeHtml(options.footerNote ?? 'This is an automated message from the school visitor system. Please do not reply.')}
         </td></tr>
       </table>
@@ -102,8 +102,8 @@ function detailTable(rows: Array<[string, string]>): string {
     .map(
       ([label, value]) =>
         `<tr>
-           <td style="padding:6px 12px 6px 0;font-size:13px;color:#5a6b85;white-space:nowrap;vertical-align:top;">${escapeHtml(label)}</td>
-           <td style="padding:6px 0;font-size:13px;color:#0b1a33;font-weight:600;">${escapeHtml(value)}</td>
+           <td style="padding:6px 12px 6px 0;font-size:13px;color:#6b625c;white-space:nowrap;vertical-align:top;">${escapeHtml(label)}</td>
+           <td style="padding:6px 0;font-size:13px;color:#1a1512;font-weight:600;">${escapeHtml(value)}</td>
          </tr>`,
     )
     .join('');
@@ -113,7 +113,7 @@ function detailTable(rows: Array<[string, string]>): string {
 
 function button(url: string, label: string): string {
   return `<p style="margin:18px 0;">
-    <a href="${escapeHtml(url)}" style="display:inline-block;background:#26437a;color:#ffffff;text-decoration:none;padding:11px 20px;border-radius:8px;font-size:14px;font-weight:600;">${escapeHtml(label)}</a>
+    <a href="${escapeHtml(url)}" style="display:inline-block;background:#00693e;color:#ffffff;text-decoration:none;padding:11px 20px;border-radius:8px;font-size:14px;font-weight:600;">${escapeHtml(label)}</a>
   </p>
   <p style="margin:0 0 12px;font-size:12px;color:#5a6b85;word-break:break-all;">If the button does not work, copy this address into your browser:<br>${escapeHtml(url)}</p>`;
 }

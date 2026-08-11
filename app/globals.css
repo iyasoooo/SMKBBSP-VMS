@@ -8,20 +8,56 @@
 @custom-variant dark (&:where(.dark, .dark *));
 
 @theme {
-  /* Brand: a restrained school palette. Deep navy carries the identity,
-     warm white keeps long shifts readable, and the status colours are
-     reserved strictly for meaning - never decoration. */
-  --color-navy-50: #f1f5fb;
-  --color-navy-100: #e0e9f6;
-  --color-navy-200: #c3d4ec;
-  --color-navy-300: #96b4dd;
-  --color-navy-400: #628dc9;
-  --color-navy-500: #3f6db3;
-  --color-navy-600: #2e5496;
-  --color-navy-700: #26437a;
-  --color-navy-800: #1d3564;
-  --color-navy-900: #142748;
-  --color-navy-950: #0b1a33;
+  /*
+   * Brand: the SMKBBSP crest - crimson, gold and forest green on white.
+   *
+   * The crest puts red and green side by side, which creates one problem worth
+   * naming: the interface already uses green for success and red for danger.
+   * If a primary button were crimson it would read as destructive, so the two
+   * roles are kept apart deliberately.
+   *
+   *   crimson  identity only - header, crest tile, print rules. Never a button.
+   *   green    the action colour, and success. "Go" in both senses.
+   *   gold     warnings and highlights. Always with dark text; white on gold
+   *            measures 1.8:1 and is unusable.
+   *
+   * Red and green together is also the common colour-vision pair, so nothing
+   * here relies on hue alone: every status carries a text label as well.
+   */
+  --color-crimson-50: #fdf2f3;
+  --color-crimson-100: #fde3e5;
+  --color-crimson-200: #fbc9ce;
+  --color-crimson-300: #f59aa4;
+  --color-crimson-400: #ea6373;
+  --color-crimson-500: #d93a4c;
+  --color-crimson-600: #c62030;
+  --color-crimson-700: #a50e26;
+  --color-crimson-800: #8a0d21;
+  --color-crimson-900: #74101f;
+  --color-crimson-950: #40040d;
+
+  --color-forest-50: #eefaf2;
+  --color-forest-100: #d6f3e2;
+  --color-forest-200: #b0e6c9;
+  --color-forest-300: #7fd6a6;
+  --color-forest-400: #45bd81;
+  --color-forest-500: #0b8043;
+  --color-forest-600: #00693e;
+  --color-forest-700: #005a34;
+  --color-forest-800: #04482c;
+  --color-forest-900: #043b26;
+  --color-forest-950: #012014;
+
+  --color-gold-50: #fefaeb;
+  --color-gold-100: #fdf0cd;
+  --color-gold-200: #fbe093;
+  --color-gold-300: #f8cc59;
+  --color-gold-400: #f5c451;
+  --color-gold-500: #f2b705;
+  --color-gold-600: #d69a04;
+  --color-gold-700: #a8720a;
+  --color-gold-800: #8a5b10;
+  --color-gold-900: #4a3800;
 
   --color-parchment: #fdfbf7;
 
@@ -40,79 +76,100 @@
  */
 @layer base {
   :root {
-    --surface-page: #f6f7fa;
+    /* Warm off-white rather than a cool grey, so the crest's red and gold do
+       not sit against a blue-tinted page. */
+    --surface-page: #f7f6f3;
     --surface-card: #ffffff;
-    --surface-muted: #eef1f6;
-    --surface-inset: #f8fafc;
+    --surface-muted: #f0eee9;
+    --surface-inset: #faf9f6;
 
-    --text-strong: #0b1a33;
-    --text-body: #1f2b41;
-    --text-muted: #5a6b85;
+    --text-strong: #1a1512;
+    --text-body: #2c2724;
+    --text-muted: #6b625c;
     --text-inverse: #ffffff;
 
-    --line-soft: #dfe4ed;
-    --line-strong: #c3ccdb;
+    --line-soft: #e4e0d8;
+    --line-strong: #cfc9be;
 
-    --accent: #26437a;
-    --accent-hover: #1d3564;
-    --accent-soft: #e0e9f6;
+    /* Forest green carries every action. Crimson is reserved for identity and
+       for danger, so a primary button can never be mistaken for a destructive
+       one. */
+    --accent: #00693e;
+    --accent-hover: #005a34;
+    --accent-soft: #d6f3e2;
     --accent-text: #ffffff;
 
-    --ok: #047857;
-    --ok-soft: #d1fae5;
-    --ok-text: #065f46;
+    /* The crest itself: header, crest tile, print rules. Never a control. */
+    --brand: #a50e26;
+    --brand-hover: #8a0d21;
+    --brand-soft: #fde3e5;
+    --brand-text: #ffffff;
 
-    --warn: #b45309;
-    --warn-soft: #fef3c7;
-    --warn-text: #92400e;
+    --ok: #0b8043;
+    --ok-soft: #dcf5e6;
+    --ok-text: #14532d;
 
-    --danger: #b91c1c;
-    --danger-soft: #fee2e2;
-    --danger-text: #991b1b;
+    --warn: #f2b705;
+    --warn-soft: #fdf0cd;
+    --warn-text: #4a3800;
+
+    --danger: #c62030;
+    --danger-soft: #fde3e5;
+    --danger-text: #7f1020;
 
     --info: #1d4ed8;
-    --info-soft: #dbeafe;
-    --info-text: #1e40af;
+    --info-soft: #dde9fb;
+    --info-text: #123a6b;
 
-    --focus-ring: #2563eb;
+    --focus-ring: #a50e26;
   }
 
   .dark {
-    --surface-page: #0a1526;
-    --surface-card: #101f37;
-    --surface-muted: #16294a;
-    --surface-inset: #0d1c31;
+    /* Near-neutral charcoal with the faintest green cast, so crimson and gold
+       stay true against it. A navy-tinted dark would fight both. */
+    --surface-page: #101311;
+    --surface-card: #171b19;
+    --surface-muted: #212724;
+    --surface-inset: #141816;
 
-    --text-strong: #f1f5fb;
-    --text-body: #dce5f2;
-    --text-muted: #93a5c0;
-    --text-inverse: #0b1a33;
+    --text-strong: #f6f4f0;
+    --text-body: #e4e0da;
+    --text-muted: #a49c94;
+    --text-inverse: #1a1512;
 
-    --line-soft: #22375c;
-    --line-strong: #33507f;
+    --line-soft: #2b322e;
+    --line-strong: #3d4641;
 
-    --accent: #628dc9;
-    --accent-hover: #96b4dd;
-    --accent-soft: #1d3564;
-    --accent-text: #071021;
+    /* Dark mode inverts the relationship: the accent becomes a light tint
+       carrying dark text, because a deep forest green on charcoal would be
+       nearly invisible. */
+    --accent: #7fd6a6;
+    --accent-hover: #b0e6c9;
+    --accent-soft: #04482c;
+    --accent-text: #08120d;
 
-    --ok: #34d399;
-    --ok-soft: #06301f;
-    --ok-text: #6ee7b7;
+    --brand: #ea6373;
+    --brand-hover: #f59aa4;
+    --brand-soft: #40040d;
+    --brand-text: #2a0209;
 
-    --warn: #fbbf24;
-    --warn-soft: #38250a;
-    --warn-text: #fcd34d;
+    --ok: #5ed69b;
+    --ok-soft: #04301d;
+    --ok-text: #7fd6a6;
 
-    --danger: #f87171;
-    --danger-soft: #3d1111;
-    --danger-text: #fca5a5;
+    --warn: #f5c451;
+    --warn-soft: #3a2b04;
+    --warn-text: #f8cc59;
 
-    --info: #60a5fa;
-    --info-soft: #10254a;
-    --info-text: #93c5fd;
+    --danger: #ff9b9b;
+    --danger-soft: #3f1116;
+    --danger-text: #f59aa4;
 
-    --focus-ring: #7dd3fc;
+    --info: #8fb8ff;
+    --info-soft: #12233f;
+    --info-text: #8fb8ff;
+
+    --focus-ring: #f5c451;
   }
 
   * {

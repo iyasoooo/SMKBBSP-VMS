@@ -20,8 +20,8 @@ import sharp from 'sharp';
 const PUBLIC_DIR = resolve(process.cwd(), 'public');
 const ICON_DIR = resolve(PUBLIC_DIR, 'icons');
 
-/** Brand navy, matching --color-navy-700 in globals.css. */
-const BACKGROUND = '#26437a';
+/** Crest crimson, matching --color-crimson-700 in globals.css. */
+const BACKGROUND = '#a50e26';
 
 interface Target {
   file: string;

@@ -24,7 +24,7 @@ export default async function VisitLayout({ children }: { children: React.ReactN
           <Link href="/" className="flex items-center gap-3">
             <span
               aria-hidden="true"
-              className="flex size-9 items-center justify-center rounded-lg bg-[var(--accent)] text-sm font-bold text-[var(--accent-text)]"
+              className="flex size-9 items-center justify-center rounded-lg bg-[var(--brand)] text-sm font-bold text-[var(--brand-text)]"
             >
               VP
             </span>
