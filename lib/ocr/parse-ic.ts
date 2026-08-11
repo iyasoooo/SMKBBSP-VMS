@@ -56,18 +56,36 @@ function coerceDigits(candidate: string): string {
  * strongest signal, because that shape does not otherwise occur on the card. A
  * bare 12-digit run is accepted next. Anything that needed glyph correction is
  * reported as uncertain, since a corrected digit is a guess.
+ *
+ * The line it was found on is reported too: the name sits directly beneath the
+ * number on a MyKad, and that position is a far stronger signal than anything
+ * the text of the name line itself provides.
  */
-function findIdentityNumber(text: string): { value: string | null; certain: boolean } {
-  const hyphenated = /(\d{6})\s*-\s*(\d{2})\s*-\s*(\d{4})/.exec(text);
-  if (hyphenated) {
-    return { value: `${hyphenated[1]}${hyphenated[2]}${hyphenated[3]}`, certain: true };
+function findIdentityNumber(lines: string[]): {
+  value: string | null;
+  certain: boolean;
+  lineIndex: number;
+} {
+  // Scanned per line rather than across the whole text so the position is
+  // known, and so `\s` in the hyphenated form cannot straddle a line break.
+  for (const [index, line] of lines.entries()) {
+    const hyphenated = /(\d{6})\s*-\s*(\d{2})\s*-\s*(\d{4})/.exec(line);
+    if (hyphenated) {
+      return {
+        value: `${hyphenated[1]}${hyphenated[2]}${hyphenated[3]}`,
+        certain: true,
+        lineIndex: index,
+      };
+    }
   }
 
-  const plain = /(?<!\d)(\d{12})(?!\d)/.exec(text);
-  if (plain?.[1]) return { value: plain[1], certain: true };
+  for (const [index, line] of lines.entries()) {
+    const plain = /(?<!\d)(\d{12})(?!\d)/.exec(line);
+    if (plain?.[1]) return { value: plain[1], certain: true, lineIndex: index };
+  }
 
   // Fall back to glyph-corrected candidates, which are inherently less certain.
-  for (const line of text.split(/\r?\n/)) {
+  for (const [index, line] of lines.entries()) {
     const compact = line.replace(/[\s-]/g, '');
     // Only consider runs that are mostly digits already.
     if (compact.length < 12) continue;
@@ -76,10 +94,10 @@ function findIdentityNumber(text: string): { value: string | null; certain: bool
 
     const coerced = coerceDigits(compact);
     const match = /(?<!\d)(\d{12})(?!\d)/.exec(coerced);
-    if (match?.[1]) return { value: match[1], certain: false };
+    if (match?.[1]) return { value: match[1], certain: false, lineIndex: index };
   }
 
-  return { value: null, certain: false };
+  return { value: null, certain: false, lineIndex: -1 };
 }
 
 /** Words printed on every MyKad that are never part of a person's name. */
@@ -117,45 +135,111 @@ const ADDRESS_TOKENS = [
 ];
 
 /**
+ * States and federal territories, which close the address block.
+ *
+ * These are set in the same capitals as the name and carry no digits, so
+ * without them a line like `WILAYAH PERSEKUTUAN` or `SELANGOR DARUL EHSAN`
+ * outranks a genuinely short name such as `SITI NORAINI`. Only unambiguous
+ * place words are listed: honorifics like `AMAN` and `IMAN` are omitted
+ * deliberately, because they also occur in given names.
+ */
+const PLACE_TOKENS = [
+  'WILAYAH',
+  'PERSEKUTUAN',
+  'KUALA',
+  'LUMPUR',
+  'PUTRAJAYA',
+  'LABUAN',
+  'JOHOR',
+  'KEDAH',
+  'KELANTAN',
+  'MELAKA',
+  'NEGERI',
+  'SEMBILAN',
+  'PAHANG',
+  'PERAK',
+  'PERLIS',
+  'PULAU',
+  'PINANG',
+  'SABAH',
+  'SARAWAK',
+  'SELANGOR',
+  'TERENGGANU',
+];
+
+/**
+ * Normalise a line and decide whether it could be a name at all. Returns the
+ * cleaned line, or null when the line is a label, an address, or not capitals.
+ */
+function asNameCandidate(raw: string): string | null {
+  // Tested on the *raw* line. Cleaning first would strip an address's house
+  // number and leave something that reads like a name.
+  if (/\d/.test(raw)) return null;
+
+  const cleaned = raw.replace(/[^A-Za-z@/'.\- ]/g, ' ').replace(/\s+/g, ' ').trim();
+  if (cleaned.length < 4) return null;
+
+  const upper = cleaned.toUpperCase();
+  if (CARD_NOISE.some((noise) => upper.includes(noise))) return null;
+  if (ADDRESS_TOKENS.some((token) => upper.split(' ').includes(token))) return null;
+
+  // Names are printed in capitals; mixed case is usually a label.
+  const letters = cleaned.replace(/[^A-Za-z]/g, '');
+  if (letters.length === 0) return null;
+  const upperRatio = (cleaned.match(/[A-Z]/g) ?? []).length / letters.length;
+  if (upperRatio <= 0.8) return null;
+
+  return cleaned;
+}
+
+function isPlaceLine(line: string): boolean {
+  const words = line.toUpperCase().split(' ');
+  return PLACE_TOKENS.some((token) => words.includes(token));
+}
+
+/**
  * Find the cardholder name.
  *
- * The name sits on its own line in capitals, so the heuristic looks for the
- * longest all-caps line that is not one of the card's printed labels and
- * contains no digits. Addresses are excluded because they carry digits; the
- * baseline deliberately never captures an address anyway.
+ * Position is the primary signal: a MyKad prints the name directly beneath the
+ * identity number, so the first plausible line after the number is the name.
+ * This replaces an earlier "longest capitalised line" rule, which reliably
+ * returned the state from the address block whenever the holder's name was
+ * shorter than it - and reported that as certain.
+ *
+ * A name wrapped across two printed lines yields only its first line. That is
+ * deliberate: truncation is obvious to the person reviewing the field, whereas
+ * a name with part of an address appended is not.
  */
-function findFullName(text: string): { value: string | null; certain: boolean } {
-  const candidates = text
-    .split(/\r?\n/)
-    // Reject digit-bearing lines on the *raw* text. Cleaning first would strip
-    // an address's house number and leave a line that reads like a name.
-    .filter((raw) => !/\d/.test(raw))
-    .map((line) => line.replace(/[^A-Za-z@/'.\- ]/g, ' ').replace(/\s+/g, ' ').trim())
-    .filter((line) => {
-      if (line.length < 4) return false;
-      const upper = line.toUpperCase();
-      if (CARD_NOISE.some((noise) => upper.includes(noise))) return false;
-      if (ADDRESS_TOKENS.some((token) => upper.split(' ').includes(token))) return false;
-      // Names are printed in capitals; mixed case is usually a label.
-      const letters = line.replace(/[^A-Za-z]/g, '');
-      if (letters.length === 0) return false;
-      const upperRatio = (line.match(/[A-Z]/g) ?? []).length / letters.length;
-      return upperRatio > 0.8;
-    })
-    .sort((a, b) => b.length - a.length);
+function findFullName(lines: string[], numberLineIndex: number): {
+  value: string | null;
+  certain: boolean;
+} {
+  if (numberLineIndex >= 0) {
+    // Bounded so a stray digit run early in the read cannot drag the search
+    // all the way down into the address block.
+    const limit = Math.min(lines.length, numberLineIndex + 6);
+    for (let index = numberLineIndex + 1; index < limit; index += 1) {
+      const candidate = asNameCandidate(lines[index] ?? '');
+      if (!candidate || isPlaceLine(candidate)) continue;
+      return { value: candidate, certain: candidate.split(' ').length >= 2 };
+    }
+  }
 
-  const best = candidates[0];
-  if (!best) return { value: null, certain: false };
+  // No number to anchor to. Fall back to the longest capitalised line, and
+  // never call it certain - without the anchor this is genuinely a guess.
+  const best = lines
+    .map((line) => asNameCandidate(line))
+    .filter((line): line is string => line !== null && !isPlaceLine(line))
+    .sort((a, b) => b.length - a.length)[0];
 
-  // A confident name has at least two parts, as Malaysian names almost always do.
-  return { value: best, certain: best.split(' ').length >= 2 };
+  return best ? { value: best, certain: false } : { value: null, certain: false };
 }
 
 export function parseIcText(rawText: string): ParsedIcFields {
-  const text = rawText ?? '';
+  const lines = (rawText ?? '').split(/\r?\n/);
 
-  const identity = findIdentityNumber(text);
-  const name = findFullName(text);
+  const identity = findIdentityNumber(lines);
+  const name = findFullName(lines, identity.lineIndex);
 
   const uncertain: ParsedIcFields['uncertain'] = [];
   if (identity.value && !identity.certain) uncertain.push('identityNumber');

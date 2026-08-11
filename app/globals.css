@@ -189,6 +189,17 @@
     color: var(--accent-text);
     border-radius: 6px;
   }
+
+  /* Draws the focus ring on a styled element standing in for a visually
+     hidden control next to it - the IC drop zone, where the real <input> is
+     `sr-only` and the <label> is what the user sees. Written out rather than
+     composed from `peer-focus-visible:outline-*` utilities so the colour comes
+     from the same token as the global `:focus-visible` rule above and cannot
+     be lost to utility ordering. */
+  .peer:focus-visible ~ .peer-ring {
+    outline: 2px solid var(--focus-ring);
+    outline-offset: 2px;
+  }
 }
 
 /*

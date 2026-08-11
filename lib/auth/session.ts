@@ -4,7 +4,6 @@ import type { Role, User } from '@prisma/client';
 import { prisma, type Db } from '@/lib/db/prisma';
 import { generateToken, hashSessionToken } from '@/lib/crypto/tokens';
 import { SESSION_COOKIE } from '@/lib/constants';
-import { getEnv } from '@/lib/env';
 
 /**
  * Database-backed sessions.
@@ -68,6 +67,33 @@ export async function describeRequestContext(): Promise<{
 }
 
 /**
+ * Whether *this request* arrived over TLS.
+ *
+ * Deliberately not `NODE_ENV === 'production'`. A `Secure` cookie is silently
+ * discarded by the browser when the page was served over plain http, so keying
+ * the flag on the build type breaks sign-in entirely for a production build
+ * reached over http - a LAN address during testing, say. The symptom is a
+ * login page that reappears immediately after a successful login, because the
+ * session was created but its cookie was never stored.
+ *
+ * Same reasoning the middleware already applies to
+ * `upgrade-insecure-requests`, and `next.config.ts` to HSTS: a transport
+ * decision belongs to the transport, not the build.
+ *
+ * The forwarded header is trusted first so the flag stays correct behind a TLS
+ * terminating proxy, where the request reaches Next over http by design.
+ */
+async function isSecureRequest(): Promise<boolean> {
+  const headerList = await headers();
+
+  const forwardedProto = headerList.get('x-forwarded-proto');
+  if (forwardedProto) return forwardedProto.split(',')[0]?.trim() === 'https';
+
+  // Set by middleware.ts, which can see the request URL scheme directly.
+  return headerList.get('x-request-secure') === '1';
+}
+
+/**
  * Issue a session and set its cookie.
  *
  * Returns the raw token only so tests can assert on it; production callers
@@ -92,7 +118,7 @@ export async function createSession(userId: string): Promise<string> {
   cookieStore.set(SESSION_COOKIE, rawToken, {
     httpOnly: true,
     sameSite: 'lax',
-    secure: getEnv().NODE_ENV === 'production',
+    secure: await isSecureRequest(),
     path: '/',
     expires: expiresAt,
   });

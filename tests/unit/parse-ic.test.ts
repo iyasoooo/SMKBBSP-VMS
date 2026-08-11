@@ -76,6 +76,57 @@ describe('parseIcText', () => {
     expect(parsed.fullName).not.toContain('JALAN');
   });
 
+  /**
+   * The card prints the address directly under the name, and its final line is
+   * a state or federal territory in the same capitals with no digits. The
+   * original "longest capitalised line" rule therefore returned the state
+   * whenever the holder's name was shorter than it - and called it certain.
+   */
+  const FULL_CARD = (name: string) => `KAD PENGENALAN
+MALAYSIA
+880101-14-5523
+${name}
+NO 12 JALAN MELATI 2
+TAMAN SRI PETALING
+KUALA LUMPUR
+WILAYAH PERSEKUTUAN
+PEREMPUAN  ISLAM
+WARGANEGARA`;
+
+  it('prefers the line under the number over a longer state line', () => {
+    expect(parseIcText(FULL_CARD('SITI NORAINI')).fullName).toBe('SITI NORAINI');
+  });
+
+  it('does not return a state or federal territory as the name', () => {
+    for (const name of ['SITI NORAINI', 'LEE WEI MING', 'NURUL HUDA BINTI ISMAIL']) {
+      const parsed = parseIcText(FULL_CARD(name));
+      expect(parsed.fullName).toBe(name);
+    }
+  });
+
+  it('rejects a state line even when it is the only candidate left', () => {
+    const parsed = parseIcText('880101-14-5523\nSELANGOR DARUL EHSAN');
+    expect(parsed.fullName).toBeNull();
+  });
+
+  it('keeps place words that are also genuine given names', () => {
+    // `AMAN` and `IMAN` occur in real names, so they are deliberately absent
+    // from the place list even though states append them.
+    const parsed = parseIcText(FULL_CARD('NUR IMAN BINTI AMAN'));
+    expect(parsed.fullName).toBe('NUR IMAN BINTI AMAN');
+  });
+
+  it('skips a label printed between the number and the name', () => {
+    const parsed = parseIcText('880101-14-5523\nWARGANEGARA\nAHMAD BIN ALI');
+    expect(parsed.fullName).toBe('AHMAD BIN ALI');
+  });
+
+  it('never reports a name found without a number anchor as certain', () => {
+    const parsed = parseIcText('KAD PENGENALAN\nAHMAD BIN ALI');
+    expect(parsed.fullName).toBe('AHMAD BIN ALI');
+    expect(parsed.uncertain).toContain('fullName');
+  });
+
   it('handles empty and whitespace input without throwing', () => {
     for (const input of ['', '   ', '\n\n']) {
       const parsed = parseIcText(input);

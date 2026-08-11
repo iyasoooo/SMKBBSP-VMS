@@ -27,6 +27,9 @@ if (process.env.NODE_ENV === 'production') {
 
 const nextConfig: NextConfig = {
   reactStrictMode: true,
+  // Dev-only: lets a phone on the same Wi-Fi load /_next/* assets from this
+  // machine's LAN address instead of being rejected as a cross-origin request.
+  allowedDevOrigins: ['192.168.1.4'],
   poweredByHeader: false,
   typedRoutes: false,
   serverExternalPackages: ['@prisma/client', 'nodemailer', 'exceljs'],

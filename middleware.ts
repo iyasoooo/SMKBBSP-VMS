@@ -22,6 +22,23 @@ export function middleware(request: NextRequest) {
   const nonce = crypto.randomUUID().replace(/-/g, '');
   const isProduction = process.env.NODE_ENV === 'production';
 
+  /*
+   * Whether this particular request arrived over TLS, which is not the same
+   * question as whether this is a production build. `upgrade-insecure-requests`
+   * rewrites every subresource URL to https://, so on a production build served
+   * over plain http - a LAN address during testing, say - the browser asks for
+   * stylesheets and scripts on a port that speaks no TLS and the page renders
+   * as unstyled markup. The same reasoning already governs HSTS in
+   * `next.config.ts`: a transport header belongs on the transport it describes.
+   *
+   * The forwarded header is checked first so the directive survives a TLS
+   * terminating proxy, where the request reaches Next over http by design.
+   */
+  const forwardedProto = request.headers.get('x-forwarded-proto');
+  const isSecure = forwardedProto
+    ? forwardedProto.split(',')[0]?.trim() === 'https'
+    : request.nextUrl.protocol === 'https:';
+
   const csp = [
     "default-src 'self'",
     // 'strict-dynamic' lets Next's nonced bootstrap load its own chunks without
@@ -37,13 +54,19 @@ export function middleware(request: NextRequest) {
     "img-src 'self' data: blob:",
     "font-src 'self' data:",
     "media-src 'self' blob: mediastream:",
-    "connect-src 'self'",
+    // `blob:` and `data:` are required by the optional IC OCR panel, which
+    // fetches both: the tesseract core glue carries its WASM binary inlined as
+    // a `data:` URI, and the card photo is read through an object URL. Neither
+    // is a network destination, so allowing them cannot exfiltrate anything -
+    // they only re-permit the page to read bytes it already holds in memory.
+    // Without them the reader dies on `TypeError: Failed to fetch`.
+    "connect-src 'self' blob: data:",
     "worker-src 'self' blob:",
     "object-src 'none'",
     "base-uri 'self'",
     "form-action 'self'",
     "frame-ancestors 'none'",
-    ...(isProduction ? ['upgrade-insecure-requests'] : []),
+    ...(isProduction && isSecure ? ['upgrade-insecure-requests'] : []),
   ].join('; ');
 
   // Passing the nonce down on the request lets a server component read it via
@@ -51,6 +74,14 @@ export function middleware(request: NextRequest) {
   const requestHeaders = new Headers(request.headers);
   requestHeaders.set('x-nonce', nonce);
   requestHeaders.set('content-security-policy', csp);
+  /*
+   * A server action cannot see the request scheme, only its headers, so the
+   * answer is forwarded. `lib/auth/session.ts` needs it to decide whether the
+   * session cookie may carry `Secure`: setting that flag on a page served over
+   * plain http makes the browser discard the cookie, which presents as a login
+   * page that returns immediately after a successful sign-in.
+   */
+  requestHeaders.set('x-request-secure', isSecure ? '1' : '0');
 
   const response = NextResponse.next({ request: { headers: requestHeaders } });
   response.headers.set('content-security-policy', csp);

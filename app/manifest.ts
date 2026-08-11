@@ -13,9 +13,15 @@ export default function manifest(): MetadataRoute.Manifest {
     short_name: 'VisitorPass',
     description:
       'Request a school visit, receive an approved QR pass, and check in at the gate.',
-    // Guards land on the gate screen; everyone else is redirected to their own
-    // home by the role guard, so this is the most useful entry point.
-    start_url: '/guard',
+    /*
+     * The home page, not `/guard`.
+     *
+     * `/guard` is behind a role guard, so launching the installed app while
+     * signed out - or as an admin or teacher - lands on the login screen every
+     * time. `/` greets a visitor properly and sends signed-in staff to their
+     * own dashboard.
+     */
+    start_url: '/',
     scope: '/',
     display: 'standalone',
     orientation: 'any',
