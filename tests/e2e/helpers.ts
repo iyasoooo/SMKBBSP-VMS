@@ -35,7 +35,7 @@ export async function logout(page: Page): Promise<void> {
  * This teacher is `teacher@smkbbsp.test`, so tests can approve their own
  * submissions after logging in.
  */
-export const HOST_TEACHER_OPTION = 'Puan Aminah binti Zulkifli - Bahasa Melayu';
+export const HOST_TEACHER_OPTION = 'Puan Aminah binti Zulkifli';
 
 /** A weekday, inside school hours, comfortably in the future (Malaysian time). */
 export function futureSchoolSlot(daysAhead = 3): { date: string; time: string } {

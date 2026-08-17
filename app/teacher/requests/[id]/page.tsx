@@ -3,6 +3,7 @@ import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { AppointmentStatus } from '@prisma/client';
 import { prisma } from '@/lib/db/prisma';
+import { CompanionList, COMPANION_SELECT } from '@/components/companion-list';
 import { requireTeacher } from '@/lib/auth/authorize';
 import { formatDate, formatDateTime, formatTimeRange } from '@/lib/time';
 import {
@@ -40,6 +41,7 @@ export default async function TeacherRequestDetailPage({
       visitType: true,
       destination: true,
       visit: true,
+      companions: { select: COMPANION_SELECT },
       decidedBy: { select: { name: true } },
     },
   });
@@ -99,6 +101,8 @@ export default async function TeacherRequestDetailPage({
               <DetailRow label="Submitted">{formatDateTime(appointment.createdAt)}</DetailRow>
             </dl>
           </Card>
+
+          <CompanionList companions={appointment.companions} />
 
           <Card>
             <div className="border-b border-[var(--line-soft)] px-5 py-4">

@@ -272,7 +272,38 @@ export async function createAppointmentRequest(
     now,
   );
 
-  const needsReview = blacklist.decision !== 'CLEAR';
+  /*
+   * Companions are screened too.
+   *
+   * Checking only the person who filled the form would leave an obvious way
+   * past the blacklist: a blocked individual simply arrives as somebody else's
+   * guest. Any hit on any attendee routes the whole request to review, because
+   * the party arrives together and the school is admitting all of them.
+   */
+  /*
+   * Defaulted here rather than relied upon from the caller. The schema fills
+   * this in when a submission is parsed, but the service is also called
+   * directly - by tests and by the walk-in path - and a missing array should
+   * mean "nobody else is coming", not a crash.
+   */
+  const companionInputs = input.companions ?? [];
+
+  const companionChecks = await Promise.all(
+    companionInputs.map((companion) =>
+      checkBlacklist(
+        {
+          identityType: companion.identityType,
+          normalizedIdentity: normalizeIdentity(companion.identityType, companion.identityNumber),
+          phone: companion.phone ?? null,
+        },
+        prisma,
+        now,
+      ),
+    ),
+  );
+
+  const needsReview =
+    blacklist.decision !== 'CLEAR' || companionChecks.some((check) => check.decision !== 'CLEAR');
   const rawToken = generateToken();
   const referenceNumber = generateReferenceNumber(now);
 
@@ -289,6 +320,23 @@ export async function createAppointmentRequest(
 
     const appointment = await tx.appointment.create({
       data: {
+        companions: {
+          create: companionInputs.map((companion) => {
+            const identity = buildIdentityFields(companion.identityType, companion.identityNumber);
+            return {
+              fullName: normalizeName(companion.fullName),
+              phone: normalizePhone(companion.phone ?? null),
+              relation: normalizeName(companion.relation),
+              identityType: companion.identityType,
+              identityCiphertext: identity.ciphertext,
+              identityIv: identity.iv,
+              identityTag: identity.tag,
+              identityKeyVersion: identity.keyVersion,
+              identityHmac: identity.hmac,
+              identityLast4: identity.last4,
+            };
+          }),
+        },
         referenceNumber,
         source: AppointmentSource.ONLINE,
         visitorId,

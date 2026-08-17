@@ -14,6 +14,7 @@ import {
 import { flushNotificationsInBackground } from '@/lib/email/outbox';
 import { fail, toFieldErrors, type ActionResult } from '@/lib/result';
 import { createLogger } from '@/lib/logger';
+import { MAX_PARTY_SIZE } from '@/lib/constants';
 
 const log = createLogger('visit-request');
 
@@ -41,7 +42,24 @@ export async function submitAppointmentRequest(
     );
   }
 
+  /*
+   * Companion fields arrive as `companions.0.fullName` and so on. They are
+   * collected by index rather than by a fixed count so the parse does not
+   * depend on `partySize` being correct - the schema cross-checks the two and
+   * reports a mismatch itself.
+   */
+  const companions: Array<Record<string, string>> = [];
+  for (const [key, value] of formData.entries()) {
+    const match = /^companions\.(\d+)\.(\w+)$/.exec(key);
+    if (!match || typeof value !== 'string') continue;
+    const index = Number(match[1]);
+    if (!Number.isInteger(index) || index < 0 || index >= MAX_PARTY_SIZE) continue;
+    companions[index] ??= {};
+    companions[index][match[2] as string] = value;
+  }
+
   const parsed = appointmentRequestSchema.safeParse({
+    companions: companions.filter(Boolean),
     fullName: formData.get('fullName'),
     email: formData.get('email'),
     phone: formData.get('phone'),

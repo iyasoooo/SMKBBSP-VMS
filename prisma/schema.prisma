@@ -318,6 +318,7 @@ model Appointment {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
+  companions  Companion[]
   visitor     Visitor      @relation(fields: [visitorId], references: [id])
   teacher     User         @relation("AppointmentTeacher", fields: [teacherId], references: [id])
   destination Destination? @relation(fields: [destinationId], references: [id])
@@ -411,6 +412,46 @@ model QrCredential {
   @@index([expiresAt])
   @@index([revokedAt])
   @@map("qr_credentials")
+}
+
+/// Someone accompanying the main visitor.
+///
+/// The school needs to know who is actually on the grounds, not merely how
+/// many people are, so a party larger than one records each additional person
+/// by name. Their identity number is protected exactly as the main visitor's
+/// is - AES-256-GCM ciphertext, a keyed HMAC for blacklist matching, and the
+/// last four characters for display. There is deliberately no column able to
+/// hold a plaintext value here either.
+///
+/// Companions are attached to the appointment rather than promoted to full
+/// Visitor records: they have no account, no private link and no pass of their
+/// own, and they enter under the host's approval.
+model Companion {
+  id            String @id @default(cuid())
+  appointmentId String
+
+  fullName String
+  /// Normalized to E.164 where derivable, as for visitors.
+  phone    String?
+  /// How they relate to the main visitor, e.g. "Spouse", "Son".
+  relation String
+
+  identityType       IdentityType @default(NRIC)
+  identityCiphertext String
+  identityIv         String
+  identityTag        String
+  identityKeyVersion Int          @default(1)
+  identityHmac       String
+  identityLast4      String
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  appointment Appointment @relation(fields: [appointmentId], references: [id], onDelete: Cascade)
+
+  @@index([appointmentId])
+  @@index([identityHmac])
+  @@map("companions")
 }
 
 // ---------------------------------------------------------------------------

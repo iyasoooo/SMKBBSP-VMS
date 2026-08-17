@@ -3,6 +3,7 @@ import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { VisitStatus } from '@prisma/client';
 import { prisma } from '@/lib/db/prisma';
+import { CompanionList, COMPANION_SELECT } from '@/components/companion-list';
 import { requireGuardOrAdmin } from '@/lib/auth/authorize';
 import { getSettings } from '@/lib/domain/settings';
 import { getLocale } from '@/lib/theme';
@@ -41,7 +42,7 @@ export default async function GuardVisitDetailPage({
       destination: true,
       checkedInBy: { select: { name: true } },
       checkedOutBy: { select: { name: true } },
-      appointment: { include: { visitType: true } },
+      appointment: { include: { visitType: true, companions: { select: COMPANION_SELECT } } },
     },
   });
 
@@ -160,6 +161,11 @@ export default async function GuardVisitDetailPage({
             </div>
           ) : null}
         </Card>
+
+        {/* The guard is admitting the whole party, so they need to see who it is. */}
+        {visit.appointment ? (
+          <CompanionList companions={visit.appointment.companions} className="lg:col-span-2" />
+        ) : null}
 
         <div className="flex flex-col gap-4">
           {visit.status === VisitStatus.EXPECTED ? (

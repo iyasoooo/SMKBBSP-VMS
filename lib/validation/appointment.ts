@@ -110,6 +110,46 @@ export const appointmentRequestSchema = z
       .refine((value) => value === 'on' || value === 'true', {
         message: 'You must agree to the privacy notice before submitting.',
       }),
+
+    /**
+     * Everyone attending besides the main visitor.
+     *
+     * The school needs to know who is on the grounds, not just how many, so a
+     * party larger than one names each person. The count is cross-checked
+     * against `partySize` below rather than trusted from either side alone.
+     */
+    companions: z
+      .array(
+        z.object({
+          fullName: z
+            .string()
+            .trim()
+            .min(2, 'Enter this person’s full name.')
+            .max(120, 'That name is too long.'),
+          relation: z
+            .string()
+            .trim()
+            .min(2, 'Say how this person is related to you, for example Spouse or Son.')
+            .max(40, 'Please shorten this.'),
+          phone: z
+            .string()
+            .trim()
+            .max(30, 'That phone number is too long.')
+            .optional()
+            .transform((value) => (value && value.length > 0 ? value : undefined))
+            .refine((value) => value === undefined || isPlausiblePhone(normalizePhone(value)), {
+              message: 'Enter a valid phone number or leave it blank.',
+            }),
+          identityType: z.enum(identityTypeValues).default(IdentityType.NRIC),
+          identityNumber: z
+            .string()
+            .trim()
+            .min(1, 'Enter this person’s identification number.')
+            .max(30, 'That identification number is too long.'),
+        }),
+      )
+      .max(MAX_PARTY_SIZE - 1)
+      .default([]),
   })
   // Identity validity depends on the chosen type, so it is checked after the
   // individual fields have parsed.
@@ -129,6 +169,57 @@ export const appointmentRequestSchema = z
 
       ctx.addIssue({ code: 'custom', path: ['identityNumber'], message });
     }
+
+    // The party size and the named companions must agree. Checking both
+    // directions stops a mismatch being silently resolved in the visitor's
+    // favour, in either direction.
+    const expected = data.partySize - 1;
+    if (data.companions.length !== expected) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['partySize'],
+        message:
+          expected === 0
+            ? 'Remove the additional people, or increase the number attending.'
+            : `Give details for all ${expected} other ${expected === 1 ? 'person' : 'people'} attending.`,
+      });
+    }
+
+    data.companions.forEach((companion, index) => {
+      const normalized = normalizeIdentity(companion.identityType, companion.identityNumber);
+      const result = validateNormalizedIdentity(companion.identityType, normalized);
+      if (!result.ok) {
+        ctx.addIssue({
+          code: 'custom',
+          path: ['companions', index, 'identityNumber'],
+          message:
+            result.code === 'NRIC_LENGTH' || result.code === 'NRIC_DIGITS'
+              ? 'Enter a 12-digit identity card number, for example 880101-14-5523.'
+              : 'Enter a valid identification number.',
+        });
+      }
+    });
+
+    // The same person cannot be counted twice, and cannot be their own
+    // companion. Compared on the normalized value so formatting differences
+    // do not defeat the check.
+    const seen = new Map<string, number>();
+    seen.set(normalizeIdentity(data.identityType, data.identityNumber), -1);
+    data.companions.forEach((companion, index) => {
+      const key = normalizeIdentity(companion.identityType, companion.identityNumber);
+      if (seen.has(key)) {
+        ctx.addIssue({
+          code: 'custom',
+          path: ['companions', index, 'identityNumber'],
+          message:
+            seen.get(key) === -1
+              ? 'This is your own identification number.'
+              : 'This person has already been added.',
+        });
+      } else {
+        seen.set(key, index);
+      }
+    });
   });
 
 export type AppointmentRequestInput = z.infer<typeof appointmentRequestSchema>;

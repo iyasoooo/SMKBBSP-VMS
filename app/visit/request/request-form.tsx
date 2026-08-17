@@ -1,11 +1,11 @@
-﻿'use client';
+'use client';
 
-import { useActionState, useState } from 'react';
+import { useActionState, useEffect, useState } from 'react';
 import { useFormStatus } from 'react-dom';
 import { submitAppointmentRequest } from './actions';
 import { Button } from '@/components/ui/button';
 import { Checkbox, Field, Input, Select, Textarea, fieldAria } from '@/components/ui/field';
-import { Alert } from '@/components/ui/surface';
+import { Alert, Card } from '@/components/ui/surface';
 import { IcScanAssist } from '@/components/ocr/ic-scan-assist';
 import { MAX_PARTY_SIZE } from '@/lib/constants';
 import type { ActionResult } from '@/lib/result';
@@ -13,7 +13,6 @@ import type { ActionResult } from '@/lib/result';
 export interface TeacherOption {
   id: string;
   name: string;
-  department: string;
 }
 
 export interface DestinationOption {
@@ -40,6 +39,21 @@ interface RequestFormProps {
   consentVersion: string;
 }
 
+/** One accompanying person, as held in form state. */
+interface CompanionDraft {
+  fullName: string;
+  relation: string;
+  phone: string;
+  identityNumber: string;
+}
+
+const emptyCompanion = (): CompanionDraft => ({
+  fullName: '',
+  relation: '',
+  phone: '',
+  identityNumber: '',
+});
+
 function SubmitButton() {
   const { pending } = useFormStatus();
   return (
@@ -64,16 +78,91 @@ export function RequestForm({
     null,
   );
 
-  const [identityType, setIdentityType] = useState('NRIC');
-  // Controlled only so the optional OCR panel can populate them. They remain
-  // ordinary editable inputs; nothing here depends on OCR having run.
+  /*
+   * Every field is controlled.
+   *
+   * React resets an uncontrolled form once its action resolves, so a rejected
+   * submission used to wipe everything the visitor had typed - including a
+   * twelve-digit identity number - and hand back a blank form with an error on
+   * it. Holding the values in state means a rejection costs the visitor only
+   * the field that was actually wrong.
+   */
   const [fullName, setFullName] = useState('');
+  const [email, setEmail] = useState('');
+  const [phone, setPhone] = useState('');
+  const [identityType, setIdentityType] = useState('NRIC');
   const [identityNumber, setIdentityNumber] = useState('');
+  const [visitorCategory, setVisitorCategory] = useState('PARENT');
+  const [teacherId, setTeacherId] = useState('');
   const [visitTypeId, setVisitTypeId] = useState(visitTypes[0]?.id ?? '');
   const [destinationId, setDestinationId] = useState('');
+  const [visitDate, setVisitDate] = useState('');
+  const [visitTime, setVisitTime] = useState('');
+  const [purpose, setPurpose] = useState('');
+  const [partySize, setPartySize] = useState(1);
+  const [vehicleNumber, setVehicleNumber] = useState('');
+  const [consent, setConsent] = useState(false);
+  const [companions, setCompanions] = useState<CompanionDraft[]>([]);
 
   const errors = state && !state.ok ? (state.fieldErrors ?? {}) : {};
   const formError = state && !state.ok ? state.message : null;
+
+  /*
+   * Clear only what was rejected.
+   *
+   * A field the server complained about is worth retyping; the fifteen it
+   * accepted are not. Consent is reset on any failure by design - an agreement
+   * should be given against the details actually being submitted, not inherited
+   * from an earlier attempt.
+   */
+  useEffect(() => {
+    if (!state || state.ok) return;
+    const rejected = state.fieldErrors ?? {};
+
+    if (rejected.fullName) setFullName('');
+    if (rejected.email) setEmail('');
+    if (rejected.phone) setPhone('');
+    if (rejected.identityNumber) setIdentityNumber('');
+    if (rejected.visitDate) setVisitDate('');
+    if (rejected.visitTime) setVisitTime('');
+    if (rejected.purpose) setPurpose('');
+    if (rejected.vehicleNumber) setVehicleNumber('');
+    if (rejected.teacherId) setTeacherId('');
+
+    setCompanions((current) =>
+      current.map((companion, index) => ({
+        fullName: rejected[`companions.${index}.fullName`] ? '' : companion.fullName,
+        relation: rejected[`companions.${index}.relation`] ? '' : companion.relation,
+        phone: rejected[`companions.${index}.phone`] ? '' : companion.phone,
+        identityNumber: rejected[`companions.${index}.identityNumber`]
+          ? ''
+          : companion.identityNumber,
+      })),
+    );
+
+    setConsent(false);
+  }, [state]);
+
+  /** Keep the companion rows in step with the number attending. */
+  function changePartySize(next: number) {
+    const size = Number.isFinite(next) ? Math.min(MAX_PARTY_SIZE, Math.max(1, next)) : 1;
+    setPartySize(size);
+    setCompanions((current) => {
+      const wanted = size - 1;
+      if (current.length === wanted) return current;
+      if (current.length < wanted) {
+        return [...current, ...Array.from({ length: wanted - current.length }, emptyCompanion)];
+      }
+      // Trim from the end so earlier entries the visitor already typed survive.
+      return current.slice(0, wanted);
+    });
+  }
+
+  function updateCompanion(index: number, patch: Partial<CompanionDraft>) {
+    setCompanions((current) =>
+      current.map((companion, i) => (i === index ? { ...companion, ...patch } : companion)),
+    );
+  }
 
   const selectedVisitType = visitTypes.find((type) => type.id === visitTypeId);
   const selectedDestination = destinations.find((d) => d.id === destinationId);
@@ -93,15 +182,8 @@ export function RequestForm({
 
       {/* ---------------- Visitor ---------------- */}
       <fieldset className="flex flex-col gap-4">
-        <legend className="mb-2 text-sm font-semibold text-[var(--text-strong)]">
-          About you
-        </legend>
+        <legend className="mb-2 text-sm font-semibold text-[var(--text-strong)]">About you</legend>
 
-        {/*
-          Optional assistance, offered before the fields it fills. It is never
-          required: every field below can be typed directly, and the form does
-          not know or care whether OCR was used.
-        */}
         {identityType === 'NRIC' ? (
           <IcScanAssist
             onApply={(fields) => {
@@ -125,8 +207,13 @@ export function RequestForm({
         </Field>
 
         <div className="grid gap-4 sm:grid-cols-2">
-          <Field id="email" label="Email address" required error={errors.email}
-            hint="Your pass and updates are sent here.">
+          <Field
+            id="email"
+            label="Email address"
+            required
+            error={errors.email}
+            hint="Your pass and updates are sent here."
+          >
             <Input
               {...fieldAria('email', { error: errors.email, hint: true })}
               name="email"
@@ -135,18 +222,27 @@ export function RequestForm({
               autoCapitalize="none"
               spellCheck={false}
               required
+              value={email}
+              onChange={(event) => setEmail(event.target.value)}
               hasError={Boolean(errors.email)}
             />
           </Field>
 
-          <Field id="phone" label="Phone number" required error={errors.phone}
-            hint="For example 012-345 6789.">
+          <Field
+            id="phone"
+            label="Phone number"
+            required
+            error={errors.phone}
+            hint="For example 012-345 6789."
+          >
             <Input
               {...fieldAria('phone', { error: errors.phone, hint: true })}
               name="phone"
               type="tel"
               autoComplete="tel"
               required
+              value={phone}
+              onChange={(event) => setPhone(event.target.value)}
               hasError={Boolean(errors.phone)}
             />
           </Field>
@@ -199,7 +295,8 @@ export function RequestForm({
           <Select
             {...fieldAria('visitorCategory', { error: errors.visitorCategory })}
             name="visitorCategory"
-            defaultValue="PARENT"
+            value={visitorCategory}
+            onChange={(event) => setVisitorCategory(event.target.value)}
             required
             hasError={Boolean(errors.visitorCategory)}
           >
@@ -224,7 +321,8 @@ export function RequestForm({
           <Select
             {...fieldAria('teacherId', { error: errors.teacherId })}
             name="teacherId"
-            defaultValue=""
+            value={teacherId}
+            onChange={(event) => setTeacherId(event.target.value)}
             required
             hasError={Boolean(errors.teacherId)}
           >
@@ -233,7 +331,7 @@ export function RequestForm({
             </option>
             {teachers.map((teacher) => (
               <option key={teacher.id} value={teacher.id}>
-                {teacher.name} - {teacher.department}
+                {teacher.name}
               </option>
             ))}
           </Select>
@@ -257,8 +355,12 @@ export function RequestForm({
             </Select>
           </Field>
 
-          <Field id="destinationId" label="Where you are going" error={errors.destinationId}
-            hint="Optional. The office can direct you on arrival.">
+          <Field
+            id="destinationId"
+            label="Where you are going"
+            error={errors.destinationId}
+            hint="Optional. The office can direct you on arrival."
+          >
             <Select
               {...fieldAria('destinationId', { error: errors.destinationId, hint: true })}
               name="destinationId"
@@ -295,6 +397,8 @@ export function RequestForm({
               min={minDate}
               max={maxDate}
               required
+              value={visitDate}
+              onChange={(event) => setVisitDate(event.target.value)}
               hasError={Boolean(errors.visitDate)}
             />
           </Field>
@@ -314,6 +418,8 @@ export function RequestForm({
               max={closingTime}
               step={900}
               required
+              value={visitTime}
+              onChange={(event) => setVisitTime(event.target.value)}
               hasError={Boolean(errors.visitTime)}
             />
           </Field>
@@ -342,6 +448,8 @@ export function RequestForm({
             maxLength={500}
             rows={3}
             required
+            value={purpose}
+            onChange={(event) => setPurpose(event.target.value)}
             hasError={Boolean(errors.purpose)}
           />
         </Field>
@@ -360,8 +468,9 @@ export function RequestForm({
               type="number"
               min={1}
               max={MAX_PARTY_SIZE}
-              defaultValue={1}
               required
+              value={partySize}
+              onChange={(event) => changePartySize(Number(event.target.value))}
               hasError={Boolean(errors.partySize)}
             />
           </Field>
@@ -377,11 +486,126 @@ export function RequestForm({
               name="vehicleNumber"
               maxLength={15}
               autoCapitalize="characters"
+              value={vehicleNumber}
+              onChange={(event) => setVehicleNumber(event.target.value.toUpperCase())}
               hasError={Boolean(errors.vehicleNumber)}
             />
           </Field>
         </div>
       </fieldset>
+
+      {/* ---------------- Companions ---------------- */}
+      {companions.length > 0 ? (
+        <fieldset className="flex flex-col gap-4">
+          <legend className="mb-2 text-sm font-semibold text-[var(--text-strong)]">
+            Who is coming with you
+          </legend>
+          <p className="-mt-2 text-sm text-muted">
+            The school records everyone on the grounds, not just how many people are expected.
+            Please give details for the {companions.length} other{' '}
+            {companions.length === 1 ? 'person' : 'people'} attending.
+          </p>
+
+          {companions.map((companion, index) => (
+            <Card key={index} className="p-4">
+              <p className="mb-3 text-sm font-semibold text-[var(--text-strong)]">
+                Person {index + 2}
+              </p>
+
+              <div className="flex flex-col gap-4">
+                <div className="grid gap-4 sm:grid-cols-2">
+                  <Field
+                    id={`companion-${index}-name`}
+                    label="Full name"
+                    required
+                    error={errors[`companions.${index}.fullName`]}
+                  >
+                    <Input
+                      {...fieldAria(`companion-${index}-name`, {
+                        error: errors[`companions.${index}.fullName`],
+                      })}
+                      name={`companions.${index}.fullName`}
+                      maxLength={120}
+                      required
+                      value={companion.fullName}
+                      onChange={(event) => updateCompanion(index, { fullName: event.target.value })}
+                      hasError={Boolean(errors[`companions.${index}.fullName`])}
+                    />
+                  </Field>
+
+                  <Field
+                    id={`companion-${index}-relation`}
+                    label="Relationship to you"
+                    required
+                    error={errors[`companions.${index}.relation`]}
+                    hint="For example Spouse, Son, Colleague."
+                  >
+                    <Input
+                      {...fieldAria(`companion-${index}-relation`, {
+                        error: errors[`companions.${index}.relation`],
+                        hint: true,
+                      })}
+                      name={`companions.${index}.relation`}
+                      maxLength={40}
+                      required
+                      value={companion.relation}
+                      onChange={(event) => updateCompanion(index, { relation: event.target.value })}
+                      hasError={Boolean(errors[`companions.${index}.relation`])}
+                    />
+                  </Field>
+                </div>
+
+                <div className="grid gap-4 sm:grid-cols-2">
+                  <Field
+                    id={`companion-${index}-ic`}
+                    label="Identification number"
+                    required
+                    error={errors[`companions.${index}.identityNumber`]}
+                    hint="Malaysian identity card, or passport number."
+                  >
+                    <Input
+                      {...fieldAria(`companion-${index}-ic`, {
+                        error: errors[`companions.${index}.identityNumber`],
+                        hint: true,
+                      })}
+                      name={`companions.${index}.identityNumber`}
+                      inputMode="numeric"
+                      autoComplete="off"
+                      maxLength={30}
+                      required
+                      value={companion.identityNumber}
+                      onChange={(event) =>
+                        updateCompanion(index, { identityNumber: event.target.value })
+                      }
+                      hasError={Boolean(errors[`companions.${index}.identityNumber`])}
+                    />
+                  </Field>
+
+                  <Field
+                    id={`companion-${index}-phone`}
+                    label="Phone number"
+                    error={errors[`companions.${index}.phone`]}
+                    hint="Optional."
+                  >
+                    <Input
+                      {...fieldAria(`companion-${index}-phone`, {
+                        error: errors[`companions.${index}.phone`],
+                        hint: true,
+                      })}
+                      name={`companions.${index}.phone`}
+                      type="tel"
+                      maxLength={30}
+                      value={companion.phone}
+                      onChange={(event) => updateCompanion(index, { phone: event.target.value })}
+                      hasError={Boolean(errors[`companions.${index}.phone`])}
+                    />
+                  </Field>
+                </div>
+              </div>
+            </Card>
+          ))}
+        </fieldset>
+      ) : null}
 
       {/* ---------------- Consent ---------------- */}
       <fieldset className="flex flex-col gap-3">
@@ -393,10 +617,16 @@ export function RequestForm({
           <p>
             The school collects your name, contact details, identification number and visit details
             in order to authorise your visit, produce your visitor pass, and keep a record of who
-            was on the school grounds. Your identification number is encrypted and is shown to staff
+            was on the school grounds. Identification numbers are encrypted and are shown to staff
             in masked form. Records are kept for the school&apos;s retention period and are not
             shared outside the school except where the law requires it.
           </p>
+          {companions.length > 0 ? (
+            <p className="mt-2">
+              The same applies to everyone attending with you. Please make sure they are aware
+              before you submit these details on their behalf.
+            </p>
+          ) : null}
           <p className="mt-2">
             Your QR pass authorises an approved appointment. It does not verify your identity, which
             is why the guard also checks your physical identification at the gate.
@@ -407,8 +637,20 @@ export function RequestForm({
         <Checkbox
           id="consent"
           name="consent"
+          required
+          checked={consent}
+          onChange={(event) => setConsent(event.target.checked)}
           error={errors.consent}
-          label="I have read the notice above and agree to the school recording these details for this visit."
+          label={
+            <>
+              I have read the notice above and agree to the school recording these details for this
+              visit.
+              <span className="ml-1 font-semibold text-[var(--danger-text)]" aria-hidden="true">
+                *
+              </span>
+              <span className="sr-only"> (required)</span>
+            </>
+          }
         />
       </fieldset>
 

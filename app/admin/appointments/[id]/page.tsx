@@ -3,6 +3,7 @@ import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { AppointmentStatus, VisitStatus } from '@prisma/client';
 import { prisma } from '@/lib/db/prisma';
+import { CompanionList, COMPANION_SELECT } from '@/components/companion-list';
 import { requireAdmin } from '@/lib/auth/authorize';
 import {
   adminApproveAction,
@@ -42,6 +43,7 @@ export default async function AdminAppointmentDetailPage({
       visitType: true,
       visit: true,
       decidedBy: { select: { name: true } },
+      companions: { select: COMPANION_SELECT },
       credentials: { orderBy: { createdAt: 'desc' } },
     },
   });
@@ -136,6 +138,8 @@ export default async function AdminAppointmentDetailPage({
               <DetailRow label="Phone">{visitor.phoneMasked}</DetailRow>
             </dl>
           </Card>
+
+          <CompanionList companions={appointment.companions} />
 
           {appointment.visit ? (
             <Card>

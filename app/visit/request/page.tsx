@@ -54,11 +54,9 @@ export default async function RequestVisitPage() {
         </Alert>
       ) : (
         <RequestForm
-          teachers={teachers.map((teacher) => ({
-            id: teacher.id,
-            name: teacher.name,
-            department: teacher.teacherProfile?.department ?? 'School staff',
-          }))}
+          // Name only. A visitor picks the person they arranged to meet, and the
+          // department is internal organisation that only adds noise here.
+          teachers={teachers.map((teacher) => ({ id: teacher.id, name: teacher.name }))}
           destinations={destinations.map((destination) => ({
             id: destination.id,
             nameEn: destination.nameEn,
