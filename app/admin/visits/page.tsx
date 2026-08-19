@@ -2,7 +2,7 @@ import type { Metadata } from 'next';
 import Link from 'next/link';
 import { Role } from '@prisma/client';
 import { prisma } from '@/lib/db/prisma';
-import { requireAdmin } from '@/lib/auth/authorize';
+import { canAdminister, requireOversight } from '@/lib/auth/authorize';
 import { parseReportFilters, runReport } from '@/lib/reports/query';
 import { markNoShowsAction } from '@/app/admin/actions';
 import { DEFAULT_PAGE_SIZE } from '@/lib/constants';
@@ -26,7 +26,9 @@ export default async function AdminVisitsPage({
 }: {
   searchParams: Promise<Record<string, string | undefined>>;
 }) {
-  await requireAdmin('/admin/visits');
+  const user = await requireOversight('/admin/visits');
+  // Marking no-shows changes records, so it belongs to the administrator.
+  const mayAct = canAdminister(user.role);
   const params = await searchParams;
 
   const filters = parseReportFilters(params);
@@ -57,13 +59,19 @@ export default async function AdminVisitsPage({
         <p className="mt-1 mb-3 text-sm text-muted">
           Mark expected visits as no-shows once their window closed more than an hour ago.
         </p>
-        <ActionForm
-          action={markNoShowsAction}
-          submitLabel="Mark past visits as no-show"
-          variant="secondary"
-          confirm="Mark all overdue expected visits as no-shows?"
-          successMessage="Past expected visits have been marked as no-shows."
-        />
+        {mayAct ? (
+          <ActionForm
+            action={markNoShowsAction}
+            submitLabel="Mark past visits as no-show"
+            variant="secondary"
+            confirm="Mark all overdue expected visits as no-shows?"
+            successMessage="Past expected visits have been marked as no-shows."
+          />
+        ) : (
+          <p className="text-sm text-muted">
+            An administrator carries this out; you are viewing these records only.
+          </p>
+        )}
       </Card>
 
       <Card>

@@ -117,6 +117,7 @@ async function clearOperationalData(): Promise<void> {
 
 async function seedUsers(): Promise<{
   admin: User;
+  principal: User;
   guard: User;
   guards: User[];
   teachers: User[];
@@ -148,6 +149,16 @@ async function seedUsers(): Promise<{
       passwordHash: guardHash,
       role: Role.GUARD,
       preferredLocale: 'ms',
+    },
+  });
+
+  const principal = await prisma.user.create({
+    data: {
+      email: 'principal@smkbbsp.test',
+      name: 'Puan Hajah Rohana binti Md Noor (Pengetua)',
+      passwordHash: adminHash,
+      role: Role.PRINCIPAL,
+      preferredLocale: 'en',
     },
   });
 
@@ -183,7 +194,7 @@ async function seedUsers(): Promise<{
     teachers.push(user);
   }
 
-  return { admin, guard, guards: [guard, guard2], teachers };
+  return { admin, principal, guard, guards: [guard, guard2], teachers };
 }
 
 async function seedReferenceData(): Promise<{
@@ -755,7 +766,9 @@ async function main(): Promise<void> {
   console.log('  settings ready');
 
   const { admin, guards, teachers } = await seedUsers();
-  console.log(`  users: 1 admin, ${guards.length} guards, ${teachers.length} teachers`);
+  console.log(
+    `  users: 1 admin, 1 principal, ${guards.length} guards, ${teachers.length} teachers`,
+  );
 
   const { destinations, visitTypes } = await seedReferenceData();
   console.log(`  reference: ${destinations.length} destinations, ${visitTypes.length} visit types`);
@@ -801,6 +814,11 @@ async function main(): Promise<void> {
     );
     console.log(
       '  teacher@smkbbsp.test  /  ' + (process.env.SEED_TEACHER_PASSWORD ?? 'Teacher#Demo2025'),
+    );
+    // The principal shares the administrator's password in the demo data; the
+    // point of the account is the role, not a separate credential.
+    console.log(
+      '  principal@smkbbsp.test/  ' + (process.env.SEED_ADMIN_PASSWORD ?? 'Admin#Demo2025'),
     );
   }
 }

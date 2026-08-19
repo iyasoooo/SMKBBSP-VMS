@@ -60,9 +60,33 @@ async function main(): Promise<void> {
     console.log(`  present ${LANG}.traineddata`.padEnd(46) + mb(statSync(langFile).size));
   } else {
     console.log(`  downloading ${LANG}.traineddata from tessdata ${TESSDATA_TAG} ...`);
-    const response = await fetch(LANG_URL);
-    if (!response.ok) {
-      throw new Error(`Download failed: ${response.status} ${response.statusText}`);
+    /*
+     * Retried, because this also runs inside the Docker build, where a single
+     * dropped connection fails the entire image. The model is 22 MB pulled from
+     * a public host, so a transient network blip is the expected failure rather
+     * than a permanent one, and one retry usually settles it.
+     */
+    let response: Response | undefined;
+    let lastError = '';
+
+    for (let attempt = 1; attempt <= 4; attempt += 1) {
+      try {
+        response = await fetch(LANG_URL);
+        if (response.ok) break;
+        lastError = `HTTP ${response.status} ${response.statusText}`;
+      } catch (error) {
+        lastError = error instanceof Error ? error.message : 'fetch failed';
+      }
+
+      if (attempt < 4) {
+        const waitMs = attempt * 2000;
+        console.log(`  attempt ${attempt} failed (${lastError}); retrying in ${waitMs / 1000}s`);
+        await new Promise((resolve) => setTimeout(resolve, waitMs));
+      }
+    }
+
+    if (!response?.ok) {
+      throw new Error(`Download failed after 4 attempts: ${lastError}`);
     }
     // Buffered rather than streamed: ~22 MB is trivial for a build script, and
     // it avoids the Node/DOM ReadableStream type mismatch entirely.

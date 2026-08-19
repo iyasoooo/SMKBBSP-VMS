@@ -68,6 +68,7 @@ export function CreateUserForm() {
           <option value="TEACHER">Teacher</option>
           <option value="GUARD">Security guard</option>
           <option value="ADMIN">Administrator</option>
+          <option value="PRINCIPAL">Principal (view only)</option>
         </Select>
       </Field>
 

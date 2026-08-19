@@ -21,7 +21,26 @@ export const ROLE_HOME: Record<Role, string> = {
   [Role.ADMIN]: '/admin',
   [Role.GUARD]: '/guard',
   [Role.TEACHER]: '/teacher',
+  // The principal reads the administrator's screens; the difference is what
+  // those screens offer, not where they live.
+  [Role.PRINCIPAL]: '/admin',
 };
+
+/**
+ * Roles allowed to *view* the administrative screens.
+ *
+ * The principal belongs here and nowhere near the mutation guards. Every
+ * state-changing action in the admin area asks for Role.ADMIN specifically,
+ * so a principal is refused by the server even if a control were ever left on
+ * screen by mistake. Hiding the buttons is presentation; this is the actual
+ * boundary.
+ */
+export const OVERSIGHT_ROLES: Role[] = [Role.ADMIN, Role.PRINCIPAL];
+
+/** True when this user may change things, rather than only look at them. */
+export function canAdminister(role: Role): boolean {
+  return role === Role.ADMIN;
+}
 
 export function homeForRole(role: Role): string {
   return ROLE_HOME[role];
@@ -64,6 +83,10 @@ export async function requireRole(roles: Role | Role[], returnTo?: string): Prom
 
 export const requireAdmin = (returnTo?: string): Promise<SessionUser> =>
   requireRole(Role.ADMIN, returnTo);
+
+/** Read access to the administrative screens: administrator or principal. */
+export const requireOversight = (returnTo?: string): Promise<SessionUser> =>
+  requireRole(OVERSIGHT_ROLES, returnTo);
 
 export const requireGuard = (returnTo?: string): Promise<SessionUser> =>
   requireRole(Role.GUARD, returnTo);

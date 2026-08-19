@@ -4,7 +4,7 @@ import { notFound } from 'next/navigation';
 import { AppointmentStatus, VisitStatus } from '@prisma/client';
 import { prisma } from '@/lib/db/prisma';
 import { CompanionList, COMPANION_SELECT } from '@/components/companion-list';
-import { requireAdmin } from '@/lib/auth/authorize';
+import { canAdminister, requireOversight } from '@/lib/auth/authorize';
 import {
   adminApproveAction,
   reissuePassAction,
@@ -31,7 +31,7 @@ export default async function AdminAppointmentDetailPage({
 }: {
   params: Promise<{ id: string }>;
 }) {
-  await requireAdmin();
+  const user = await requireOversight();
   const { id } = await params;
 
   const appointment = await prisma.appointment.findUnique({
@@ -57,7 +57,16 @@ export default async function AdminAppointmentDetailPage({
   // Passes are only manageable while the visitor is still expected. Once they
   // have arrived, been denied, or the visit is closed, the pass is history and
   // the buttons would do nothing useful.
+  /*
+   * Whether this viewer may act at all. A principal reads these screens and
+   * changes nothing, so every control below is withheld. The server refuses
+   * them regardless - each action asks for Role.ADMIN - and this simply keeps
+   * the page honest about what it offers.
+   */
+  const mayAct = canAdminister(user.role);
+
   const canManagePass =
+    mayAct &&
     appointment.status === AppointmentStatus.APPROVED &&
     (!appointment.visit || appointment.visit.status === VisitStatus.EXPECTED);
 
@@ -178,7 +187,7 @@ export default async function AdminAppointmentDetailPage({
         </div>
 
         <div className="flex flex-col gap-5">
-          {underReview ? (
+          {mayAct && underReview ? (
             <Card className="p-5">
               <h2 className="text-base font-semibold">Resolve review</h2>
               <p className="mt-1 text-sm text-muted">
@@ -222,7 +231,13 @@ export default async function AdminAppointmentDetailPage({
             </Card>
           ) : null}
 
-          <RevealIdentity visitorId={visitor.id} maskedValue={visitor.identityMasked} />
+          {/*
+            Revealing a full identity number is a privileged, audited action,
+            not passive viewing, so it stays with the administrator.
+          */}
+          {mayAct ? (
+            <RevealIdentity visitorId={visitor.id} maskedValue={visitor.identityMasked} />
+          ) : null}
 
           <Card className="p-5">
             <h2 className="text-base font-semibold">Pass</h2>

@@ -283,7 +283,7 @@ export async function resetPasswordAction(
 const createUserSchema = z.object({
   email: z.email('Enter a valid email address.'),
   name: z.string().trim().min(2, 'Enter a name.').max(120),
-  role: z.enum(['ADMIN', 'GUARD', 'TEACHER']),
+  role: z.enum(['ADMIN', 'GUARD', 'TEACHER', 'PRINCIPAL']),
   password: z.string().min(10, PASSWORD_MIN_LENGTH_HINT).max(200),
   department: z.string().trim().max(80).optional(),
   staffCode: z.string().trim().max(40).optional(),

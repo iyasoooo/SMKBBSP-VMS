@@ -2,7 +2,7 @@ import type { Metadata } from 'next';
 import Link from 'next/link';
 import type { Prisma } from '@prisma/client';
 import { prisma } from '@/lib/db/prisma';
-import { requireAdmin } from '@/lib/auth/authorize';
+import { requireOversight } from '@/lib/auth/authorize';
 import { AUDIT_ACTIONS, DEFAULT_PAGE_SIZE } from '@/lib/constants';
 import { formatDateTime } from '@/lib/time';
 import { Alert, Card, EmptyState, PageHeading, TableScroll } from '@/components/ui/surface';
@@ -25,7 +25,7 @@ export default async function AuditPage({
 }: {
   searchParams: Promise<{ action?: string; page?: string }>;
 }) {
-  await requireAdmin('/admin/audit');
+  await requireOversight('/admin/audit');
   const params = await searchParams;
 
   const action = params.action && ACTION_VALUES.includes(params.action as never)

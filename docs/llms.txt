@@ -52,6 +52,8 @@ identity number, host, purpose, or database id. The manual fallback code is *der
 token hash (`deriveFallbackCode`) rather than stored, which is how the database keeps only a hash
 while the pass page can still display the code.
 
+**Four roles, and two different questions.** Administrators run the system; the principal reads it and changes nothing; guards work the gate; teachers see only their own queue and may approve or reject requests addressed to them. "May view the admin area" and "may change things" are separate checks - see OVERSIGHT_ROLES and canAdminister in lib/auth/authorize.ts. Every admin mutation asks for Role.ADMIN specifically, so hiding a control is never what stops a principal.
+
 **Authorization is server-side.** Hiding a navigation link is not access control. Every protected
 page and every mutation calls a helper from `lib/auth/authorize.ts` *before* fetching protected
 data, so a denied request cannot briefly stream it. Teacher-scoped queries filter by `teacherId` in

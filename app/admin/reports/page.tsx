@@ -1,7 +1,7 @@
 import type { Metadata } from 'next';
 import { Role } from '@prisma/client';
 import { prisma } from '@/lib/db/prisma';
-import { requireAdmin } from '@/lib/auth/authorize';
+import { requireOversight } from '@/lib/auth/authorize';
 import { parseReportFilters, REPORT_COLUMNS, runReport } from '@/lib/reports/query';
 import { DEFAULT_PAGE_SIZE } from '@/lib/constants';
 import { Card, EmptyState, PageHeading, TableScroll } from '@/components/ui/surface';
@@ -17,7 +17,7 @@ export default async function ReportsPage({
 }: {
   searchParams: Promise<Record<string, string | undefined>>;
 }) {
-  await requireAdmin('/admin/reports');
+  await requireOversight('/admin/reports');
   const params = await searchParams;
 
   const filters = parseReportFilters(params);

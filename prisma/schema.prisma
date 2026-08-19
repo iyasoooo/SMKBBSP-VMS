@@ -25,6 +25,8 @@ enum Role {
   ADMIN
   GUARD
   TEACHER
+  /// Oversight without authority: sees the data, changes none of it.
+  PRINCIPAL
 }
 
 enum IdentityType {

@@ -6,6 +6,8 @@ export const ACCOUNTS = {
   admin: { email: 'admin@smkbbsp.test', password: 'Admin#Demo2025' },
   guard: { email: 'guard@smkbbsp.test', password: 'Guard#Demo2025' },
   teacher: { email: 'teacher@smkbbsp.test', password: 'Teacher#Demo2025' },
+  // Shares the administrator password by design; the role is the difference.
+  principal: { email: 'principal@smkbbsp.test', password: 'Admin#Demo2025' },
 } as const;
 
 export async function login(page: Page, account: keyof typeof ACCOUNTS): Promise<void> {

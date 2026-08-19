@@ -16,6 +16,7 @@ const ROLE_TONE = {
   ADMIN: 'danger',
   GUARD: 'info',
   TEACHER: 'success',
+  PRINCIPAL: 'warning',
 } as const;
 
 export default async function UsersPage() {

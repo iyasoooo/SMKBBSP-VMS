@@ -1,6 +1,6 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
-import { requireAdmin } from '@/lib/auth/authorize';
+import { requireOversight } from '@/lib/auth/authorize';
 import {
   defaultRange,
   getDashboardMetrics,
@@ -28,7 +28,7 @@ export default async function AdminDashboardPage({
 }: {
   searchParams: Promise<{ from?: string; to?: string }>;
 }) {
-  await requireAdmin();
+  await requireOversight();
   const params = await searchParams;
   const range = resolveRange(params);
 

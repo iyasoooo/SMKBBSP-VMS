@@ -1,5 +1,5 @@
 import { NextResponse, type NextRequest } from 'next/server';
-import { Role } from '@prisma/client';
+import { OVERSIGHT_ROLES } from '@/lib/auth/authorize';
 import { getCurrentUser } from '@/lib/auth/session';
 import { getSettings } from '@/lib/domain/settings';
 import { parseReportFilters, runReport } from '@/lib/reports/query';
@@ -20,9 +20,15 @@ import { AUDIT_ACTIONS } from '@/lib/constants';
 export async function GET(request: NextRequest): Promise<NextResponse> {
   const user = await getCurrentUser();
 
-  // Deliberately 404 rather than 403 for a non-admin: the existence of the
-  // export endpoint is not something a guard or teacher needs to learn.
-  if (!user || user.role !== Role.ADMIN) {
+  /*
+   * Administrators and the principal. Exporting reads data rather than
+   * changing it, and reporting upward is the principal's job; the export is
+   * audited against whoever ran it either way.
+   *
+   * Deliberately 404 rather than 403 for anyone else: the existence of the
+   * export endpoint is not something a guard or teacher needs to learn.
+   */
+  if (!user || !OVERSIGHT_ROLES.includes(user.role)) {
     return new NextResponse('Not found', { status: 404 });
   }
 

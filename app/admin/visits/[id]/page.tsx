@@ -2,7 +2,7 @@ import type { Metadata } from 'next';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { prisma } from '@/lib/db/prisma';
-import { requireAdmin } from '@/lib/auth/authorize';
+import { requireOversight } from '@/lib/auth/authorize';
 import { SAFE_VISITOR_SELECT, identityTypeLabel, toSafeVisitor } from '@/lib/domain/presenters';
 import { formatDate, formatDateTime, formatDuration, formatTimeRange, diffMinutes } from '@/lib/time';
 import { Card, DetailRow, EmptyState, PageHeading } from '@/components/ui/surface';
@@ -28,7 +28,7 @@ export default async function AdminVisitDetailPage({
 }: {
   params: Promise<{ id: string }>;
 }) {
-  await requireAdmin();
+  await requireOversight();
   const { id } = await params;
 
   const visit = await prisma.visit.findUnique({

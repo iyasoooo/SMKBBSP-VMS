@@ -1,7 +1,7 @@
 import type { Metadata } from 'next';
 import { BlacklistStatus } from '@prisma/client';
 import { prisma } from '@/lib/db/prisma';
-import { requireAdmin } from '@/lib/auth/authorize';
+import { canAdminister, requireOversight } from '@/lib/auth/authorize';
 import { expireLapsedEntries } from '@/lib/domain/blacklist';
 import { setBlacklistStatusAction } from '@/app/admin/actions';
 import { formatDate, formatDateTime } from '@/lib/time';
@@ -14,7 +14,9 @@ export const metadata: Metadata = { title: 'Blacklist' };
 export const dynamic = 'force-dynamic';
 
 export default async function BlacklistPage() {
-  await requireAdmin('/admin/blacklist');
+  const user = await requireOversight('/admin/blacklist');
+  // A principal reads this list; only an administrator maintains it.
+  const mayAct = canAdminister(user.role);
 
   // Opportunistically retire entries whose window has closed, so the list
   // never shows an "active" rule that no longer applies.
@@ -44,11 +46,13 @@ export default async function BlacklistPage() {
         </Alert>
       </div>
 
-      <div className="grid gap-5 lg:grid-cols-[1fr_1.4fr]">
-        <Card className="p-5">
-          <h2 className="text-base font-semibold">Add an entry</h2>
-          <BlacklistCreateForm />
-        </Card>
+      <div className={mayAct ? 'grid gap-5 lg:grid-cols-[1fr_1.4fr]' : 'grid gap-5'}>
+        {mayAct ? (
+          <Card className="p-5">
+            <h2 className="text-base font-semibold">Add an entry</h2>
+            <BlacklistCreateForm />
+          </Card>
+        ) : null}
 
         <Card>
           <div className="border-b border-[var(--line-soft)] px-5 py-4">
@@ -94,12 +98,20 @@ export default async function BlacklistPage() {
                           <span className="block text-xs text-muted">
                             {entry.category.replace(/_/g, ' ').toLowerCase()}
                           </span>
-                          <details className="mt-1">
-                            <summary className="cursor-pointer text-xs text-[var(--accent)]">
-                              Internal reason
-                            </summary>
-                            <p className="mt-1 max-w-xs text-xs text-muted">{entry.reason}</p>
-                          </details>
+                          {/*
+                            The reason is restricted internal text - safeguarding,
+                            custody, incident detail - and often concerns someone
+                            who is not the visitor. Oversight needs to see that an
+                            entry exists and what it does, not why it was written.
+                          */}
+                          {mayAct ? (
+                            <details className="mt-1">
+                              <summary className="cursor-pointer text-xs text-[var(--accent)]">
+                                Internal reason
+                              </summary>
+                              <p className="mt-1 max-w-xs text-xs text-muted">{entry.reason}</p>
+                            </details>
+                          ) : null}
                         </td>
                         <td className="px-4 py-3 text-xs">
                           {matches.length > 0 ? matches.join(', ') : 'none'}
@@ -135,7 +147,9 @@ export default async function BlacklistPage() {
                           ) : null}
                         </td>
                         <td className="px-4 py-3">
-                          {entry.status === BlacklistStatus.ACTIVE ? (
+                          {!mayAct ? (
+                            <span className="text-xs text-muted">-</span>
+                          ) : entry.status === BlacklistStatus.ACTIVE ? (
                             <ActionForm
                               action={setBlacklistStatusAction}
                               hidden={{ entryId: entry.id, status: 'INACTIVE' }}
