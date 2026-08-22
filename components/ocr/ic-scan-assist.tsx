@@ -1,9 +1,14 @@
 'use client';
 
 import { useCallback, useEffect, useRef, useState } from 'react';
-import type { Worker as TesseractWorker } from 'tesseract.js';
+import type { Block, Bbox, PSM, Worker as TesseractWorker } from 'tesseract.js';
 import { clsx } from 'clsx';
-import { parseIcText, type ParsedIcFields } from '@/lib/ocr/parse-ic';
+import {
+  parseIcText,
+  readIdentityNumber,
+  type OcrWord,
+  type ParsedIcFields,
+} from '@/lib/ocr/parse-ic';
 import { Button } from '@/components/ui/button';
 import { Alert } from '@/components/ui/surface';
 import { createLogger } from '@/lib/logger';
@@ -76,6 +81,8 @@ const COPY = {
     failed: 'The reader could not start. Please type the details in yourself.',
     uncertain: 'Low confidence - check this carefully',
     unsupported: 'This browser cannot run the card reader. Please type the details in yourself.',
+    blurry:
+      'That photo looks blurry, so the details below may be wrong. Hold the card flat, avoid glare, and take it again for a better read.',
   },
   ms: {
     title: 'Imbas kad pengenalan (pilihan)',
@@ -104,6 +111,8 @@ const COPY = {
     failed: 'Pembaca tidak dapat dimulakan. Sila taip butiran sendiri.',
     uncertain: 'Keyakinan rendah - semak dengan teliti',
     unsupported: 'Pelayar ini tidak boleh menjalankan pembaca kad. Sila taip butiran sendiri.',
+    blurry:
+      'Gambar itu kelihatan kabur, jadi butiran di bawah mungkin salah. Pegang kad rata, elakkan silau, dan ambil gambar semula untuk bacaan lebih baik.',
   },
 } as const;
 
@@ -147,7 +156,54 @@ const THRESHOLD_BIAS = 0.86;
  * and handles the glare and uneven lighting of a handheld photo at the same
  * time - the two conditions a global threshold handles worst.
  */
-async function prepareImage(file: File): Promise<HTMLCanvasElement> {
+/**
+ * How much high-frequency detail the greyscale still carries, as the variance
+ * of its Laplacian.
+ *
+ * Blur is the failure this feature cannot recover from: binarising a soft photo
+ * produces confident-looking output built from glyphs that were never legible.
+ * Measuring it lets the panel say "retake the photo" instead of leaving someone
+ * to work out why the number came back wrong. It is advisory only - a low score
+ * never blocks a scan, because the threshold is a rule of thumb and a real read
+ * that happens to score badly must still be allowed through.
+ */
+function sharpnessScore(grey: Uint8Array, width: number, height: number): number {
+  let sum = 0;
+  let sumSquares = 0;
+  let count = 0;
+
+  // Interior pixels only, so the 4-neighbour kernel needs no bounds checks.
+  for (let y = 1; y < height - 1; y += 1) {
+    for (let x = 1; x < width - 1; x += 1) {
+      const p = y * width + x;
+      const laplacian =
+        4 * (grey[p] ?? 0) -
+        (grey[p - 1] ?? 0) -
+        (grey[p + 1] ?? 0) -
+        (grey[p - width] ?? 0) -
+        (grey[p + width] ?? 0);
+
+      sum += laplacian;
+      sumSquares += laplacian * laplacian;
+      count += 1;
+    }
+  }
+
+  if (count === 0) return 0;
+  const mean = sum / count;
+  return sumSquares / count - mean * mean;
+}
+
+/** Below this the photo is soft enough that a misread is likely. */
+const BLUR_THRESHOLD = 60;
+
+interface PreparedImage {
+  canvas: HTMLCanvasElement;
+  /** Measured before binarisation, which would destroy the signal. */
+  sharpness: number;
+}
+
+async function prepareImage(file: File): Promise<PreparedImage> {
   const bitmap = await createImageBitmap(file);
 
   try {
@@ -173,6 +229,10 @@ async function prepareImage(file: File): Promise<HTMLCanvasElement> {
       grey[p] =
         ((data[i] ?? 0) * 299 + (data[i + 1] ?? 0) * 587 + (data[i + 2] ?? 0) * 114) / 1000;
     }
+
+    // Taken from the greyscale, before the threshold below turns every pixel
+    // into pure black or white and erases the gradients this measures.
+    const sharpness = sharpnessScore(grey, width, height);
 
     /*
      * Summed-area table, one row and column of zero padding so the window sum
@@ -220,10 +280,149 @@ async function prepareImage(file: File): Promise<HTMLCanvasElement> {
     }
 
     context.putImageData(image, 0, 0);
-    return canvas;
+    return { canvas, sharpness };
   } finally {
     // Free the decoded frame straight away; a card photo is several megabytes.
     bitmap.close();
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Recognition passes
+// ---------------------------------------------------------------------------
+
+/**
+ * The page segmentation modes this component uses.
+ *
+ * Carried as values rather than imported, because `PSM` is a runtime export of
+ * `tesseract.js` and importing it normally would pull the OCR bundle into the
+ * initial page load - defeating the dynamic import that keeps this feature free
+ * for visitors who never open it. They are read off the module that
+ * `getWorker` already loads.
+ */
+interface SegmentationModes {
+  auto: PSM;
+  singleLine: PSM;
+  sparseText: PSM;
+}
+
+/** The only characters the number band can legitimately contain. */
+const DIGIT_WHITELIST = '0123456789-';
+
+interface FlatLine {
+  text: string;
+  bbox: Bbox;
+  words: OcrWord[];
+}
+
+/**
+ * Flatten the recognizer's block/paragraph/line/word tree into lines.
+ *
+ * Only the line text, its box and its words' confidences are wanted, and
+ * reaching through four levels of nesting at every call site is how the
+ * `blocks` array being `null` gets forgotten.
+ */
+function flattenLines(blocks: Block[] | null): FlatLine[] {
+  const lines: FlatLine[] = [];
+
+  for (const block of blocks ?? []) {
+    for (const paragraph of block.paragraphs ?? []) {
+      for (const line of paragraph.lines ?? []) {
+        lines.push({
+          text: line.text ?? '',
+          bbox: line.bbox,
+          words: (line.words ?? []).map((word) => ({
+            text: word.text ?? '',
+            confidence: word.confidence ?? 0,
+          })),
+        });
+      }
+    }
+  }
+
+  return lines;
+}
+
+/**
+ * The line most likely to hold the identity number, for the second pass to
+ * re-read. Chosen by digit density rather than by matching the number itself:
+ * the whole reason a second pass is running is that the first pass did not
+ * produce a number worth trusting, so the digits are, by assumption, wrong.
+ */
+function numberBandOf(lines: FlatLine[]): Bbox | null {
+  let best: { bbox: Bbox; digits: number } | null = null;
+
+  for (const line of lines) {
+    const compact = line.text.replace(/[\s-]/g, '');
+    if (compact.length < 8) continue;
+
+    const digits = (compact.match(/\d/g) ?? []).length;
+    // Mostly-numeric and long enough to be the 12-digit run rather than a
+    // house number in the address block.
+    if (digits < 8 || digits / compact.length < 0.6) continue;
+    if (!best || digits > best.digits) best = { bbox: line.bbox, digits };
+  }
+
+  return best?.bbox ?? null;
+}
+
+/** Grow a box outward, clamped to the canvas, so no glyph is clipped. */
+function padded(bbox: Bbox, canvas: HTMLCanvasElement) {
+  const padX = Math.round((bbox.x1 - bbox.x0) * 0.06) + 12;
+  const padY = Math.round((bbox.y1 - bbox.y0) * 0.35) + 8;
+
+  const left = Math.max(0, bbox.x0 - padX);
+  const top = Math.max(0, bbox.y0 - padY);
+
+  return {
+    left,
+    top,
+    width: Math.min(canvas.width - left, bbox.x1 - bbox.x0 + padX * 2),
+    height: Math.min(canvas.height - top, bbox.y1 - bbox.y0 + padY * 2),
+  };
+}
+
+/**
+ * Read the number band again with only digits permitted.
+ *
+ * The first pass runs over the whole card with every character allowed, so the
+ * decoder is free to return `S` for `5` and `B` for `8` - both are legal
+ * outputs there, and by the time the text reaches the parser the evidence for
+ * choosing between them is gone. Constraining the alphabet moves that decision
+ * back inside the recognizer, where the pixel likelihoods still exist.
+ *
+ * Non-regressive by construction: the caller only runs this when the first pass
+ * produced nothing or something doubtful, and the result is adopted only when
+ * it is structurally sound. A failed second pass leaves the first pass standing.
+ */
+async function reReadNumber(
+  worker: TesseractWorker,
+  canvas: HTMLCanvasElement,
+  band: Bbox | null,
+  modes: SegmentationModes,
+): Promise<string | null> {
+  try {
+    await worker.setParameters({
+      tessedit_char_whitelist: DIGIT_WHITELIST,
+      // A cropped band is one line of text; the whole card is scattered text.
+      tessedit_pageseg_mode: band ? modes.singleLine : modes.sparseText,
+    });
+
+    const { data } = await worker.recognize(
+      canvas,
+      band ? { rectangle: padded(band, canvas) } : {},
+      { text: true },
+    );
+
+    const refined = readIdentityNumber(data.text ?? '');
+    return refined.certain ? refined.value : null;
+  } finally {
+    // The worker is reused across scans, so leaving the whitelist in place
+    // would silently reduce every later card to digits.
+    await worker.setParameters({
+      tessedit_char_whitelist: '',
+      tessedit_pageseg_mode: modes.auto,
+    });
   }
 }
 
@@ -237,6 +436,8 @@ export function IcScanAssist({ onApply, locale = 'en' }: IcScanAssistProps) {
   const [dragging, setDragging] = useState(false);
   const [hasCamera, setHasCamera] = useState(false);
   const [parsed, setParsed] = useState<ParsedIcFields | null>(null);
+  /** Advisory: the photo was soft, so any field may be wrong. */
+  const [blurry, setBlurry] = useState(false);
   /*
    * Kept only so the review step can show it. It never leaves the component:
    * not logged, not sent anywhere, and dropped with the rest of the state on
@@ -258,11 +459,14 @@ export function IcScanAssist({ onApply, locale = 'en' }: IcScanAssistProps) {
    * back wrong and you just want to retake the photo.
    */
   const workerRef = useRef<TesseractWorker | null>(null);
+  /** Populated alongside the worker, from the same dynamic import. */
+  const modesRef = useRef<SegmentationModes | null>(null);
 
   useEffect(() => {
     return () => {
       void workerRef.current?.terminate();
       workerRef.current = null;
+      modesRef.current = null;
     };
   }, []);
 
@@ -283,7 +487,13 @@ export function IcScanAssist({ onApply, locale = 'en' }: IcScanAssistProps) {
 
     // Imported here, not at module scope, so the OCR runtime is fetched only
     // when someone actually opens this panel.
-    const { createWorker } = await import('tesseract.js');
+    const { createWorker, PSM: modes } = await import('tesseract.js');
+
+    modesRef.current = {
+      auto: modes.AUTO,
+      singleLine: modes.SINGLE_LINE,
+      sparseText: modes.SPARSE_TEXT,
+    };
 
     const worker = await createWorker(
       'eng',
@@ -353,12 +563,41 @@ export function IcScanAssist({ onApply, locale = 'en' }: IcScanAssistProps) {
       try {
         // Prepared before the worker is asked for, so a large photo is already
         // down to a workable size by the time recognition starts.
-        const prepared = await prepareImage(file);
+        const { canvas, sharpness } = await prepareImage(file);
         const worker = await getWorker();
-        const { data } = await worker.recognize(prepared);
 
-        const fields = parseIcText(data.text);
-        setRawText(data.text);
+        // `blocks` is off by default and carries the per-word confidence, which
+        // is the only honest source for the "check this carefully" flag.
+        const { data } = await worker.recognize(canvas, {}, { text: true, blocks: true });
+
+        const lines = flattenLines(data.blocks);
+        const words = lines.flatMap((line) => line.words);
+        let fields = parseIcText(data.text ?? '', { words });
+
+        /*
+         * Second pass, only when the first one left the number missing or
+         * doubtful. Skipping it on a clean read keeps the common case as fast
+         * as it was, and means this can only ever add a correct number, never
+         * replace one.
+         */
+        const modes = modesRef.current;
+        if (modes && (!fields.identityNumber || fields.uncertain.includes('identityNumber'))) {
+          setPhase('read');
+          const refined = await reReadNumber(worker, canvas, numberBandOf(lines), modes);
+
+          if (refined && refined !== fields.identityNumber) {
+            fields = {
+              ...fields,
+              identityNumber: refined,
+              // A digits-only re-read of a structurally sound number is the
+              // strongest evidence available here, so the flag comes off.
+              uncertain: fields.uncertain.filter((field) => field !== 'identityNumber'),
+            };
+          }
+        }
+
+        setRawText(data.text ?? '');
+        setBlurry(sharpness < BLUR_THRESHOLD);
         setParsed(fields);
         setDraftName(fields.fullName ?? '');
         setDraftNumber(fields.identityNumber ?? '');
@@ -387,6 +626,7 @@ export function IcScanAssist({ onApply, locale = 'en' }: IcScanAssistProps) {
 
   function reset() {
     setParsed(null);
+    setBlurry(false);
     setRawText('');
     setDraftName('');
     setDraftNumber('');
@@ -560,6 +800,13 @@ export function IcScanAssist({ onApply, locale = 'en' }: IcScanAssistProps) {
 
       {status === 'done' && parsed ? (
         <div className="mt-4 flex flex-col gap-3">
+          {/*
+            Shown above the fields rather than beside one of them: blur degrades
+            the whole read, so attaching it to a single field would imply the
+            others are sound.
+          */}
+          {blurry ? <Alert tone="warning">{t.blurry}</Alert> : null}
+
           {!parsed.fullName && !parsed.identityNumber ? (
             <Alert tone="warning">{t.nothing}</Alert>
           ) : (

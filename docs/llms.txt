@@ -150,6 +150,14 @@ so nothing is prerendered against a database that may not exist.
 **The lockfile is generated on Windows** and lacks Linux/musl variants of sharp's optional
 dependencies, so Docker and CI use `npm install` rather than `npm ci`.
 
+**OCR accuracy is bounded by the photograph, not by the parser.** Glare and blur destroy the
+digits before any code runs, so the goal is an honest confidence signal, never a higher hit rate.
+Two rules follow. Judge a reading by whether it is *structurally possible* (`YYMMDD` a real date,
+`PB` an issued code) and by the recognizer's own per-word confidence - never by whether it matched
+a pattern, and never by the separators, because a hyphen returns as `.`, as a space, or as nothing
+without saying anything about the digits either side. And request `blocks: true` from
+`worker.recognize`: it is off by default, and it carries the only real confidence data there is.
+
 ## Data and privacy in this repository
 
 All seeded people, contacts and identity numbers are invented. Email addresses use the reserved
