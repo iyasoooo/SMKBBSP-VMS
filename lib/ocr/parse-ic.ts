@@ -323,7 +323,31 @@ const PLACE_TOKENS = [
  * Normalise a line and decide whether it could be a name at all. Returns the
  * cleaned line, or null when the line is a label, an address, or not capitals.
  */
-function asNameCandidate(raw: string): string | null {
+/**
+ * The widest run of text on a line, treating a large gap as a column break.
+ *
+ * A MyKad prints the holder's photograph to the right of their name, and its
+ * edge, the hologram and the chip all produce stray glyphs on the *same text
+ * line* as the name - observed directly, as
+ * `NURUL HUDA BINTI ISMAIL{spaces}A`, which was then applied to the form as a
+ * name ending in a stray `A`. Frame voting cannot catch it: the artefact comes
+ * from the card's own layout, so every frame reproduces it.
+ *
+ * The gap is the signal, and it only exists because `preserve_interword_spaces`
+ * is deliberately enabled - a wide run of spaces means a wide physical gap on
+ * the card, so text either side of it belongs to different columns. The widest
+ * fragment is the name, because the junk is by nature a glyph or two.
+ */
+function widestColumn(raw: string): string {
+  return raw
+    .split(/\s{4,}/)
+    .map((part) => part.trim())
+    .reduce((widest, part) => (part.length > widest.length ? part : widest), '');
+}
+
+function asNameCandidate(line: string): string | null {
+  const raw = widestColumn(line);
+
   // Tested on the *raw* line. Cleaning first would strip an address's house
   // number and leave something that reads like a name.
   if (/\d/.test(raw)) return null;

@@ -163,6 +163,30 @@ WARGANEGARA`;
     expect(parseIcText(`${line}\nAHMAD BIN ALI`).identityNumber).toBe('880101145523');
   });
 
+  /*
+   * A MyKad prints the photograph to the right of the name, and its edge, the
+   * hologram and the chip all shed stray glyphs onto the same text line.
+   * Observed on a live camera feed as `NURUL HUDA BINTI ISMAIL{spaces}A`, which
+   * reached the form as a name ending in a stray letter. Reading frames and
+   * voting cannot catch this - the artefact is the card's own layout, so every
+   * frame reproduces it identically.
+   */
+  it('drops a stray glyph shed by the photograph beside the name', () => {
+    const parsed = parseIcText('880101-14-5523\nNURUL HUDA BINTI ISMAIL                    A');
+    expect(parsed.fullName).toBe('NURUL HUDA BINTI ISMAIL');
+  });
+
+  it('drops stray glyphs on either side of the name', () => {
+    const parsed = parseIcText('880101-14-5523\nB      AHMAD BIN ALI        X');
+    expect(parsed.fullName).toBe('AHMAD BIN ALI');
+  });
+
+  it('keeps a name whose own words are normally spaced', () => {
+    // Ordinary interword spacing must never be read as a column break.
+    const parsed = parseIcText('880101-14-5523\nNURUL HUDA BINTI ISMAIL');
+    expect(parsed.fullName).toBe('NURUL HUDA BINTI ISMAIL');
+  });
+
   it('does not find a 6-2-4 grouping inside a longer digit run', () => {
     // Without the lookarounds the pattern would carve an identity number out
     // of any sufficiently long number printed on the card.

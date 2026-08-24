@@ -158,6 +158,14 @@ a pattern, and never by the separators, because a hyphen returns as `.`, as a sp
 without saying anything about the digits either side. And request `blocks: true` from
 `worker.recognize`: it is off by default, and it carries the only real confidence data there is.
 
+**Frame voting fixes random error, never systematic error.** The camera reads a burst and keeps
+what the frames agree on (`lib/ocr/consensus.ts`), which cancels sensor noise and hand shake
+because those differ per frame. It is blind to anything the card's own layout causes: the
+photograph printed beside the name sheds stray glyphs onto the *same text line*, identically in
+every frame, and voting ratified a name ending in a stray `A`. Artefacts of the layout have to be
+handled in parsing - which is what `widestColumn` does, treating a wide run of spaces as a column
+break. That only works because `preserve_interword_spaces` is on; do not turn it off.
+
 ## Data and privacy in this repository
 
 All seeded people, contacts and identity numbers are invented. Email addresses use the reserved

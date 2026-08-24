@@ -9,6 +9,14 @@ import {
   type OcrWord,
   type ParsedIcFields,
 } from '@/lib/ocr/parse-ic';
+import { combineReadings, type FrameReading } from '@/lib/ocr/consensus';
+import {
+  BLUR_THRESHOLD,
+  CARD_ASPECT,
+  prepareFile,
+  prepareVideoFrame,
+  type PreparedImage,
+} from '@/lib/ocr/prepare-image';
 import { Button } from '@/components/ui/button';
 import { Alert } from '@/components/ui/surface';
 import { createLogger } from '@/lib/logger';
@@ -23,20 +31,53 @@ const log = createLogger('ocr');
  * registry, and cannot tell a genuine card from a forgery. The extracted values
  * are suggestions that a person must review and correct.
  *
+ * There are two ways in: a live camera, and choosing a file. The camera is
+ * preferred where it exists, because it can read a burst of frames and keep
+ * only what they agree on - see `lib/ocr/consensus.ts` for why agreement is
+ * better evidence than any single frame's own confidence.
+ *
  * Privacy properties, which are the reason it is built this way:
- *   - The image is read from a local `File` and decoded in this browser. It is
- *     never uploaded: there is no fetch, no form field, and no server action
- *     that receives it.
+ *   - Camera frames and chosen files are decoded in this browser and never
+ *     uploaded: there is no fetch, no form field, and no server action that
+ *     receives an image.
  *   - The Tesseract worker, its WASM core and the language model are served
  *     from this origin (`/ocr/...`), so no third party sees anything either.
- *   - The object URL and the image bitmap are released as soon as recognition
- *     finishes, and the file input is cleared, so the page holds no copy.
+ *   - The camera stream is stopped the moment the burst is taken, the bitmaps
+ *     are released as soon as recognition finishes, and the file input is
+ *     cleared, so the page holds no copy of the card.
  *
  * The whole feature is loaded on demand. A visitor who never opens it downloads
  * none of the ~30 MB of OCR runtime.
  */
 
-type Status = 'idle' | 'loading' | 'reading' | 'done' | 'error' | 'rejected' | 'unsupported';
+type Status =
+  | 'idle'
+  | 'camera'
+  | 'capturing'
+  | 'loading'
+  | 'reading'
+  | 'done'
+  | 'error'
+  | 'rejected'
+  | 'unsupported';
+
+/** Why the camera is not available, so the panel can say something useful. */
+type CameraFault = 'denied' | 'unavailable';
+
+/**
+ * How many frames a capture takes, and how many of them are recognised.
+ *
+ * Reading every frame would triple the wait for no gain, because the blurred
+ * ones are exactly the ones that produce wrong answers. Taking more than are
+ * read and keeping the sharpest is nearly free - a `drawImage` is microseconds
+ * against seconds of recognition - and it means a hand shaking at the wrong
+ * moment costs nothing.
+ */
+const BURST_FRAMES = 5;
+const FRAMES_READ = 3;
+
+/** Spacing between grabs, long enough for the sensor to produce a new frame. */
+const BURST_INTERVAL_MS = 120;
 
 /**
  * Which part of the work is running. The language model is ~22 MB, so lumping
@@ -83,6 +124,15 @@ const COPY = {
     unsupported: 'This browser cannot run the card reader. Please type the details in yourself.',
     blurry:
       'That photo looks blurry, so the details below may be wrong. Hold the card flat, avoid glare, and take it again for a better read.',
+    openCamera: 'Use the camera',
+    guide: 'Fill the frame with the card. Keep it flat and avoid glare on the numbers.',
+    capture: 'Capture',
+    capturing: 'Hold still...',
+    cancelCamera: 'Close the camera',
+    cameraDenied:
+      'The camera permission was refused. Allow it in your browser settings, or choose a photo instead.',
+    cameraUnavailable: 'No camera is available on this device. Choose a photo instead.',
+    orChoose: 'or choose a photo instead',
   },
   ms: {
     title: 'Imbas kad pengenalan (pilihan)',
@@ -113,179 +163,18 @@ const COPY = {
     unsupported: 'Pelayar ini tidak boleh menjalankan pembaca kad. Sila taip butiran sendiri.',
     blurry:
       'Gambar itu kelihatan kabur, jadi butiran di bawah mungkin salah. Pegang kad rata, elakkan silau, dan ambil gambar semula untuk bacaan lebih baik.',
+    openCamera: 'Guna kamera',
+    guide: 'Penuhkan bingkai dengan kad. Pegang rata dan elakkan silau pada nombor.',
+    capture: 'Tangkap',
+    capturing: 'Pegang diam...',
+    cancelCamera: 'Tutup kamera',
+    cameraDenied:
+      'Kebenaran kamera ditolak. Benarkan dalam tetapan pelayar anda, atau pilih gambar sebaliknya.',
+    cameraUnavailable: 'Tiada kamera pada peranti ini. Sila pilih gambar sebaliknya.',
+    orChoose: 'atau pilih gambar sebaliknya',
   },
 } as const;
 
-/**
- * The width band the reader is actually given.
- *
- * Recognition cost scales with pixel count, and a modern phone camera produces
- * something like 4000x3000 - twelve megapixels of which the card is a fraction.
- * Handing that over unchanged is what makes a scan take tens of seconds, and it
- * buys nothing: a card filling most of the frame still has far more than the
- * ~30px of glyph height Tesseract needs once it is down at 2000px. The lower
- * bound covers the opposite case, a small or already-downscaled photo.
- */
-const MIN_WIDTH = 1400;
-const MAX_WIDTH = 2000;
-
-/**
- * Window for the local threshold, as a fraction of image width. Wide enough to
- * span several characters plus their background, narrow enough that the card's
- * photo does not influence the text beside it.
- */
-const THRESHOLD_WINDOW = 0.125;
-
-/** How far below the local mean a pixel must sit to count as ink. */
-const THRESHOLD_BIAS = 0.86;
-
-/**
- * Binarise the photo with a *local* threshold before recognition.
- *
- * This replaces a global min-max contrast stretch, which was close to useless
- * on a real card. A MyKad carries a dark portrait over roughly a fifth of its
- * face, so the darkest pixel in the image comes from the photograph, not the
- * text: the measured range was already near 0-255 and the stretch therefore did
- * almost nothing to the text region it was supposed to help. Any single global
- * threshold has the same problem, including the Otsu pass Tesseract runs
- * internally - it lands somewhere between "portrait" and "card", not between
- * "ink" and "paper".
- *
- * A per-pixel threshold taken from the neighbourhood mean (Bradley's method,
- * via an integral image so the window cost is constant) sidesteps all of it,
- * and handles the glare and uneven lighting of a handheld photo at the same
- * time - the two conditions a global threshold handles worst.
- */
-/**
- * How much high-frequency detail the greyscale still carries, as the variance
- * of its Laplacian.
- *
- * Blur is the failure this feature cannot recover from: binarising a soft photo
- * produces confident-looking output built from glyphs that were never legible.
- * Measuring it lets the panel say "retake the photo" instead of leaving someone
- * to work out why the number came back wrong. It is advisory only - a low score
- * never blocks a scan, because the threshold is a rule of thumb and a real read
- * that happens to score badly must still be allowed through.
- */
-function sharpnessScore(grey: Uint8Array, width: number, height: number): number {
-  let sum = 0;
-  let sumSquares = 0;
-  let count = 0;
-
-  // Interior pixels only, so the 4-neighbour kernel needs no bounds checks.
-  for (let y = 1; y < height - 1; y += 1) {
-    for (let x = 1; x < width - 1; x += 1) {
-      const p = y * width + x;
-      const laplacian =
-        4 * (grey[p] ?? 0) -
-        (grey[p - 1] ?? 0) -
-        (grey[p + 1] ?? 0) -
-        (grey[p - width] ?? 0) -
-        (grey[p + width] ?? 0);
-
-      sum += laplacian;
-      sumSquares += laplacian * laplacian;
-      count += 1;
-    }
-  }
-
-  if (count === 0) return 0;
-  const mean = sum / count;
-  return sumSquares / count - mean * mean;
-}
-
-/** Below this the photo is soft enough that a misread is likely. */
-const BLUR_THRESHOLD = 60;
-
-interface PreparedImage {
-  canvas: HTMLCanvasElement;
-  /** Measured before binarisation, which would destroy the signal. */
-  sharpness: number;
-}
-
-async function prepareImage(file: File): Promise<PreparedImage> {
-  const bitmap = await createImageBitmap(file);
-
-  try {
-    const target = Math.min(MAX_WIDTH, Math.max(MIN_WIDTH, bitmap.width));
-    const scale = target / bitmap.width;
-    const canvas = document.createElement('canvas');
-    canvas.width = Math.round(bitmap.width * scale);
-    canvas.height = Math.round(bitmap.height * scale);
-
-    const context = canvas.getContext('2d', { willReadFrequently: true });
-    if (!context) throw new Error('2d canvas context unavailable');
-
-    context.imageSmoothingQuality = 'high';
-    context.drawImage(bitmap, 0, 0, canvas.width, canvas.height);
-
-    const { width, height } = canvas;
-    const image = context.getImageData(0, 0, width, height);
-    const { data } = image;
-
-    const grey = new Uint8Array(width * height);
-    for (let p = 0; p < grey.length; p += 1) {
-      const i = p * 4;
-      grey[p] =
-        ((data[i] ?? 0) * 299 + (data[i + 1] ?? 0) * 587 + (data[i + 2] ?? 0) * 114) / 1000;
-    }
-
-    // Taken from the greyscale, before the threshold below turns every pixel
-    // into pure black or white and erases the gradients this measures.
-    const sharpness = sharpnessScore(grey, width, height);
-
-    /*
-     * Summed-area table, one row and column of zero padding so the window sum
-     * needs no bounds checks. A Uint32 cannot overflow here: the largest
-     * possible total is 255 x 2000 x 2000, comfortably inside 2^32.
-     */
-    const integral = new Uint32Array((width + 1) * (height + 1));
-    for (let y = 0; y < height; y += 1) {
-      let rowSum = 0;
-      for (let x = 0; x < width; x += 1) {
-        rowSum += grey[y * width + x] ?? 0;
-        integral[(y + 1) * (width + 1) + (x + 1)] =
-          (integral[y * (width + 1) + (x + 1)] ?? 0) + rowSum;
-      }
-    }
-
-    const radius = Math.max(8, Math.round((width * THRESHOLD_WINDOW) / 2));
-
-    for (let y = 0; y < height; y += 1) {
-      const y0 = Math.max(0, y - radius);
-      const y1 = Math.min(height - 1, y + radius);
-
-      for (let x = 0; x < width; x += 1) {
-        const x0 = Math.max(0, x - radius);
-        const x1 = Math.min(width - 1, x + radius);
-
-        const area = (x1 - x0 + 1) * (y1 - y0 + 1);
-        const sum =
-          (integral[(y1 + 1) * (width + 1) + (x1 + 1)] ?? 0) -
-          (integral[y0 * (width + 1) + (x1 + 1)] ?? 0) -
-          (integral[(y1 + 1) * (width + 1) + x0] ?? 0) +
-          (integral[y0 * (width + 1) + x0] ?? 0);
-
-        // pixel < mean * bias, with the division folded away: the local mean is
-        // sum/area, so multiplying both sides by area keeps this in integers.
-        const p = y * width + x;
-        const ink = (grey[p] ?? 0) * area < sum * THRESHOLD_BIAS;
-        const value = ink ? 0 : 255;
-
-        const i = p * 4;
-        data[i] = value;
-        data[i + 1] = value;
-        data[i + 2] = value;
-      }
-    }
-
-    context.putImageData(image, 0, 0);
-    return { canvas, sharpness };
-  } finally {
-    // Free the decoded frame straight away; a card photo is several megabytes.
-    bitmap.close();
-  }
-}
 
 // ---------------------------------------------------------------------------
 // Recognition passes
@@ -438,6 +327,7 @@ export function IcScanAssist({ onApply, locale = 'en' }: IcScanAssistProps) {
   const [parsed, setParsed] = useState<ParsedIcFields | null>(null);
   /** Advisory: the photo was soft, so any field may be wrong. */
   const [blurry, setBlurry] = useState(false);
+  const [cameraFault, setCameraFault] = useState<CameraFault | null>(null);
   /*
    * Kept only so the review step can show it. It never leaves the component:
    * not logged, not sent anywhere, and dropped with the rest of the state on
@@ -449,7 +339,8 @@ export function IcScanAssist({ onApply, locale = 'en' }: IcScanAssistProps) {
   const [draftNumber, setDraftNumber] = useState('');
 
   const inputRef = useRef<HTMLInputElement>(null);
-  const cameraRef = useRef<HTMLInputElement>(null);
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const streamRef = useRef<MediaStream | null>(null);
   /*
    * Built once and kept for the life of the panel.
    *
@@ -471,14 +362,20 @@ export function IcScanAssist({ onApply, locale = 'en' }: IcScanAssistProps) {
   }, []);
 
   /*
-   * `capture` is honoured by phones and tablets and ignored everywhere else, so
-   * on a laptop the camera button would silently open the same file dialog as
-   * the drop zone. A coarse pointer is the practical signal for a device that
-   * has a camera worth pointing at a card. Resolved after mount because the
-   * server cannot know it, and a guess would mismatch on hydration.
+   * Whether to offer the camera at all.
+   *
+   * This used to test for a coarse pointer, on the theory that only phones have
+   * a camera worth pointing at a card. That was wrong twice over: it hid the
+   * button on a touchscreen guard tablet's docked setup and on any laptop with
+   * a usable webcam, and it offered it on touch devices with no camera. The
+   * real question is whether the API exists; whether a camera answers is
+   * settled by `getUserMedia` itself, and handled as a fault.
+   *
+   * Resolved after mount because the server cannot know it, and a guess would
+   * mismatch on hydration.
    */
   useEffect(() => {
-    setHasCamera(window.matchMedia('(pointer: coarse)').matches);
+    setHasCamera(Boolean(navigator.mediaDevices?.getUserMedia));
   }, []);
 
   const getWorker = useCallback(async (): Promise<TesseractWorker> => {
@@ -542,6 +439,92 @@ export function IcScanAssist({ onApply, locale = 'en' }: IcScanAssistProps) {
     return worker;
   }, []);
 
+  /**
+   * Recognise one prepared image. Shared by both entry points, so a camera
+   * frame and a chosen photograph are read by exactly the same code.
+   */
+  const readOne = useCallback(
+    async (
+      worker: TesseractWorker,
+      canvas: HTMLCanvasElement,
+    ): Promise<{ reading: FrameReading; text: string }> => {
+      // `blocks` is off by default and carries the per-word confidence, which
+      // is the only honest source for the "check this carefully" flag.
+      const { data } = await worker.recognize(canvas, {}, { text: true, blocks: true });
+
+      const lines = flattenLines(data.blocks);
+      const words = lines.flatMap((line) => line.words);
+      let fields = parseIcText(data.text ?? '', { words });
+
+      /*
+       * Second pass, only when the first one left the number missing or
+       * doubtful. Skipping it on a clean read keeps the common case fast, and
+       * means this can only ever add a correct number, never replace one.
+       */
+      const modes = modesRef.current;
+      if (modes && (!fields.identityNumber || fields.uncertain.includes('identityNumber'))) {
+        const refined = await reReadNumber(worker, canvas, numberBandOf(lines), modes);
+
+        if (refined && refined !== fields.identityNumber) {
+          fields = {
+            ...fields,
+            identityNumber: refined,
+            // A digits-only re-read of a structurally sound number is the
+            // strongest evidence available here, so the flag comes off.
+            uncertain: fields.uncertain.filter((field) => field !== 'identityNumber'),
+          };
+        }
+      }
+
+      return {
+        reading: { fields, confidence: data.confidence ?? 0 },
+        text: data.text ?? '',
+      };
+    },
+    [],
+  );
+
+  /** Recognise a set of prepared images and settle on what they agree about. */
+  const readAll = useCallback(
+    async (prepared: PreparedImage[]) => {
+      const worker = await getWorker();
+
+      const readings: FrameReading[] = [];
+      const texts: string[] = [];
+
+      for (const image of prepared) {
+        const { reading, text } = await readOne(worker, image.canvas);
+        readings.push(reading);
+        texts.push(text);
+      }
+
+      const fields = combineReadings(readings);
+
+      /*
+       * The raw text of the frame that actually won, so "what the reader saw"
+       * corresponds to the values on screen. Showing the first frame's text
+       * beside a different frame's answer would be actively misleading.
+       */
+      const chosen = Math.max(
+        0,
+        readings.findIndex(
+          (reading) =>
+            fields.identityNumber !== null &&
+            reading.fields.identityNumber === fields.identityNumber,
+        ),
+      );
+
+      setRawText(texts[chosen] ?? texts[0] ?? '');
+      // The sharpest frame governs: it is the one whose reading was believed.
+      setBlurry((prepared[0]?.sharpness ?? 0) < BLUR_THRESHOLD);
+      setParsed(fields);
+      setDraftName(fields.fullName ?? '');
+      setDraftNumber(fields.identityNumber ?? '');
+      setStatus('done');
+    },
+    [getWorker, readOne],
+  );
+
   const handleFile = useCallback(
     async (file: File) => {
       setDragging(false);
@@ -550,7 +533,6 @@ export function IcScanAssist({ onApply, locale = 'en' }: IcScanAssistProps) {
       // `accept`, but a drag bypasses that entirely.
       if (!file.type.startsWith('image/')) {
         if (inputRef.current) inputRef.current.value = '';
-        if (cameraRef.current) cameraRef.current.value = '';
         setStatus('rejected');
         return;
       }
@@ -563,58 +545,133 @@ export function IcScanAssist({ onApply, locale = 'en' }: IcScanAssistProps) {
       try {
         // Prepared before the worker is asked for, so a large photo is already
         // down to a workable size by the time recognition starts.
-        const { canvas, sharpness } = await prepareImage(file);
-        const worker = await getWorker();
-
-        // `blocks` is off by default and carries the per-word confidence, which
-        // is the only honest source for the "check this carefully" flag.
-        const { data } = await worker.recognize(canvas, {}, { text: true, blocks: true });
-
-        const lines = flattenLines(data.blocks);
-        const words = lines.flatMap((line) => line.words);
-        let fields = parseIcText(data.text ?? '', { words });
-
-        /*
-         * Second pass, only when the first one left the number missing or
-         * doubtful. Skipping it on a clean read keeps the common case as fast
-         * as it was, and means this can only ever add a correct number, never
-         * replace one.
-         */
-        const modes = modesRef.current;
-        if (modes && (!fields.identityNumber || fields.uncertain.includes('identityNumber'))) {
-          setPhase('read');
-          const refined = await reReadNumber(worker, canvas, numberBandOf(lines), modes);
-
-          if (refined && refined !== fields.identityNumber) {
-            fields = {
-              ...fields,
-              identityNumber: refined,
-              // A digits-only re-read of a structurally sound number is the
-              // strongest evidence available here, so the flag comes off.
-              uncertain: fields.uncertain.filter((field) => field !== 'identityNumber'),
-            };
-          }
-        }
-
-        setRawText(data.text ?? '');
-        setBlurry(sharpness < BLUR_THRESHOLD);
-        setParsed(fields);
-        setDraftName(fields.fullName ?? '');
-        setDraftNumber(fields.identityNumber ?? '');
-        setStatus('done');
+        await readAll([await prepareFile(file)]);
       } catch (error) {
         // Never surface the underlying error: it can contain local file paths.
         log.error('recognition failed', undefined, error);
         setStatus('error');
       } finally {
         // The prepared canvas is unreferenced once recognition returns, so the
-        // only handles left are the two inputs' own copies of the file.
+        // only handle left is the input's own copy of the file.
         if (inputRef.current) inputRef.current.value = '';
-        if (cameraRef.current) cameraRef.current.value = '';
       }
     },
-    [getWorker],
+    [readAll],
   );
+
+  // ---------------------------------------------------------------------
+  // Camera
+  // ---------------------------------------------------------------------
+
+  /**
+   * Release the camera.
+   *
+   * Every track has to be stopped individually - dropping the reference is not
+   * enough, and leaves the device's camera indicator lit. Written to be safe to
+   * call twice, because it runs from the capture path, the cancel button and
+   * unmount, and those can overlap.
+   */
+  const stopCamera = useCallback(() => {
+    for (const track of streamRef.current?.getTracks() ?? []) track.stop();
+    streamRef.current = null;
+
+    const video = videoRef.current;
+    if (video) video.srcObject = null;
+  }, []);
+
+  // The stream must not outlive the panel: a live camera left running is both a
+  // privacy surprise and a flat battery.
+  useEffect(() => stopCamera, [stopCamera]);
+
+  const startCamera = useCallback(async () => {
+    if (typeof navigator === 'undefined' || !navigator.mediaDevices?.getUserMedia) {
+      setCameraFault('unavailable');
+      return;
+    }
+
+    setCameraFault(null);
+    setStatus('camera');
+
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({
+        // The rear camera, and as many pixels as the device will give: the
+        // limiting factor on a card is glyph height in the captured frame.
+        video: {
+          facingMode: { ideal: 'environment' },
+          width: { ideal: 1920 },
+          height: { ideal: 1080 },
+        },
+        audio: false,
+      });
+
+      streamRef.current = stream;
+
+      const video = videoRef.current;
+      if (!video) {
+        // The panel closed while the permission prompt was open.
+        stopCamera();
+        return;
+      }
+
+      video.srcObject = stream;
+      await video.play();
+    } catch (error) {
+      const name = error instanceof Error ? error.name : '';
+      // A refusal is worth distinguishing: it is the one fault the person can
+      // actually do something about.
+      setCameraFault(name === 'NotAllowedError' || name === 'SecurityError' ? 'denied' : 'unavailable');
+      setStatus('idle');
+      stopCamera();
+      log.debug('camera unavailable', { name });
+    }
+  }, [stopCamera]);
+
+  /**
+   * Take a burst, keep the sharpest frames, and read those.
+   *
+   * The burst is grabbed before anything is recognised, and the camera is
+   * released immediately afterwards. Holding it open through several seconds of
+   * OCR would keep the indicator lit long after the person had finished, and
+   * invite them to move the card while it was still being read.
+   */
+  const capture = useCallback(async () => {
+    const video = videoRef.current;
+    if (!video || !video.videoWidth) return;
+
+    setStatus('capturing');
+
+    const frames: PreparedImage[] = [];
+    try {
+      for (let i = 0; i < BURST_FRAMES; i += 1) {
+        frames.push(prepareVideoFrame(video));
+        if (i < BURST_FRAMES - 1) {
+          await new Promise((resolve) => setTimeout(resolve, BURST_INTERVAL_MS));
+        }
+      }
+    } catch (error) {
+      log.error('capture failed', undefined, error);
+      stopCamera();
+      setStatus('error');
+      return;
+    }
+
+    stopCamera();
+
+    setStatus('loading');
+    setPhase('prepare');
+    setProgress(0);
+    setParsed(null);
+
+    try {
+      // Sharpest first, so the blur advisory and the raw-text panel both refer
+      // to the best frame rather than whichever happened to be grabbed first.
+      const sharpest = frames.sort((a, b) => b.sharpness - a.sharpness).slice(0, FRAMES_READ);
+      await readAll(sharpest);
+    } catch (error) {
+      log.error('recognition failed', undefined, error);
+      setStatus('error');
+    }
+  }, [readAll, stopCamera]);
 
   function applyAndClose() {
     onApply({
@@ -625,6 +682,8 @@ export function IcScanAssist({ onApply, locale = 'en' }: IcScanAssistProps) {
   }
 
   function reset() {
+    stopCamera();
+    setCameraFault(null);
     setParsed(null);
     setBlurry(false);
     setRawText('');
@@ -723,40 +782,28 @@ export function IcScanAssist({ onApply, locale = 'en' }: IcScanAssistProps) {
           </label>
 
           {hasCamera ? (
-            <>
-              <input
-                ref={cameraRef}
-                id="ic-camera"
-                type="file"
-                accept="image/*"
-                // `capture` opens the rear camera directly on a phone or tablet.
-                capture="environment"
-                className="sr-only"
-                onChange={(event) => {
-                  const file = event.target.files?.[0];
-                  if (file) void handleFile(file);
-                }}
-              />
-              <Button
-                type="button"
-                size="lg"
-                className="mt-3 w-full"
-                onClick={() => cameraRef.current?.click()}
+            <Button type="button" size="lg" className="mt-3 w-full" onClick={() => void startCamera()}>
+              <svg
+                aria-hidden="true"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="1.5"
+                className="h-5 w-5"
               >
-                <svg
-                  aria-hidden="true"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="1.5"
-                  className="h-5 w-5"
-                >
-                  <path d="M3 8.5A1.5 1.5 0 0 1 4.5 7h2.2l1.2-2h8.2l1.2 2h2.2A1.5 1.5 0 0 1 21 8.5v9a1.5 1.5 0 0 1-1.5 1.5h-15A1.5 1.5 0 0 1 3 17.5z" />
-                  <circle cx="12" cy="13" r="3.5" />
-                </svg>
-                {t.camera}
-              </Button>
-            </>
+                <path d="M3 8.5A1.5 1.5 0 0 1 4.5 7h2.2l1.2-2h8.2l1.2 2h2.2A1.5 1.5 0 0 1 21 8.5v9a1.5 1.5 0 0 1-1.5 1.5h-15A1.5 1.5 0 0 1 3 17.5z" />
+                <circle cx="12" cy="13" r="3.5" />
+              </svg>
+              {t.openCamera}
+            </Button>
+          ) : null}
+
+          {cameraFault ? (
+            <div className="mt-3">
+              <Alert tone="warning">
+                {cameraFault === 'denied' ? t.cameraDenied : t.cameraUnavailable}
+              </Alert>
+            </div>
           ) : null}
 
           {status === 'error' ? (
@@ -769,6 +816,71 @@ export function IcScanAssist({ onApply, locale = 'en' }: IcScanAssistProps) {
               <Alert tone="warning">{t.notImage}</Alert>
             </div>
           ) : null}
+        </div>
+      ) : null}
+
+      {status === 'camera' || status === 'capturing' ? (
+        <div className="mt-4">
+          {/*
+            Cut to the card's own proportions, and the frame is the crop: what
+            recognition receives is exactly this rectangle, computed by
+            `coverCrop`. That is the point of matching the shapes - a guide that
+            only approximated the crop would quietly read a strip of desk the
+            person framing the shot could not see.
+          */}
+          <div
+            className="relative w-full overflow-hidden rounded-xl bg-black"
+            style={{ aspectRatio: String(CARD_ASPECT) }}
+          >
+            <video
+              ref={videoRef}
+              className="h-full w-full object-cover"
+              // `playsInline` keeps iOS from taking the video fullscreen, which
+              // would hide the frame and the capture button.
+              playsInline
+              muted
+              // Decorative: the guidance below is the accessible description,
+              // and a live camera feed has no alternative text worth giving.
+              aria-hidden="true"
+            />
+
+            <div
+              aria-hidden="true"
+              className="pointer-events-none absolute inset-[6%] rounded-lg border-2 border-white/80 shadow-[0_0_0_9999px_rgba(0,0,0,0.28)]"
+            />
+
+            {status === 'capturing' ? (
+              <div className="absolute inset-0 flex items-center justify-center bg-black/45">
+                <p className="text-sm font-semibold text-white" role="status">
+                  {t.capturing}
+                </p>
+              </div>
+            ) : null}
+          </div>
+
+          <p className="mt-2 text-sm text-muted">{t.guide}</p>
+
+          <div className="mt-3 flex flex-wrap gap-2">
+            <Button
+              type="button"
+              size="lg"
+              onClick={() => void capture()}
+              disabled={status === 'capturing'}
+            >
+              {t.capture}
+            </Button>
+            <Button
+              type="button"
+              variant="secondary"
+              onClick={() => {
+                stopCamera();
+                setStatus('idle');
+              }}
+              disabled={status === 'capturing'}
+            >
+              {t.cancelCamera}
+            </Button>
+          </div>
         </div>
       ) : null}
 
