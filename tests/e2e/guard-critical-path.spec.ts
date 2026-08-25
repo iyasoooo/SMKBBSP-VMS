@@ -1,5 +1,5 @@
 import { expect, test } from '@playwright/test';
-import { HOST_TEACHER_OPTION, login, logout, submitVisitRequest, uniqueNric } from './helpers';
+import { login, logout, selectHostTeacher, submitVisitRequest, uniqueNric } from './helpers';
 import { mark } from './steps';
 
 
@@ -106,7 +106,7 @@ test('AT-003/006/010/016/017/018 full appointment to check-out journey', async (
   await page.getByLabel('Full name').fill(gateVisitor);
   await page.getByLabel('Phone number').fill('014-555 6666');
   await page.getByLabel('Identification number').fill(uniqueNric());
-  await page.getByLabel('Host teacher').selectOption({ label: HOST_TEACHER_OPTION });
+  await selectHostTeacher(page);
   await page.getByLabel('Purpose').fill('Gate lifecycle end to end check');
   await page.getByLabel(/I have seen the visitor/).check();
   await page.getByRole('button', { name: 'Register and check in' }).click();

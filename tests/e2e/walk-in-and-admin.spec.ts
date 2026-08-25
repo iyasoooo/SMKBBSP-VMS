@@ -1,5 +1,5 @@
 ﻿import { expect, test } from '@playwright/test';
-import { HOST_TEACHER_OPTION, login, logout, submitVisitRequest, uniqueNric } from './helpers';
+import { login, logout, selectHostTeacher, submitVisitRequest, uniqueNric } from './helpers';
 
 /** AT-014 / AT-015: the two walk-in branches. */
 test.describe('walk-in registration', () => {
@@ -12,7 +12,7 @@ test.describe('walk-in registration', () => {
     await page.getByLabel('Full name').fill(visitorName);
     await page.getByLabel('Phone number').fill('013-222 3333');
     await page.getByLabel('Identification number').fill(uniqueNric());
-    await page.getByLabel('Host teacher').selectOption({ label: HOST_TEACHER_OPTION });
+    await selectHostTeacher(page);
     await page.getByLabel('Purpose').fill('Air-conditioning maintenance visit');
     await page.getByLabel(/I have seen the visitor/).check();
 
@@ -35,7 +35,7 @@ test.describe('walk-in registration', () => {
     await page.getByLabel('Full name').fill('Rizal bin Sulaiman');
     await page.getByLabel('Phone number').fill('+60121119999');
     await page.getByLabel('Identification number').fill('779912319001');
-    await page.getByLabel('Host teacher').selectOption({ label: HOST_TEACHER_OPTION });
+    await selectHostTeacher(page);
     await page.getByLabel('Purpose').fill('Attempting entry for the blocked-path test');
     await page.getByLabel(/I have seen the visitor/).check();
 
