@@ -35,10 +35,6 @@ RUN npx prisma generate
 
 COPY . .
 
-# Fetch the OCR runtime into public/ocr so the image is self-contained and the
-# browser never reaches a CDN. Needs network access at build time.
-RUN npm run ocr:assets
-
 # `next build` imports modules that validate the environment at load time. These
 # values are placeholders that satisfy that validation only; every one of them
 # is replaced at runtime from the compose environment. No real secret is ever

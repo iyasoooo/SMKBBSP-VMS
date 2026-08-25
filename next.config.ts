@@ -25,11 +25,34 @@ if (process.env.NODE_ENV === 'production') {
   });
 }
 
+/**
+ * Dev-only origins allowed to load `/_next/*` assets.
+ *
+ * A phone or tablet on the same Wi-Fi reaches this machine by LAN address, and
+ * the dev server rejects that as cross-origin unless the address is listed.
+ * Hard-coding one address meant every change of network silently broke the
+ * tablet again, so the value is derived from APP_URL - the same address the
+ * emails, QR passes and badge codes already point at - and cannot drift from
+ * it. The private-range wildcards keep a DHCP lease change from breaking it
+ * before anyone has updated `.env`.
+ *
+ * This applies to `next dev` only; a production build ignores it entirely.
+ */
+function devOrigins(): string[] {
+  const wildcards = ['192.168.*.*', '10.*.*.*', '172.16.*.*', '172.20.*.*'];
+  try {
+    const host = new URL(process.env.APP_URL ?? 'http://localhost:3000').hostname;
+    return host === 'localhost' ? wildcards : [host, ...wildcards];
+  } catch {
+    // A malformed APP_URL is reported properly by `lib/env.ts` at startup;
+    // failing the config load here would replace that message with a stack.
+    return wildcards;
+  }
+}
+
 const nextConfig: NextConfig = {
   reactStrictMode: true,
-  // Dev-only: lets a phone on the same Wi-Fi load /_next/* assets from this
-  // machine's LAN address instead of being rejected as a cross-origin request.
-  allowedDevOrigins: ['192.168.1.4'],
+  allowedDevOrigins: devOrigins(),
   poweredByHeader: false,
   typedRoutes: false,
   serverExternalPackages: ['@prisma/client', 'nodemailer', 'exceljs'],

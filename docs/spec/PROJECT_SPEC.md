@@ -97,7 +97,7 @@ The current paper process is slow, exposes previous visitors' personal details, 
 
 ### P1 - implement after every P0 test passes
 
-1. Browser-side OCR assistance for Malaysian IC fields with mandatory user correction/confirmation and immediate image disposal.
+1. OCR assistance for Malaysian IC fields with mandatory user correction/confirmation and immediate image disposal. Reading runs on a self-hosted vision model the application server calls; the photograph is held for one request and never stored, and the feature is absent where no model host is configured. The model host is a separate machine from the application server, reached over a private network (Tailscale) rather than the public internet, and its unavailability is a supported state in which the form is typed in.
 2. Resend/revoke QR pass.
 3. Configurable visit windows, badge prefix, data-retention interval, and overdue threshold.
 4. In-app notification center.
@@ -212,7 +212,7 @@ Visit status transitions:
 | FR-018 | P0 | Record append-oriented audit logs for privileged and lifecycle actions. |
 | FR-019 | P0 | Support English and Bahasa Melayu on main guard pages and support dark mode. |
 | FR-020 | P0 | Derive overdue visitors and upcoming/expired/no-show operational alerts using explicit rules. |
-| FR-021 | P1 | Assist form entry with browser-side OCR and delete the source image immediately. |
+| FR-021 | P1 | Assist form entry with OCR on a self-hosted vision model and discard the source image immediately. The image is never written to disk and no extracted value is persisted before the visitor submits the form. |
 
 ## 9. Information architecture
 

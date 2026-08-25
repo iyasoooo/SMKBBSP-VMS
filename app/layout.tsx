@@ -12,7 +12,13 @@ export const metadata: Metadata = {
     'Appointment-based visitor management for SMK Bandar Baru Sri Petaling: request a visit, get teacher approval, and check in at the gate with a QR pass.',
   robots: { index: false, follow: false },
   icons: {
-    icon: '/icon.svg',
+    // Both are rendered from the crest by `npm run pwa:icons`. The small one is
+    // what a browser tab actually draws; the large one is there for bookmarks
+    // and tab-switcher previews.
+    icon: [
+      { url: '/icons/favicon-32.png', sizes: '32x32', type: 'image/png' },
+      { url: '/icons/icon-192.png', sizes: '192x192', type: 'image/png' },
+    ],
     // Safari ignores the manifest icons for the home screen and composites onto
     // white, so it gets its own pre-branded icon.
     apple: '/icons/apple-touch-icon.png',

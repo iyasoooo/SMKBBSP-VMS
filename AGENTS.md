@@ -20,6 +20,17 @@ Deliver a complete, honest, demo-ready FYP implementation of SMKBBSP VisitorPass
 - Do not require paid or proprietary services for local operation.
 - Do not create fake integrations, fake analytics, placeholder routes, or buttons without behavior.
 
+## Card reading
+
+Reading an identity card is the one part of this system that calls a model, and it has a fixed shape. Changing any of the following is a specification change, not an implementation choice.
+
+- **The model host is a separate machine, reached over a Tailscale private network.** In the school's deployment a laptop runs Ollama and the VPS calls it across the tailnet. Do not move the model onto the application server, do not add a hosted-inference provider, and do not introduce a fallback that reaches the public internet.
+- **Server-side only.** The browser posts a photograph to `/api/ocr`; the server calls the model. Never let a component or client bundle address the model host — that would require loosening `connect-src 'self'` in the content security policy.
+- **The model host being offline is a normal state, not an error to engineer around.** Report card reading as unavailable and let the form be typed. Do not add retries, queues, background jobs, or any workflow that waits on the model.
+- **Ollama has no authentication.** The tailnet is the entire access control. Never publish, forward, or document opening the model port, and never bind it to a public interface.
+- **A well-formed reading is not a successful one.** A model asked for an example output can return that example verbatim. Validate structurally, discard what cannot be real, and never surface a confidence figure the model reported about itself.
+- **Ask for nothing the form cannot use.** A card carries an address, a birthplace and a religion. Requesting them would place personal data in server memory for no purpose.
+
 ## Implementation standards
 
 - Keep the application as a single Next.js/TypeScript codebase with PostgreSQL and Prisma.

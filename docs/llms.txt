@@ -120,7 +120,6 @@ npm run test:e2e       # prepares the E2E database, then Playwright
 npm run build          # production build
 npm run db:migrate     # create and apply a migration
 npm run db:seed        # deterministic demonstration data
-npm run ocr:assets     # fetch the self-hosted OCR runtime into public/ocr
 ```
 
 Run `lint`, `typecheck`, `test` and `build` before claiming any change is complete.
@@ -150,23 +149,69 @@ so nothing is prerendered against a database that may not exist.
 **The lockfile is generated on Windows** and lacks Linux/musl variants of sharp's optional
 dependencies, so Docker and CI use `npm install` rather than `npm ci`.
 
-**OCR accuracy is bounded by the photograph, not by the parser.** Glare and blur destroy the
-digits before any code runs, so the goal is an honest confidence signal, never a higher hit rate.
-Two rules follow. Judge a reading by whether it is *structurally possible* (`YYMMDD` a real date,
-`PB` an issued code) and by the recognizer's own per-word confidence - never by whether it matched
-a pattern, and never by the separators, because a hyphen returns as `.`, as a space, or as nothing
-without saying anything about the digits either side. And request `blocks: true` from
-`worker.recognize`: it is off by default, and it carries the only real confidence data there is.
+**Card reading is a vision model on an Ollama host, and it is server-side.** The browser posts a
+photograph to `/api/ocr` (`app/api/ocr/route.ts`), which calls the model through
+`lib/ocr/ollama.ts`. The browser never addresses the model host, which is what keeps
+`connect-src 'self'` intact. This replaced a browser-side recognizer (PP-OCRv5 via ONNX Runtime)
+because a classical recognizer transcribes lines and leaves a parser guessing which line was the
+name, and a real laminated MyKad defeats that guess. Set `OCR_OLLAMA_URL` empty and the feature
+disappears rather than failing at the moment somebody uses it.
 
-**Frame voting fixes random error, never systematic error.** The camera reads a burst and keeps
-what the frames agree on (`lib/ocr/consensus.ts`), which cancels sensor noise and hand shake
-because those differ per frame. It is blind to anything the card's own layout causes: the
-photograph printed beside the name sheds stray glyphs onto the *same text line*, identically in
-every frame, and voting ratified a name ending in a stray `A`. Artefacts of the layout have to be
-handled in parsing - which is what `widestColumn` does, treating a wide run of spaces as a column
-break. That only works because `preserve_interword_spaces` is on; do not turn it off.
+**The model host is not the application server.** In the deployed system a laptop at the school
+runs Ollama and the VPS reaches it over a Tailscale private network, so the photograph crosses a
+WireGuard tunnel and never the public internet. This is the intended architecture rather than a
+stopgap, and two things follow from it. Ollama has no authentication, so the tailnet is the entire
+access control and the model port must never be published or forwarded. And the host is expected to
+be offline sometimes - a laptop gets shut - so unavailability is a normal state that reports itself
+and lets the form be typed, never something to retry or queue around. `HOSTING.md` has the setup,
+including why the container needs the numeric `100.x` address rather than a MagicDNS name.
+
+**Ollama's default context window is 4096 tokens regardless of the model's own limit**, and a
+photographed card lands close enough to that ceiling to cross it depending on the picture. The host
+then answers `400 exceed_context_size_error` rather than truncating, which surfaces as a failed
+read of a perfectly good photograph. `lib/ocr/ollama.ts` therefore sets `num_ctx` explicitly. If
+card reading starts failing on images that plainly ought to work, check that first.
+
+**A language model fails differently, and the code is built around that.** A recognizer that
+cannot read a digit returns something visibly wrong. A model returns a *fluent, well-formed*
+identity number that nobody printed. There is no calibrated confidence to fall back on - asking a
+model to rate its own certainty produces a number that reads well and means nothing - so the only
+evidence used is whether a value could be real. `readIdentityNumber` knows a MyKad encodes a valid
+birth date and an issued state code, and anything that fails it is returned as `null` rather than
+flagged: a number that cannot be a MyKad is not worth showing a person at all. Never add a
+confidence figure sourced from the model.
+
+**The model's output is untrusted input.** It arrives as text that is *asked* to be JSON and
+frequently is not - fenced, prefaced with prose, or truncated. `extractJsonObject` pulls the first
+balanced object out (string-aware, so a brace inside a name cannot cut it short) and a Zod schema
+discards everything else. Pin the model by name: an Ollama host can carry `*:cloud` tags that proxy
+to ollama.com, and a loose model name would eventually send someone's identity card to a third
+party. `lib/ocr/ollama.ts` checks the host's model list and refuses a mismatch.
+
+**Only what the form can use is requested.** A card carries an address, a birthplace and a
+religion; none have a field on the visitor form, so none are asked for. Extracting them would put
+personal data in a server's memory - and possibly a log - for no purpose. The card *type* is the
+one extra, and it is used solely to warn when a passport was photographed while the form says
+MyKad.
+
+**Frame voting is gone, and it was a real loss.** The camera still takes a burst, but only the
+sharpest frame is sent. Voting across frames cancelled the random half of OCR error, because
+sensor noise and hand shake differ per frame - but each frame is now a model call measured in
+seconds, so three would mean half a minute at the gate and three times the rate-limit budget for
+one scan. The blur warning in `lib/ocr/prepare-image.ts` is what remains of that safeguard.
+
+**The card is not binarised before it is sent.** The preparation step used to threshold it to pure
+black and white, which suited a classical recognizer. It is off-distribution input for a model
+trained on ordinary photographs, and a threshold that clips a thin stroke deletes evidence
+silently. `measureSharpness` reads the greyscale without touching the pixels for that reason.
 
 ## Data and privacy in this repository
+
+The one image path. `/api/ocr` is the only endpoint that accepts an image. The photograph is held
+for the length of one request, never written to disk, never cached and never logged, and nothing
+read off the card is persisted - the identity number reaches the database only if the visitor
+submits the form themselves, through the ordinary encrypted path. There is no upload directory and
+nothing should create one.
 
 All seeded people, contacts and identity numbers are invented. Email addresses use the reserved
 `.test` TLD, which cannot resolve on the public internet. No real staff member, student or parent

@@ -145,11 +145,6 @@ jobs:
         # others would add minutes for nothing.
         run: npx playwright install --with-deps chromium
 
-      - name: Fetch the OCR runtime
-        # The request form imports it; without this the production build would
-        # serve a panel whose assets 404.
-        run: npm run ocr:assets
-
       - name: Run Playwright
         # `npm run test:e2e` prepares and seeds visitorpass_e2e first, then
         # Playwright builds and starts the app on port 3100. CI sets

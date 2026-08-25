@@ -299,3 +299,29 @@
     content: '';
   }
 }
+
+@layer utilities {
+  /*
+   * The card reader's busy indicator.
+   *
+   * Indeterminate on purpose: the model host reports nothing while it works, so
+   * there is no honest fraction to show. A sweeping bar says "still going"
+   * without claiming to know how far along it is.
+   *
+   * The global reduced-motion rule above collapses the animation to a single
+   * near-instant iteration, which leaves a static bar - still correct, because
+   * `aria-busy` is what actually announces the state.
+   */
+  @keyframes ocr-progress-sweep {
+    0% {
+      transform: translateX(-100%);
+    }
+    100% {
+      transform: translateX(400%);
+    }
+  }
+
+  .ocr-progress-sweep {
+    animation: ocr-progress-sweep 1.4s ease-in-out infinite;
+  }
+}

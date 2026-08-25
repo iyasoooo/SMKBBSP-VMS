@@ -133,3 +133,80 @@ di Blok A"). The text list is generated from the node sequence plus each node's 
 The school's fire-evacuation floor plan is the best source - it is already drawn to scale
 and already shows walkways. Failing that, trace over a satellite screenshot in Inkscape and
 delete the screenshot layer before committing, so no third-party imagery ships in the repo.
+
+## Reference implementation: Pavilion Damansara Heights
+
+Their wayfinding was inspected directly (August 2026). It is a **paid vendor product** -
+Map72 (`map72.com`), a Malaysian indoor-mapping company whose client list includes Pavilion
+KL, Pavilion Bukit Jalil, Pavilion Damansara Heights, Sunway Pyramid and The Exchange TRX.
+The maps are hosted on their CMS at `indoorcms.com`. Pricing is quote-based enterprise;
+it is not an option for this project.
+
+The *technique*, however, is exactly the one proposed above, and it is worth copying.
+
+**The picker.** The site is WordPress (Avada/Fusion theme). The "Wayfinding" button is a
+modal titled "Where are you coming from?", built with Alpine.js and Tailwind (prefixed
+`ts-`). It pulls the shop list from `admin-ajax.php?action=get_wayfinding_shop_list` with
+search, category and precinct filters plus pagination. Picking a start and an end builds
+`/map/?start=<slug>&end=<slug>`.
+
+**The map.** `/map/` is only a shell; the map itself is an `<iframe>` pointing at
+`paviliondh-data.indoorcms.com/mapengine/index.html?snode=1322&tnode=1320`. The slugs
+have become numeric node ids - `snode` (source) and `tnode` (target). That is a node
+graph, plainly. The engine is a static SvelteKit build.
+
+**The rendering is plain inline SVG.** No canvas, no WebGL, no 3D:
+
+```html
+<svg id="stage" viewBox="0 0 1000 529">
+  <g id="map">
+    <g class="level" id="LL2" data-ordinal="2" data-is-parking="false" visibility="visible">
+      <g class="layer" id="FOOTPRINT_2">   <path d="M334.5,273.1L337.3,265.8..."/>
+      <g class="layer" id="ROOM_SMALL_2">  ...
+      <g class="layer" id="TOILET_2">      ...
+      <g class="layer" id="LIFT_2">        ...
+      <g class="layer" id="ESCALATOR_2">   ...
+```
+
+One `<g class="level">` per floor with a `data-ordinal`; switching floors just toggles
+`visibility`. Inside each level, semantic layers - footprint, rooms by size, toilets,
+lifts, escalators, voids. The naming echoes IMDF (Apple's Indoor Mapping Data Format),
+so the source was probably CAD or IMDF converted to SVG.
+
+**The animated route is two stacked paths.**
+
+```html
+<g class="routes">
+  <path d="M236.8,283.4L249.8,288.3L255.5,280.9L..." fill="none" stroke="#e0e0e0" stroke-width="4px" stroke-linecap="round"/>
+  <path id="route" d="(same d)" stroke="#ed1c24" stroke-width="2px"/>   <!-- dasharray 20%, animation: 17s linear infinite draw -->
+</g>
+```
+
+A grey 4px base line showing the whole route, and a red 2px line on top with
+`stroke-dasharray: 20%` animated by a `draw` keyframe - the marching-ants effect that
+makes the route look like it is being walked. The `d` attribute is nothing but `L`
+segments between graph nodes; there is no curve smoothing at all. Add `walking.svg`,
+`arrow.svg` and a `tap.gif` hint overlay and that is the entire visual.
+
+**What this means for us.** The expensive part of Map72 is not the code - it is digitising
+the floor plans and hosting a CMS to maintain them. A single school with roughly 20
+destinations does not need that. Replicating the interaction is a weekend of work with the
+free stack in this document; the base-plus-dashed-overlay path above should be copied
+verbatim, because it is the detail that makes the feature feel finished.
+
+One deliberate difference: they use an iframe to an external origin. We render the SVG
+in-app instead, so the map keeps working offline at the guard house and stays inside our
+own CSP and accessibility tree.
+
+## Working prototype
+
+`docs/prototypes/school-map-demo.html` is a single self-contained file - open it by
+double-clicking, no server and no install. It implements the whole technique end to end
+on a mock SMKBBSP campus: 11 destinations, a 23-node walkway graph, Dijkstra, the
+base-plus-dashed animated SVG route, generated BM/EN turn-by-turn text, distance and
+walking time, keyboard-operable buildings, and dark mode.
+
+It is deliberately dependency-free so the pathfinding and the rendering can be read in
+one sitting. The `findRoute` function in it is about 25 lines. When porting into the app,
+that function moves to `lib/map/route.ts` unchanged, and `NODES` / `EDGES` / `BUILDINGS`
+come from Postgres instead of being literals.

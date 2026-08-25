@@ -43,8 +43,9 @@ export function middleware(request: NextRequest) {
     "default-src 'self'",
     // 'strict-dynamic' lets Next's nonced bootstrap load its own chunks without
     // each one needing a nonce. 'wasm-unsafe-eval' is required by the optional
-    // IC OCR panel and permits WebAssembly compilation only - it does not
-    // re-enable eval() on JavaScript. blob: covers the Tesseract worker.
+    // IC OCR panel, whose inference runtime is WebAssembly, and permits
+    // compilation only - it does not re-enable eval() on JavaScript. blob:
+    // covers the worker that runtime starts.
     isProduction
       ? `script-src 'self' 'nonce-${nonce}' 'strict-dynamic' 'wasm-unsafe-eval' blob:`
       : `script-src 'self' 'unsafe-eval' 'unsafe-inline' blob:`,
@@ -55,11 +56,11 @@ export function middleware(request: NextRequest) {
     "font-src 'self' data:",
     "media-src 'self' blob: mediastream:",
     // `blob:` and `data:` are required by the optional IC OCR panel, which
-    // fetches both: the tesseract core glue carries its WASM binary inlined as
-    // a `data:` URI, and the card photo is read through an object URL. Neither
-    // is a network destination, so allowing them cannot exfiltrate anything -
-    // they only re-permit the page to read bytes it already holds in memory.
-    // Without them the reader dies on `TypeError: Failed to fetch`.
+    // fetches both: the inference runtime starts its worker from an object URL
+    // and the card photo is read through one too. Neither is a network
+    // destination, so allowing them cannot exfiltrate anything - they only
+    // re-permit the page to read bytes it already holds in memory. Without them
+    // the reader dies on `TypeError: Failed to fetch`.
     "connect-src 'self' blob: data:",
     "worker-src 'self' blob:",
     "object-src 'none'",

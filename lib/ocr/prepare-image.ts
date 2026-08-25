@@ -1,34 +1,35 @@
 /**
- * Turn a photograph or a camera frame into something a text recogniser can read.
+ * Turn a photograph or a camera frame into something a card reader can read.
  *
  * Separated from the React component for two reasons: the geometry and the
  * pixel work are the parts most likely to be wrong, and neither needs a
- * component to be tested. Everything here runs in the browser and touches only
- * a canvas - no image ever leaves the device, and nothing is persisted.
+ * component to be tested.
+ *
+ * Note what this file no longer promises. Reading now happens on a model host
+ * the server talks to, so the prepared image *does* leave the device - it is
+ * posted to `app/api/ocr/route.ts`, held for one request and dropped. The work
+ * here is what keeps that trip small and legible: crop to what the viewfinder
+ * showed, scale to a sane size, and measure whether the photo was sharp enough
+ * to be worth sending at all.
  */
 
 /**
  * The width band the reader is actually given.
  *
- * Recognition cost scales with pixel count, and a modern phone camera produces
- * something like 4000x3000 - twelve megapixels of which the card is a fraction.
- * Handing that over unchanged is what makes a scan take tens of seconds, and it
- * buys nothing: a card filling most of the frame still has far more than the
- * ~30px of glyph height Tesseract needs once it is down at 2000px. The lower
- * bound covers the opposite case, a small or already-downscaled photo.
+ * A modern phone camera produces something like 4000x3000 - twelve megapixels
+ * of which the card is a fraction - and handing that over unchanged costs
+ * memory and time for nothing.
+ *
+ * 2000 also bounds the upload. A card filling the frame at this width is about
+ * 1260 pixels tall, which leaves the identity number roughly 60 pixels high -
+ * comfortably legible - while keeping the encoded image to a few hundred
+ * kilobytes. That matters more than it looks: the photo now travels to a model
+ * host over a school's wifi, and a twelve-megapixel original would spend longer
+ * in transit than the model spends reading it. The lower bound covers the
+ * opposite case, a small or already-downscaled photo.
  */
 export const MIN_WIDTH = 1400;
 export const MAX_WIDTH = 2000;
-
-/**
- * Window for the local threshold, as a fraction of image width. Wide enough to
- * span several characters plus their background, narrow enough that the card's
- * photo does not influence the text beside it.
- */
-const THRESHOLD_WINDOW = 0.125;
-
-/** How far below the local mean a pixel must sit to count as ink. */
-const THRESHOLD_BIAS = 0.86;
 
 /** Below this the photo is soft enough that a misread is likely. */
 export const BLUR_THRESHOLD = 60;
@@ -42,7 +43,7 @@ export const CARD_ASPECT = 85.6 / 54;
 
 export interface PreparedImage {
   canvas: HTMLCanvasElement;
-  /** Measured before binarisation, which would destroy the signal. */
+  /** Laplacian variance of the prepared image; only relative values matter. */
   sharpness: number;
 }
 
@@ -81,11 +82,11 @@ export function coverCrop(width: number, height: number, targetAspect: number): 
  * How much high-frequency detail a greyscale carries, as the variance of its
  * Laplacian.
  *
- * Blur is the failure this feature cannot recover from: binarising a soft photo
- * produces confident-looking output built from glyphs that were never legible.
- * Measuring it serves two purposes - advising that a photo be retaken, and
- * choosing between camera frames, where only the *relative* values matter and
- * no threshold has to be trusted at all.
+ * Blur is the failure this feature cannot recover from: a soft photo still
+ * produces confident-looking output, assembled from glyphs that were never
+ * legible in the first place. Measuring it serves two purposes - advising that
+ * a photo be retaken, and choosing between camera frames, where only the
+ * *relative* values matter and no threshold has to be trusted at all.
  */
 export function sharpnessScore(grey: Uint8Array, width: number, height: number): number {
   let sum = 0;
@@ -114,7 +115,7 @@ export function sharpnessScore(grey: Uint8Array, width: number, height: number):
   return sumSquares / count - mean * mean;
 }
 
-/** Rec. 601 luma, which is what Tesseract's own greyscale conversion uses. */
+/** Rec. 601 luma - the standard weighting, and what the blur measure expects. */
 function toGreyscale(data: Uint8ClampedArray, pixels: number): Uint8Array {
   const grey = new Uint8Array(pixels);
 
@@ -127,79 +128,28 @@ function toGreyscale(data: Uint8ClampedArray, pixels: number): Uint8Array {
 }
 
 /**
- * Binarise with a *local* threshold.
+ * Measure how sharp the card is, leaving the pixels untouched.
  *
- * This replaces a global min-max contrast stretch, which was close to useless
- * on a real card. A MyKad carries a dark portrait over roughly a fifth of its
- * face, so the darkest pixel in the image comes from the photograph, not the
- * text: the measured range was already near 0-255 and the stretch therefore did
- * almost nothing to the text region it was supposed to help. Any single global
- * threshold has the same problem, including the Otsu pass Tesseract runs
- * internally - it lands somewhere between "portrait" and "card", not between
- * "ink" and "paper".
+ * This used to binarise as well - a local, per-pixel threshold that turned the
+ * card into pure black and white before reading it. That suited a classical
+ * recognizer, which thresholds internally anyway. It is wrong for a model
+ * trained on ordinary photographs: shadows, glare, coloured backgrounds, the
+ * lot. A binarised card is not a cleaner version of that input, it is an image
+ * unlike anything the model was shown, and a threshold that clips a thin stroke
+ * deletes evidence the model would otherwise have weighed - silently. Sending
+ * the natural photograph lets it do the separating, which is the part it is
+ * actually good at.
  *
- * A per-pixel threshold taken from the neighbourhood mean (Bradley's method,
- * via an integral image so the window cost is constant) sidesteps all of it,
- * and handles the glare and uneven lighting of a handheld photo at the same
- * time - the two conditions a global threshold handles worst.
+ * The measurement survives because it never needed the threshold. It reads the
+ * greyscale, and binarising was destroying the very gradients it measures.
  */
-function binarise(context: CanvasRenderingContext2D, width: number, height: number): number {
-  const image = context.getImageData(0, 0, width, height);
-  const { data } = image;
-
-  const grey = toGreyscale(data, width * height);
-
-  // Taken from the greyscale, before the threshold below turns every pixel into
-  // pure black or white and erases the gradients it measures.
-  const sharpness = sharpnessScore(grey, width, height);
-
-  /*
-   * Summed-area table, one row and column of zero padding so the window sum
-   * needs no bounds checks. A Uint32 cannot overflow here: the largest
-   * possible total is 255 x 2000 x 2000, comfortably inside 2^32.
-   */
-  const integral = new Uint32Array((width + 1) * (height + 1));
-  for (let y = 0; y < height; y += 1) {
-    let rowSum = 0;
-    for (let x = 0; x < width; x += 1) {
-      rowSum += grey[y * width + x] ?? 0;
-      integral[(y + 1) * (width + 1) + (x + 1)] =
-        (integral[y * (width + 1) + (x + 1)] ?? 0) + rowSum;
-    }
-  }
-
-  const radius = Math.max(8, Math.round((width * THRESHOLD_WINDOW) / 2));
-
-  for (let y = 0; y < height; y += 1) {
-    const y0 = Math.max(0, y - radius);
-    const y1 = Math.min(height - 1, y + radius);
-
-    for (let x = 0; x < width; x += 1) {
-      const x0 = Math.max(0, x - radius);
-      const x1 = Math.min(width - 1, x + radius);
-
-      const area = (x1 - x0 + 1) * (y1 - y0 + 1);
-      const sum =
-        (integral[(y1 + 1) * (width + 1) + (x1 + 1)] ?? 0) -
-        (integral[y0 * (width + 1) + (x1 + 1)] ?? 0) -
-        (integral[(y1 + 1) * (width + 1) + x0] ?? 0) +
-        (integral[y0 * (width + 1) + x0] ?? 0);
-
-      // pixel < mean * bias, with the division folded away: the local mean is
-      // sum/area, so multiplying both sides by area keeps this in integers.
-      const p = y * width + x;
-      const ink = (grey[p] ?? 0) * area < sum * THRESHOLD_BIAS;
-      const value = ink ? 0 : 255;
-
-      const i = p * 4;
-      data[i] = value;
-      data[i + 1] = value;
-      data[i + 2] = value;
-    }
-  }
-
-  context.putImageData(image, 0, 0);
-  return sharpness;
+function measureSharpness(
+  context: CanvasRenderingContext2D,
+  width: number,
+  height: number,
+): number {
+  const { data } = context.getImageData(0, 0, width, height);
+  return sharpnessScore(toGreyscale(data, width * height), width, height);
 }
 
 /** The scaled canvas dimensions for a source region of the given width. */
@@ -240,7 +190,7 @@ export async function prepareFile(file: File): Promise<PreparedImage> {
       sHeight: bitmap.height,
     });
 
-    return { canvas, sharpness: binarise(context, canvas.width, canvas.height) };
+    return { canvas, sharpness: measureSharpness(context, canvas.width, canvas.height) };
   } finally {
     // Free the decoded frame straight away; a card photo is several megabytes.
     bitmap.close();
@@ -258,5 +208,34 @@ export function prepareVideoFrame(video: HTMLVideoElement): PreparedImage {
   const crop = coverCrop(video.videoWidth, video.videoHeight, CARD_ASPECT);
   const { canvas, context } = draw(video, crop);
 
-  return { canvas, sharpness: binarise(context, canvas.width, canvas.height) };
+  return { canvas, sharpness: measureSharpness(context, canvas.width, canvas.height) };
+}
+
+/**
+ * Quality the prepared card is encoded at for the trip to the reader.
+ *
+ * High, and deliberately so. This is the one lossy step between the camera and
+ * the model, and JPEG spends its error budget exactly where it hurts here - on
+ * the hard edges of small glyphs, which is what the reader has to resolve. The
+ * bytes saved by compressing harder are not worth a digit.
+ */
+const UPLOAD_QUALITY = 0.92;
+
+/**
+ * Encode a prepared card for upload.
+ *
+ * JPEG rather than PNG: a photograph of a card compresses to a few hundred
+ * kilobytes this way against several megabytes losslessly, and the difference
+ * is what makes this usable over a school's wifi from a phone at the gate.
+ *
+ * Nothing here writes the image anywhere. The blob exists for the duration of
+ * one request and is dropped with it.
+ */
+export async function toUploadBlob(canvas: HTMLCanvasElement): Promise<Blob> {
+  const blob = await new Promise<Blob | null>((resolve) => {
+    canvas.toBlob(resolve, 'image/jpeg', UPLOAD_QUALITY);
+  });
+
+  if (!blob) throw new Error('the card could not be encoded');
+  return blob;
 }

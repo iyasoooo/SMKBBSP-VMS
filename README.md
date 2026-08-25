@@ -363,8 +363,18 @@ Documented deliberately; none blocks the P0 feature set.
    (configurable) and passes open 30 minutes before the start, so a visitor needing immediate entry
    is handled as a walk-in. The end-to-end test reflects this: it asserts the correct refusal for a
    not-yet-valid pass, then exercises the gate lifecycle through a walk-in.
-6. **OCR (P1) is not implemented.** It was specified as optional assistance to be added only after
-   all P0 work; the P0 surface was completed instead. Nothing in the UI claims otherwise.
+6. **OCR (P1) needs a model host, and is absent without one.** Card reading calls a self-hosted
+   vision model (Qwen3.5 0.8B through Ollama) from the application server. The model does not run
+   on the application server: a laptop at the school runs it and the server reaches that laptop
+   over a Tailscale private network, so the photograph crosses a WireGuard tunnel between two
+   machines the school controls rather than the public internet. The honest cost is availability -
+   card reading works while that laptop is awake and online, and not otherwise. Where
+   `OCR_OLLAMA_URL` is unset, or the host is simply switched off, the scan
+   panel does not appear and the form is typed in. The photograph is held for one request and
+   never stored, but it does leave the browser, and no interface text claims otherwise. Because a
+   language model reports no calibrated confidence, any value that is not structurally possible as
+   a MyKad number is discarded rather than shown; doubt is inferred from structure, never from the
+   model's own account of itself. It remains assisted data entry, not identity verification.
 7. **Dependency advisories.** `npm audit` reports transitive issues inside Next.js's own tree
    (`postcss`, `sharp`) and `exceljs`'s pinned `uuid`. No non-breaking upstream fix is available, and
    none is reachable from a code path this application exposes.

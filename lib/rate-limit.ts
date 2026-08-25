@@ -30,6 +30,17 @@ export const RATE_LIMITS = {
   passVerify: { name: 'guard.verify', limit: 120, windowSeconds: 60 },
   /** Manual fallback-code attempts, keyed by user. Tight: it is guessable. */
   fallbackCode: { name: 'guard.fallback', limit: 15, windowSeconds: 300 },
+  /*
+   * Card reads, keyed by IP.
+   *
+   * Tighter than it looks, and deliberately so. This is the one public endpoint
+   * that costs real CPU per call - a model host answering a scan is busy for
+   * seconds, not milliseconds - so an unthrottled endpoint is both a denial of
+   * service against the gate and a free vision model for anyone who finds it.
+   * Ten is comfortable for a visitor retaking a photo a few times and useless
+   * to anyone batching images through it.
+   */
+  ocrScan: { name: 'public.ocr', limit: 10, windowSeconds: 600 },
 } as const satisfies Record<string, RateLimitRule>;
 
 export interface RateLimitResult {

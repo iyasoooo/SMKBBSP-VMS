@@ -90,7 +90,38 @@ The evaluation should measure task completion, correctness, usability, response 
 
 ### Optional module
 
-Browser-side OCR for assisted Malaysian IC data entry. The image is not retained, the extracted data is editable, and a human confirms the result.
+OCR for assisted Malaysian IC data entry. The image is not retained, the extracted data is editable, and a human confirms the result.
+
+Reading was originally browser-side. It moved to a self-hosted vision model (Qwen3.5 0.8B via Ollama) called by the application server, because a browser-sized text recognizer transcribes lines without knowing which line is the name, and a real laminated MyKad defeats that inference often enough to make the feature useless. The trade is deliberate and is recorded here rather than hidden:
+
+| | Browser-side recognizer | Self-hosted vision model |
+| --- | --- | --- |
+| Photograph leaves the device | No | Yes, to a machine the school controls |
+| Confidence signal | Per-character, calibrated | None; structural validation only |
+| Accuracy on real cards | Poor | Good |
+| Runs on a 1 vCPU host | Yes | No; needs a separate model host |
+
+Two consequences follow. The claim "the image never leaves your device" is no longer made anywhere in the interface. And because a language model produces fluent output whether or not it read correctly, any value that is not *structurally possible* as a MyKad number is discarded rather than shown - the system has no calibrated confidence to report and does not pretend to.
+
+This remains assisted data entry. It is not identity verification, it does not check any registry, and it cannot detect a forgery.
+
+#### Where the model runs
+
+The vision model does not run on the application server. A small VPS of the size this project deploys to cannot hold one, and a server that could would cost more than the rest of the hosting combined. Instead a laptop at the school runs Ollama, and the application server reaches it over a Tailscale private network. The photograph travels inside a WireGuard tunnel between two machines the school controls; it does not cross the public internet and it does not reach a third party.
+
+This is a deliberate architecture rather than a temporary measure, and it should be described that way in the report. Its honest cost is availability: card reading works when the laptop is awake and on the network, and not otherwise. The system is built so that this degrades rather than breaks - the scan panel reports itself unavailable and the form is typed in, exactly as it could always be - but a reviewer is entitled to note that a feature depending on a laptop being switched on is weaker than one that does not depend on anything.
+
+A second property is worth stating because it cuts the other way. Ollama has no authentication: anything able to reach its port can use the model. The private network is therefore not a convenience but the entire access control, which is why the port is never published, forwarded, or bound to a public interface.
+
+#### A failure mode specific to language models
+
+A conventional recognizer that cannot read a digit produces something visibly wrong, and a person notices. A language model produces something *plausible*, and a person may not.
+
+This is not hypothetical here. During testing, an unreadable image caused the model to return the example values written into its own prompt - a correctly formatted identity number and a placeholder name - and that reply passed structural validation cleanly, because a well-formed fabrication is structurally indistinguishable from a well-formed reading. Structural validation catches values that *could not* be real. It cannot catch a value that could be real but was invented.
+
+Two safeguards follow, and the report should claim only what they actually deliver. The extracted values are always presented for a human to confirm and correct before anything is submitted, so a fabricated reading has to survive a person looking at the card in their hand. And no confidence figure is displayed, because the only available source for one would be the model's opinion of itself, which reads convincingly and means nothing.
+
+The correct claim is therefore narrow: card reading reduces typing, under human confirmation, and its output is treated as an untrusted suggestion at every point. It is not a measurement, and its accuracy is not characterised in this project.
 
 ### Explicit exclusions
 

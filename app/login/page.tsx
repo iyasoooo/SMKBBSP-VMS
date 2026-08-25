@@ -6,6 +6,7 @@ import { homeForRole } from '@/lib/auth/authorize';
 import { getSettings } from '@/lib/domain/settings';
 import { getTheme } from '@/lib/theme';
 import { ThemeToggle } from '@/components/theme-toggle';
+import { CrestFull } from '@/components/ui/crest';
 import { LoginForm } from './login-form';
 /**
  * Rendered per request. These read school settings and the session from the
@@ -38,8 +39,9 @@ export default async function LoginPage({
         </div>
 
         <div className="surface-card rounded-xl p-6">
-          <div className="mb-6">
-            <h1 className="text-xl font-semibold">Staff login</h1>
+          <div className="mb-6 flex flex-col items-center text-center">
+            <CrestFull width={124} />
+            <h1 className="mt-3 text-xl font-semibold">Staff login</h1>
             <p className="mt-1 text-sm text-muted">
               For {settings.schoolShortName} administrators, guards and teachers. Visitors do not
               need an account.

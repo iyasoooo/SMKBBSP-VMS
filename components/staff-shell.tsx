@@ -7,6 +7,7 @@ import { ThemeToggle } from '@/components/theme-toggle';
 import { LocaleToggle } from '@/components/locale-toggle';
 import { logoutAction } from '@/app/login/actions';
 import { Button } from '@/components/ui/button';
+import { CrestTile } from '@/components/ui/crest';
 
 export interface NavItem {
   href: string;
@@ -50,12 +51,7 @@ export async function StaffShell({
       >
         <div className={`mx-auto flex ${container} flex-wrap items-center gap-3 px-4 py-3`}>
           <div className="flex min-w-0 items-center gap-3">
-            <span
-              aria-hidden="true"
-              className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-[var(--brand)] text-sm font-bold text-[var(--brand-text)]"
-            >
-              VP
-            </span>
+            <CrestTile size={30} />
             <div className="min-w-0 leading-tight">
               <p className="truncate text-sm font-semibold text-[var(--text-strong)]">
                 {roleLabel}

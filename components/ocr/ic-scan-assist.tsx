@@ -1,20 +1,13 @@
 'use client';
 
 import { useCallback, useEffect, useRef, useState } from 'react';
-import type { Block, Bbox, PSM, Worker as TesseractWorker } from 'tesseract.js';
 import { clsx } from 'clsx';
-import {
-  parseIcText,
-  readIdentityNumber,
-  type OcrWord,
-  type ParsedIcFields,
-} from '@/lib/ocr/parse-ic';
-import { combineReadings, type FrameReading } from '@/lib/ocr/consensus';
 import {
   BLUR_THRESHOLD,
   CARD_ASPECT,
   prepareFile,
   prepareVideoFrame,
+  toUploadBlob,
   type PreparedImage,
 } from '@/lib/ocr/prepare-image';
 import { Button } from '@/components/ui/button';
@@ -32,22 +25,30 @@ const log = createLogger('ocr');
  * are suggestions that a person must review and correct.
  *
  * There are two ways in: a live camera, and choosing a file. The camera is
- * preferred where it exists, because it can read a burst of frames and keep
- * only what they agree on - see `lib/ocr/consensus.ts` for why agreement is
- * better evidence than any single frame's own confidence.
+ * preferred where it exists, because it can take a burst and send only the
+ * sharpest frame, which costs nothing and removes the worst of hand shake.
  *
- * Privacy properties, which are the reason it is built this way:
- *   - Camera frames and chosen files are decoded in this browser and never
- *     uploaded: there is no fetch, no form field, and no server action that
- *     receives an image.
- *   - The Tesseract worker, its WASM core and the language model are served
- *     from this origin (`/ocr/...`), so no third party sees anything either.
- *   - The camera stream is stopped the moment the burst is taken, the bitmaps
- *     are released as soon as recognition finishes, and the file input is
- *     cleared, so the page holds no copy of the card.
+ * Reading happens on a vision model, reached through this application's own
+ * `/api/ocr` endpoint. It used to happen here in the browser, and the honest
+ * reason it moved is that the browser-sized recognizer was not good enough on
+ * real cards - it transcribes lines and leaves a parser guessing which line was
+ * the name, and a laminated MyKad with a hologram across the digits defeats
+ * that guess often enough to be useless. See `lib/ocr/ollama.ts`.
  *
- * The whole feature is loaded on demand. A visitor who never opens it downloads
- * none of the ~30 MB of OCR runtime.
+ * What that costs, stated plainly because the UI has to be honest about it:
+ *   - The photograph leaves this device. It is posted to this origin only,
+ *     held for the length of one request, and never stored - but "the image
+ *     never leaves your phone" is no longer a claim this component can make,
+ *     and the copy below no longer makes it.
+ *   - There is no per-character confidence any more. A language model reports
+ *     none, so the "check this carefully" flag is now driven by whether a value
+ *     is *structurally possible* rather than by how sure a recognizer was.
+ *
+ * What is unchanged:
+ *   - Nothing read off the card is stored anywhere until the visitor submits
+ *     the form themselves, and every field stays editable before that.
+ *   - The camera stream is stopped the moment the shot is taken, the bitmaps
+ *     are released once the upload is built, and the file input is cleared.
  */
 
 type Status =
@@ -59,32 +60,52 @@ type Status =
   | 'done'
   | 'error'
   | 'rejected'
+  | 'throttled'
   | 'unsupported';
 
 /** Why the camera is not available, so the panel can say something useful. */
 type CameraFault = 'denied' | 'unavailable';
 
 /**
- * How many frames a capture takes, and how many of them are recognised.
+ * How many frames a capture takes. Only the sharpest is sent.
  *
- * Reading every frame would triple the wait for no gain, because the blurred
- * ones are exactly the ones that produce wrong answers. Taking more than are
- * read and keeping the sharpest is nearly free - a `drawImage` is microseconds
- * against seconds of recognition - and it means a hand shaking at the wrong
- * moment costs nothing.
+ * Taking several and keeping the best is nearly free - a `drawImage` is
+ * microseconds - and it means a hand shaking at the wrong moment costs nothing.
+ *
+ * Only one is read, where the previous engine read three and voted on what they
+ * agreed about. Voting was worth having: it cancelled the random half of OCR
+ * error, because sensor noise and hand shake differ frame to frame. It is not
+ * affordable now. Each frame is a model call measured in seconds, so three
+ * would put half a minute between pressing the button and seeing a name, and it
+ * would spend three times the request budget on one scan. The sharpest frame
+ * alone is the trade, and the blur warning is what remains of the safeguard.
  */
 const BURST_FRAMES = 5;
-const FRAMES_READ = 3;
 
 /** Spacing between grabs, long enough for the sensor to produce a new frame. */
 const BURST_INTERVAL_MS = 120;
 
 /**
- * Which part of the work is running. The language model is ~22 MB, so lumping
- * its download in with the rest leaves the panel apparently frozen for the
- * whole first scan; naming it lets the progress bar mean something.
+ * Which part of the work is running.
+ *
+ * `prepare` is local and quick; `read` is the model, and it is the one that
+ * takes long enough for someone to wonder whether the panel has hung.
  */
-type Phase = 'prepare' | 'download' | 'read';
+type Phase = 'prepare' | 'read';
+
+/**
+ * What `/api/ocr` answers with.
+ *
+ * Declared here rather than imported from the reader, which is server-only:
+ * pulling its module in would drag the model client and its environment
+ * handling into the browser bundle.
+ */
+interface CardFields {
+  identityNumber: string | null;
+  fullName: string | null;
+  card: 'ic' | 'passport' | 'other' | null;
+  uncertain: Array<'identityNumber' | 'fullName'>;
+}
 
 export interface IcScanAssistProps {
   /** Applies the reviewed values to the surrounding form. */
@@ -100,18 +121,21 @@ const COPY = {
       'Take or choose a photo of the identity card to fill the name and number automatically. You must check the result before it is used.',
     disclaimer:
       'This reads text from the photo to save typing. It does not verify identity and cannot tell whether a card is genuine.',
-    // Both required claims in one line: that this is not identity
-    // verification, and that the image does not leave the device.
-    notice: 'Reads text only - not identity verification. The photo is never uploaded or stored.',
-    rawLabel: 'Show exactly what the reader saw',
+    /*
+      Both required claims in one line: that this is not identity verification,
+      and what actually happens to the photo. The previous wording promised the
+      image was "never uploaded", which was true of the in-browser reader and is
+      not true now - saying so plainly is the whole point of the line.
+    */
+    notice:
+      'Reads text only - not identity verification. The photo is sent to the school reader, used once, and never saved.',
     drop: 'Drag a photo of the card here',
     dropActive: 'Release to read the card',
     browse: 'or tap to browse for a file',
     camera: 'Take a photo',
     notImage: 'That file is not an image. Choose a photo of the card.',
-    reading: 'Reading the card...',
-    loading: 'Preparing the reader...',
-    downloading: 'Downloading the reader. This happens only once.',
+    reading: 'Reading the card. This takes a few seconds...',
+    loading: 'Preparing the photo...',
     review: 'Check these values, correct anything wrong, then apply them.',
     apply: 'Use these details',
     discard: 'Discard',
@@ -119,9 +143,12 @@ const COPY = {
     number: 'Identity number',
     nothing:
       'Nothing could be read from that photo. Try better lighting, or type the details in yourself.',
-    failed: 'The reader could not start. Please type the details in yourself.',
-    uncertain: 'Low confidence - check this carefully',
-    unsupported: 'This browser cannot run the card reader. Please type the details in yourself.',
+    failed: 'The card could not be read. Please type the details in yourself.',
+    uncertain: 'This may be wrong - check it carefully',
+    unsupported: 'Card scanning is not available here. Please type the details in yourself.',
+    throttled:
+      'Too many scans from this connection. Wait a few minutes, or type the details in yourself.',
+    cardMismatch: 'That does not look like a MyKad. Check that you scanned the right document.',
     blurry:
       'That photo looks blurry, so the details below may be wrong. Hold the card flat, avoid glare, and take it again for a better read.',
     openCamera: 'Use the camera',
@@ -141,16 +168,14 @@ const COPY = {
     disclaimer:
       'Ini membaca teks daripada gambar untuk menjimatkan masa menaip. Ia tidak mengesahkan identiti dan tidak boleh menentukan sama ada kad itu tulen.',
     notice:
-      'Membaca teks sahaja - bukan pengesahan identiti. Gambar tidak dimuat naik atau disimpan.',
-    rawLabel: 'Tunjuk apa yang dibaca',
+      'Membaca teks sahaja - bukan pengesahan identiti. Gambar dihantar ke pembaca sekolah, digunakan sekali, dan tidak disimpan.',
     drop: 'Seret gambar kad ke sini',
     dropActive: 'Lepaskan untuk membaca kad',
     browse: 'atau ketik untuk memilih fail',
     camera: 'Ambil gambar',
     notImage: 'Fail itu bukan gambar. Sila pilih gambar kad.',
-    reading: 'Sedang membaca kad...',
-    loading: 'Menyediakan pembaca...',
-    downloading: 'Memuat turun pembaca. Ini berlaku sekali sahaja.',
+    reading: 'Sedang membaca kad. Ini mengambil beberapa saat...',
+    loading: 'Menyediakan gambar...',
     review: 'Semak nilai ini, betulkan jika salah, kemudian gunakannya.',
     apply: 'Guna butiran ini',
     discard: 'Buang',
@@ -158,9 +183,12 @@ const COPY = {
     number: 'Nombor pengenalan',
     nothing:
       'Tiada apa-apa dapat dibaca daripada gambar itu. Cuba pencahayaan lebih baik, atau taip sendiri.',
-    failed: 'Pembaca tidak dapat dimulakan. Sila taip butiran sendiri.',
-    uncertain: 'Keyakinan rendah - semak dengan teliti',
-    unsupported: 'Pelayar ini tidak boleh menjalankan pembaca kad. Sila taip butiran sendiri.',
+    failed: 'Kad tidak dapat dibaca. Sila taip butiran sendiri.',
+    uncertain: 'Mungkin salah - semak dengan teliti',
+    unsupported: 'Imbasan kad tidak tersedia di sini. Sila taip butiran sendiri.',
+    throttled:
+      'Terlalu banyak imbasan dari sambungan ini. Tunggu beberapa minit, atau taip butiran sendiri.',
+    cardMismatch: 'Ini tidak kelihatan seperti MyKad. Sila semak dokumen yang diimbas.',
     blurry:
       'Gambar itu kelihatan kabur, jadi butiran di bawah mungkin salah. Pegang kad rata, elakkan silau, dan ambil gambar semula untuk bacaan lebih baik.',
     openCamera: 'Guna kamera',
@@ -175,166 +203,36 @@ const COPY = {
   },
 } as const;
 
-
-// ---------------------------------------------------------------------------
-// Recognition passes
-// ---------------------------------------------------------------------------
-
-/**
- * The page segmentation modes this component uses.
- *
- * Carried as values rather than imported, because `PSM` is a runtime export of
- * `tesseract.js` and importing it normally would pull the OCR bundle into the
- * initial page load - defeating the dynamic import that keeps this feature free
- * for visitors who never open it. They are read off the module that
- * `getWorker` already loads.
- */
-interface SegmentationModes {
-  auto: PSM;
-  singleLine: PSM;
-  sparseText: PSM;
-}
-
-/** The only characters the number band can legitimately contain. */
-const DIGIT_WHITELIST = '0123456789-';
-
-interface FlatLine {
-  text: string;
-  bbox: Bbox;
-  words: OcrWord[];
-}
-
-/**
- * Flatten the recognizer's block/paragraph/line/word tree into lines.
- *
- * Only the line text, its box and its words' confidences are wanted, and
- * reaching through four levels of nesting at every call site is how the
- * `blocks` array being `null` gets forgotten.
- */
-function flattenLines(blocks: Block[] | null): FlatLine[] {
-  const lines: FlatLine[] = [];
-
-  for (const block of blocks ?? []) {
-    for (const paragraph of block.paragraphs ?? []) {
-      for (const line of paragraph.lines ?? []) {
-        lines.push({
-          text: line.text ?? '',
-          bbox: line.bbox,
-          words: (line.words ?? []).map((word) => ({
-            text: word.text ?? '',
-            confidence: word.confidence ?? 0,
-          })),
-        });
-      }
-    }
-  }
-
-  return lines;
-}
-
-/**
- * The line most likely to hold the identity number, for the second pass to
- * re-read. Chosen by digit density rather than by matching the number itself:
- * the whole reason a second pass is running is that the first pass did not
- * produce a number worth trusting, so the digits are, by assumption, wrong.
- */
-function numberBandOf(lines: FlatLine[]): Bbox | null {
-  let best: { bbox: Bbox; digits: number } | null = null;
-
-  for (const line of lines) {
-    const compact = line.text.replace(/[\s-]/g, '');
-    if (compact.length < 8) continue;
-
-    const digits = (compact.match(/\d/g) ?? []).length;
-    // Mostly-numeric and long enough to be the 12-digit run rather than a
-    // house number in the address block.
-    if (digits < 8 || digits / compact.length < 0.6) continue;
-    if (!best || digits > best.digits) best = { bbox: line.bbox, digits };
-  }
-
-  return best?.bbox ?? null;
-}
-
-/** Grow a box outward, clamped to the canvas, so no glyph is clipped. */
-function padded(bbox: Bbox, canvas: HTMLCanvasElement) {
-  const padX = Math.round((bbox.x1 - bbox.x0) * 0.06) + 12;
-  const padY = Math.round((bbox.y1 - bbox.y0) * 0.35) + 8;
-
-  const left = Math.max(0, bbox.x0 - padX);
-  const top = Math.max(0, bbox.y0 - padY);
-
-  return {
-    left,
-    top,
-    width: Math.min(canvas.width - left, bbox.x1 - bbox.x0 + padX * 2),
-    height: Math.min(canvas.height - top, bbox.y1 - bbox.y0 + padY * 2),
-  };
-}
-
-/**
- * Read the number band again with only digits permitted.
- *
- * The first pass runs over the whole card with every character allowed, so the
- * decoder is free to return `S` for `5` and `B` for `8` - both are legal
- * outputs there, and by the time the text reaches the parser the evidence for
- * choosing between them is gone. Constraining the alphabet moves that decision
- * back inside the recognizer, where the pixel likelihoods still exist.
- *
- * Non-regressive by construction: the caller only runs this when the first pass
- * produced nothing or something doubtful, and the result is adopted only when
- * it is structurally sound. A failed second pass leaves the first pass standing.
- */
-async function reReadNumber(
-  worker: TesseractWorker,
-  canvas: HTMLCanvasElement,
-  band: Bbox | null,
-  modes: SegmentationModes,
-): Promise<string | null> {
-  try {
-    await worker.setParameters({
-      tessedit_char_whitelist: DIGIT_WHITELIST,
-      // A cropped band is one line of text; the whole card is scattered text.
-      tessedit_pageseg_mode: band ? modes.singleLine : modes.sparseText,
-    });
-
-    const { data } = await worker.recognize(
-      canvas,
-      band ? { rectangle: padded(band, canvas) } : {},
-      { text: true },
-    );
-
-    const refined = readIdentityNumber(data.text ?? '');
-    return refined.certain ? refined.value : null;
-  } finally {
-    // The worker is reused across scans, so leaving the whitelist in place
-    // would silently reduce every later card to digits.
-    await worker.setParameters({
-      tessedit_char_whitelist: '',
-      tessedit_pageseg_mode: modes.auto,
-    });
-  }
-}
-
 export function IcScanAssist({ onApply, locale = 'en' }: IcScanAssistProps) {
   const t = COPY[locale];
 
   const [open, setOpen] = useState(false);
   const [status, setStatus] = useState<Status>('idle');
   const [phase, setPhase] = useState<Phase>('prepare');
-  const [progress, setProgress] = useState(0);
   const [dragging, setDragging] = useState(false);
   const [hasCamera, setHasCamera] = useState(false);
-  const [parsed, setParsed] = useState<ParsedIcFields | null>(null);
+  const [parsed, setParsed] = useState<CardFields | null>(null);
   /** Advisory: the photo was soft, so any field may be wrong. */
   const [blurry, setBlurry] = useState(false);
   const [cameraFault, setCameraFault] = useState<CameraFault | null>(null);
   /*
-   * Kept only so the review step can show it. It never leaves the component:
-   * not logged, not sent anywhere, and dropped with the rest of the state on
-   * reset - logging it would put a real name and identity number into the
-   * console, which the project rules forbid outright.
+   * Whether the preview is being shown through a front-facing camera.
+   *
+   * A laptop webcam hands back a reversed picture, so a card held up to it
+   * appears with its text mirrored. That is worth undoing rather than living
+   * with: a person framing a card checks the preview to see whether the number
+   * is inside the guide and in focus, and they cannot read it backwards. The
+   * flip below restores it, so the preview shows the card the same way round as
+   * the photograph that will actually be read.
+   *
+   * It deliberately does not touch what is captured, and does not need to. The
+   * flip is CSS, while `drawImage` reads frames from the video element rather
+   * than from its rendered box, so the bytes sent to the reader are the
+   * camera's own either way. Correcting this in the capture path instead would
+   * be the dangerous version of the same fix: a genuinely mirrored photograph
+   * puts the card's text backwards and no reader can do anything with it.
    */
-  const [rawText, setRawText] = useState('');
+  const [frontFacing, setFrontFacing] = useState(false);
   const [draftName, setDraftName] = useState('');
   const [draftNumber, setDraftNumber] = useState('');
 
@@ -342,22 +240,20 @@ export function IcScanAssist({ onApply, locale = 'en' }: IcScanAssistProps) {
   const videoRef = useRef<HTMLVideoElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
   /*
-   * Built once and kept for the life of the panel.
+   * Aborts the read in flight.
    *
-   * Starting a worker means compiling the WASM core and parsing a 22 MB
-   * language model. Doing that per scan made a second attempt cost as much as
-   * the first, which is punishing when the first read was the one that came
-   * back wrong and you just want to retake the photo.
+   * A model call takes seconds, which is long enough for someone to close the
+   * panel, discard the result and take another photo while the first is still
+   * being read. Without this the earlier answer arrives late and overwrites the
+   * newer one - the classic race, and one that would silently put the wrong
+   * card's details into the form.
    */
-  const workerRef = useRef<TesseractWorker | null>(null);
-  /** Populated alongside the worker, from the same dynamic import. */
-  const modesRef = useRef<SegmentationModes | null>(null);
+  const requestRef = useRef<AbortController | null>(null);
 
   useEffect(() => {
     return () => {
-      void workerRef.current?.terminate();
-      workerRef.current = null;
-      modesRef.current = null;
+      requestRef.current?.abort();
+      requestRef.current = null;
     };
   }, []);
 
@@ -378,152 +274,85 @@ export function IcScanAssist({ onApply, locale = 'en' }: IcScanAssistProps) {
     setHasCamera(Boolean(navigator.mediaDevices?.getUserMedia));
   }, []);
 
-  const getWorker = useCallback(async (): Promise<TesseractWorker> => {
-    const existing = workerRef.current;
-    if (existing) return existing;
-
-    // Imported here, not at module scope, so the OCR runtime is fetched only
-    // when someone actually opens this panel.
-    const { createWorker, PSM: modes } = await import('tesseract.js');
-
-    modesRef.current = {
-      auto: modes.AUTO,
-      singleLine: modes.SINGLE_LINE,
-      sparseText: modes.SPARSE_TEXT,
-    };
-
-    const worker = await createWorker(
-      'eng',
-      1,
-      {
-        workerPath: '/ocr/worker.min.js',
-        corePath: '/ocr',
-        langPath: '/ocr/tessdata',
-        // The model is served uncompressed from our own origin.
-        gzip: false,
-        logger: (message: { status: string; progress: number }) => {
-          const percent = Math.round((message.progress ?? 0) * 100);
-
-          if (message.status === 'recognizing text') {
-            setStatus('reading');
-            setPhase('read');
-          } else if (message.status.includes('traineddata')) {
-            // The 22 MB language model. Worth naming: it is the only step slow
-            // enough for someone to think the panel has hung.
-            setPhase('download');
-          } else {
-            setPhase('prepare');
-          }
-
-          setProgress(percent);
-        },
-      },
-      {
-        // Turn the English dictionaries off. Malaysian names are not English
-        // words, and with the dictionaries loaded the decoder pulls them
-        // towards ones that are. These are init-time options: passing them to
-        // `setParameters` afterwards would be accepted and silently ignored.
-        load_system_dawg: '0',
-        load_freq_dawg: '0',
-      },
-    );
-
-    await worker.setParameters({
-      // Names are parsed word by word, so the gaps have to survive.
-      preserve_interword_spaces: '1',
-      // The photo carries no DPI metadata; saying so avoids a bad guess.
-      user_defined_dpi: '300',
-    });
-
-    workerRef.current = worker;
-    return worker;
+  /**
+   * Whether a reader is configured at all.
+   *
+   * Asked once, when the panel is first opened, rather than at mount: a visitor
+   * who never scans a card should not cause a request. A deployment with no
+   * model host hides the whole feature instead of offering it and then failing
+   * at the moment somebody tries to use it.
+   */
+  const checkAvailable = useCallback(async (): Promise<boolean> => {
+    try {
+      // GET rather than an empty POST. The POST path counts against the scan
+      // budget, so probing with one would let a visitor exhaust their own
+      // allowance simply by opening the panel a few times.
+      const response = await fetch('/api/ocr', { method: 'GET' });
+      if (response.status === 503) {
+        setStatus('unsupported');
+        return false;
+      }
+      return true;
+    } catch {
+      // A network failure here is not proof of anything: the endpoint may be
+      // fine and the tab briefly offline. Let the real attempt report it.
+      return true;
+    }
   }, []);
 
   /**
-   * Recognise one prepared image. Shared by both entry points, so a camera
-   * frame and a chosen photograph are read by exactly the same code.
+   * Send one prepared card to be read.
+   *
+   * The image is encoded and posted as `multipart/form-data` rather than as
+   * base64 in a JSON body: base64 inflates the payload by a third for no gain,
+   * and a multipart part streams rather than being held twice in memory.
    */
-  const readOne = useCallback(
-    async (
-      worker: TesseractWorker,
-      canvas: HTMLCanvasElement,
-    ): Promise<{ reading: FrameReading; text: string }> => {
-      // `blocks` is off by default and carries the per-word confidence, which
-      // is the only honest source for the "check this carefully" flag.
-      const { data } = await worker.recognize(canvas, {}, { text: true, blocks: true });
+  const readImage = useCallback(async (prepared: PreparedImage) => {
+    // Any read still running belongs to a photo the person has moved on from.
+    requestRef.current?.abort();
+    const controller = new AbortController();
+    requestRef.current = controller;
 
-      const lines = flattenLines(data.blocks);
-      const words = lines.flatMap((line) => line.words);
-      let fields = parseIcText(data.text ?? '', { words });
+    setPhase('prepare');
+    const blob = await toUploadBlob(prepared.canvas);
 
-      /*
-       * Second pass, only when the first one left the number missing or
-       * doubtful. Skipping it on a clean read keeps the common case fast, and
-       * means this can only ever add a correct number, never replace one.
-       */
-      const modes = modesRef.current;
-      if (modes && (!fields.identityNumber || fields.uncertain.includes('identityNumber'))) {
-        const refined = await reReadNumber(worker, canvas, numberBandOf(lines), modes);
+    const body = new FormData();
+    body.append('image', blob, 'card.jpg');
 
-        if (refined && refined !== fields.identityNumber) {
-          fields = {
-            ...fields,
-            identityNumber: refined,
-            // A digits-only re-read of a structurally sound number is the
-            // strongest evidence available here, so the flag comes off.
-            uncertain: fields.uncertain.filter((field) => field !== 'identityNumber'),
-          };
-        }
-      }
+    setStatus('reading');
+    setPhase('read');
 
-      return {
-        reading: { fields, confidence: data.confidence ?? 0 },
-        text: data.text ?? '',
-      };
-    },
-    [],
-  );
+    const response = await fetch('/api/ocr', {
+      method: 'POST',
+      body,
+      signal: controller.signal,
+    });
 
-  /** Recognise a set of prepared images and settle on what they agree about. */
-  const readAll = useCallback(
-    async (prepared: PreparedImage[]) => {
-      const worker = await getWorker();
+    // A newer scan started while this one was in flight; its answer is the one
+    // that should win, so this reply is dropped rather than applied.
+    if (controller.signal.aborted) return;
 
-      const readings: FrameReading[] = [];
-      const texts: string[] = [];
+    if (response.status === 503) {
+      setStatus('unsupported');
+      return;
+    }
+    if (response.status === 429) {
+      setStatus('throttled');
+      return;
+    }
+    if (!response.ok) {
+      setStatus('error');
+      return;
+    }
 
-      for (const image of prepared) {
-        const { reading, text } = await readOne(worker, image.canvas);
-        readings.push(reading);
-        texts.push(text);
-      }
+    const fields = (await response.json()) as CardFields;
 
-      const fields = combineReadings(readings);
-
-      /*
-       * The raw text of the frame that actually won, so "what the reader saw"
-       * corresponds to the values on screen. Showing the first frame's text
-       * beside a different frame's answer would be actively misleading.
-       */
-      const chosen = Math.max(
-        0,
-        readings.findIndex(
-          (reading) =>
-            fields.identityNumber !== null &&
-            reading.fields.identityNumber === fields.identityNumber,
-        ),
-      );
-
-      setRawText(texts[chosen] ?? texts[0] ?? '');
-      // The sharpest frame governs: it is the one whose reading was believed.
-      setBlurry((prepared[0]?.sharpness ?? 0) < BLUR_THRESHOLD);
-      setParsed(fields);
-      setDraftName(fields.fullName ?? '');
-      setDraftNumber(fields.identityNumber ?? '');
-      setStatus('done');
-    },
-    [getWorker, readOne],
-  );
+    setBlurry(prepared.sharpness < BLUR_THRESHOLD);
+    setParsed(fields);
+    setDraftName(fields.fullName ?? '');
+    setDraftNumber(fields.identityNumber ?? '');
+    setStatus('done');
+  }, []);
 
   const handleFile = useCallback(
     async (file: File) => {
@@ -539,16 +368,17 @@ export function IcScanAssist({ onApply, locale = 'en' }: IcScanAssistProps) {
 
       setStatus('loading');
       setPhase('prepare');
-      setProgress(0);
       setParsed(null);
 
       try {
-        // Prepared before the worker is asked for, so a large photo is already
-        // down to a workable size by the time recognition starts.
-        await readAll([await prepareFile(file)]);
+        // Downscaled before it is sent, so a twelve-megapixel photo does not
+        // spend longer in transit than the model spends reading it.
+        await readImage(await prepareFile(file));
       } catch (error) {
+        // An abort is this component cancelling its own request, not a failure.
+        if (error instanceof DOMException && error.name === 'AbortError') return;
         // Never surface the underlying error: it can contain local file paths.
-        log.error('recognition failed', undefined, error);
+        log.error('card read failed', undefined, error);
         setStatus('error');
       } finally {
         // The prepared canvas is unreferenced once recognition returns, so the
@@ -556,7 +386,7 @@ export function IcScanAssist({ onApply, locale = 'en' }: IcScanAssistProps) {
         if (inputRef.current) inputRef.current.value = '';
       }
     },
-    [readAll],
+    [readImage],
   );
 
   // ---------------------------------------------------------------------
@@ -574,6 +404,8 @@ export function IcScanAssist({ onApply, locale = 'en' }: IcScanAssistProps) {
   const stopCamera = useCallback(() => {
     for (const track of streamRef.current?.getTracks() ?? []) track.stop();
     streamRef.current = null;
+    // Cleared with the stream: the next camera opened may not be the same one.
+    setFrontFacing(false);
 
     const video = videoRef.current;
     if (video) video.srcObject = null;
@@ -605,6 +437,24 @@ export function IcScanAssist({ onApply, locale = 'en' }: IcScanAssistProps) {
       });
 
       streamRef.current = stream;
+
+      /*
+       * `facingMode` is what the device actually gave, which is not necessarily
+       * what was asked for: the constraint above is `ideal`, so a machine with
+       * no rear camera - any laptop - satisfies it with the front one rather
+       * than failing.
+       *
+       * Only an explicit `environment` counts as rear, because a great many
+       * cameras report no `facingMode` at all. Desktop browsers routinely omit
+       * it for a built-in or USB webcam, having no meaningful answer to give,
+       * and those are precisely the cameras that point at the person. Testing
+       * for `=== 'user'` therefore misses the whole case this exists for, while
+       * testing for `!== 'environment'` treats an unlabelled camera as
+       * user-facing, which for a webcam it always is. Phones do report the
+       * value, so a rear camera still identifies itself and is left alone.
+       */
+      const facing = stream.getVideoTracks()[0]?.getSettings().facingMode;
+      setFrontFacing(facing !== 'environment');
 
       const video = videoRef.current;
       if (!video) {
@@ -659,19 +509,21 @@ export function IcScanAssist({ onApply, locale = 'en' }: IcScanAssistProps) {
 
     setStatus('loading');
     setPhase('prepare');
-    setProgress(0);
     setParsed(null);
 
     try {
-      // Sharpest first, so the blur advisory and the raw-text panel both refer
-      // to the best frame rather than whichever happened to be grabbed first.
-      const sharpest = frames.sort((a, b) => b.sharpness - a.sharpness).slice(0, FRAMES_READ);
-      await readAll(sharpest);
+      // The sharpest of the burst, and only that one: every frame sent is a
+      // separate model call, so this is where the burst pays for itself.
+      const sharpest = frames.reduce((best, frame) =>
+        frame.sharpness > best.sharpness ? frame : best,
+      );
+      await readImage(sharpest);
     } catch (error) {
-      log.error('recognition failed', undefined, error);
+      if (error instanceof DOMException && error.name === 'AbortError') return;
+      log.error('card read failed', undefined, error);
       setStatus('error');
     }
-  }, [readAll, stopCamera]);
+  }, [readImage, stopCamera]);
 
   function applyAndClose() {
     onApply({
@@ -683,15 +535,17 @@ export function IcScanAssist({ onApply, locale = 'en' }: IcScanAssistProps) {
 
   function reset() {
     stopCamera();
+    // Discarding a result while its successor is still being read would let
+    // the older answer land in an emptied panel.
+    requestRef.current?.abort();
+    requestRef.current = null;
     setCameraFault(null);
     setParsed(null);
     setBlurry(false);
-    setRawText('');
     setDraftName('');
     setDraftNumber('');
     setStatus('idle');
     setPhase('prepare');
-    setProgress(0);
     setDragging(false);
     setOpen(false);
   }
@@ -699,7 +553,16 @@ export function IcScanAssist({ onApply, locale = 'en' }: IcScanAssistProps) {
   if (!open) {
     return (
       <div className="rounded-lg border border-dashed border-[var(--line-strong)] p-4">
-        <Button type="button" variant="secondary" onClick={() => setOpen(true)}>
+        <Button
+          type="button"
+          variant="secondary"
+          onClick={() => {
+            setOpen(true);
+            // Fire and forget: the panel opens immediately either way, and the
+            // probe only decides whether it shows a dropzone or an explanation.
+            void checkAvailable();
+          }}
+        >
           {t.title}
         </Button>
         <p className="mt-2 text-xs text-muted">{t.disclaimer}</p>
@@ -722,7 +585,10 @@ export function IcScanAssist({ onApply, locale = 'en' }: IcScanAssistProps) {
       */}
       <p className="mt-1 text-xs text-muted">{t.notice}</p>
 
-      {status === 'idle' || status === 'error' || status === 'rejected' ? (
+      {status === 'idle' ||
+      status === 'error' ||
+      status === 'rejected' ||
+      status === 'throttled' ? (
         <div className="mt-4">
           {/*
             The input stays in the accessibility tree and keyboard tab order -
@@ -816,6 +682,11 @@ export function IcScanAssist({ onApply, locale = 'en' }: IcScanAssistProps) {
               <Alert tone="warning">{t.notImage}</Alert>
             </div>
           ) : null}
+          {status === 'throttled' ? (
+            <div className="mt-3">
+              <Alert tone="warning">{t.throttled}</Alert>
+            </div>
+          ) : null}
         </div>
       ) : null}
 
@@ -835,6 +706,9 @@ export function IcScanAssist({ onApply, locale = 'en' }: IcScanAssistProps) {
             <video
               ref={videoRef}
               className="h-full w-full object-cover"
+              // Preview only, and only on a camera pointed at the person - see
+              // `frontFacing`. The captured frame is never flipped.
+              style={frontFacing ? { transform: 'scaleX(-1)' } : undefined}
               // `playsInline` keeps iOS from taking the video fullscreen, which
               // would hide the frame and the capture button.
               playsInline
@@ -887,26 +761,22 @@ export function IcScanAssist({ onApply, locale = 'en' }: IcScanAssistProps) {
       {status === 'loading' || status === 'reading' ? (
         <div className="mt-4">
           <p className="text-sm" role="status" aria-live="polite">
-            {phase === 'read' ? t.reading : phase === 'download' ? t.downloading : t.loading}
+            {phase === 'read' ? t.reading : t.loading}
           </p>
           {/*
-            Determinate per phase rather than across the whole job: the phases
-            each report their own 0-100 and there is no honest way to weigh a
-            22 MB download against a two-second recognition pass.
+            Indeterminate, because it honestly is. The model answers when it
+            answers and reports nothing on the way, so a bar creeping towards a
+            number nobody knows would be an invented progress signal - worse
+            than none, because it implies knowledge that does not exist.
           */}
           <div
             role="progressbar"
-            aria-valuemin={0}
-            aria-valuemax={100}
-            aria-valuenow={progress}
+            aria-busy="true"
+            aria-label={phase === 'read' ? t.reading : t.loading}
             className="mt-2 h-2 w-full overflow-hidden rounded-full bg-[var(--surface-muted)]"
           >
-            <div
-              className="h-full rounded-full bg-[var(--accent)] transition-[width] duration-300"
-              style={{ width: `${progress}%` }}
-            />
+            <div className="ocr-progress-sweep h-full w-1/3 rounded-full bg-[var(--accent)]" />
           </div>
-          <p className="mt-1 text-right text-xs tabular-nums text-muted">{progress}%</p>
         </div>
       ) : null}
 
@@ -918,6 +788,16 @@ export function IcScanAssist({ onApply, locale = 'en' }: IcScanAssistProps) {
             others are sound.
           */}
           {blurry ? <Alert tone="warning">{t.blurry}</Alert> : null}
+
+          {/*
+            The model is asked what kind of document it saw, and this is the
+            only thing that answer is used for. It catches the common mistake of
+            photographing a passport while the form says MyKad, which otherwise
+            produces a number that fails validation with no explanation.
+          */}
+          {parsed.card && parsed.card !== 'ic' ? (
+            <Alert tone="warning">{t.cardMismatch}</Alert>
+          ) : null}
 
           {!parsed.fullName && !parsed.identityNumber ? (
             <Alert tone="warning">{t.nothing}</Alert>
@@ -957,20 +837,6 @@ export function IcScanAssist({ onApply, locale = 'en' }: IcScanAssistProps) {
               </div>
             </>
           )}
-
-          {/*
-            The reader's unedited output. When a field comes back wrong this is
-            what says whether the text was misread or merely picked from the
-            wrong line, which is otherwise impossible to tell from the outside.
-          */}
-          {rawText.trim() ? (
-            <details className="text-xs">
-              <summary className="cursor-pointer text-muted">{t.rawLabel}</summary>
-              <pre className="mt-2 max-h-40 overflow-auto rounded-lg bg-[var(--surface-inset)] p-3 font-mono text-[11px] whitespace-pre-wrap">
-                {rawText.trim()}
-              </pre>
-            </details>
-          ) : null}
 
           <div className="flex flex-wrap gap-2">
             {parsed.fullName || parsed.identityNumber ? (

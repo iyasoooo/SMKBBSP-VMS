@@ -27,10 +27,6 @@ blob-report
 .playwright
 tmp
 
-# The OCR runtime is fetched during the build (npm run ocr:assets) rather than
-# copied, so a stale local copy cannot end up in the image.
-public/ocr
-
 # Editor / OS
 .vscode
 .idea

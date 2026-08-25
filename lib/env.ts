@@ -56,6 +56,27 @@ const envSchema = z.object({
   SEED_ADMIN_PASSWORD: z.string().min(8).default('Admin#Demo2025'),
   SEED_GUARD_PASSWORD: z.string().min(8).default('Guard#Demo2025'),
   SEED_TEACHER_PASSWORD: z.string().min(8).default('Teacher#Demo2025'),
+
+  /*
+   * OCR assistance. Reading runs on an Ollama host that this server talks to;
+   * the browser never addresses it, which is what keeps `connect-src 'self'`
+   * intact and stops the model endpoint from being reachable from a page.
+   *
+   * Left empty, the OCR panel disappears entirely rather than failing at the
+   * moment someone tries to use it. A school without a model host gets a form
+   * that is simply typed in, which is the honest degradation.
+   */
+  OCR_OLLAMA_URL: z.string().default(''),
+  /*
+   * Pinned by name on purpose. An Ollama install can carry cloud-routed models
+   * alongside local ones - `*:cloud` tags proxy to ollama.com - and defaulting
+   * to whatever happens to be installed would eventually send a photograph of
+   * someone's identity card to a third party. This value is compared against
+   * the host's model list at call time and a mismatch is refused.
+   */
+  OCR_OLLAMA_MODEL: z.string().min(1).default('qwen3.5:0.8b'),
+  /** How long one page is given to read a card before the request is dropped. */
+  OCR_TIMEOUT_MS: z.coerce.number().int().positive().default(45_000),
 });
 
 export type AppEnv = z.infer<typeof envSchema>;

@@ -2,6 +2,7 @@ import Link from 'next/link';
 import { getSettings } from '@/lib/domain/settings';
 import { getTheme } from '@/lib/theme';
 import { ThemeToggle } from '@/components/theme-toggle';
+import { CrestTile } from '@/components/ui/crest';
 /**
  * Rendered per request. These read school settings and the session from the
  * database, so prerendering them would both bake in values an administrator
@@ -22,12 +23,7 @@ export default async function VisitLayout({ children }: { children: React.ReactN
       >
         <div className="mx-auto flex max-w-3xl items-center justify-between gap-4 px-5 py-4">
           <Link href="/" className="flex items-center gap-3">
-            <span
-              aria-hidden="true"
-              className="flex size-9 items-center justify-center rounded-lg bg-[var(--brand)] text-sm font-bold text-[var(--brand-text)]"
-            >
-              VP
-            </span>
+            <CrestTile size={30} />
             <span className="leading-tight">
               <span className="block text-sm font-semibold text-[var(--text-strong)]">
                 VisitorPass
