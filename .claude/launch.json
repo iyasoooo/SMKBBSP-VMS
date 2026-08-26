@@ -22,6 +22,18 @@
         "3100"
       ],
       "port": 3100
+    },
+    {
+      "name": "visitorpass-dev-alt",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": [
+        "run",
+        "dev",
+        "--",
+        "-p",
+        "3200"
+      ],
+      "port": 3200
     }
   ]
 }

@@ -4,6 +4,7 @@ import { useActionState, useCallback, useEffect, useRef, useState } from 'react'
 import { useFormStatus } from 'react-dom';
 import Link from 'next/link';
 import { BrowserQRCodeReader, type IScannerControls } from '@zxing/browser';
+import { clsx } from 'clsx';
 import { lookupPassAction, type PassLookupPayload } from '@/app/guard/actions';
 import { Button } from '@/components/ui/button';
 import { Field, Input, fieldAria } from '@/components/ui/field';
@@ -37,6 +38,18 @@ export function Scanner({ t }: { t: GuardDictionary }) {
   );
 
   const [camera, setCamera] = useState<CameraState>('idle');
+  /*
+   * Whether to show the preview mirrored.
+   *
+   * A front-facing camera - a laptop webcam, or a tablet turned towards the
+   * guard - produces a feed in which moving the pass to your right moves it
+   * left on screen. Aiming at a small code that way is genuinely awkward, and
+   * every video-call application mirrors for exactly this reason. A rear camera
+   * must be left alone: it already shows the scene the way the person holding
+   * the device sees it, and mirroring that would introduce the problem instead
+   * of fixing it.
+   */
+  const [mirrored, setMirrored] = useState(false);
   const videoRef = useRef<HTMLVideoElement>(null);
   const controlsRef = useRef<IScannerControls | null>(null);
   const formRef = useRef<HTMLFormElement>(null);
@@ -46,6 +59,8 @@ export function Scanner({ t }: { t: GuardDictionary }) {
   const stopCamera = useCallback(() => {
     controlsRef.current?.stop();
     controlsRef.current = null;
+    // Cleared with the stream: the next camera opened may face the other way.
+    setMirrored(false);
     setCamera('idle');
   }, []);
 
@@ -84,10 +99,21 @@ export function Scanner({ t }: { t: GuardDictionary }) {
           if (tokenRef.current) tokenRef.current.value = text;
           controlsRef.current?.stop();
           controlsRef.current = null;
+          setMirrored(false);
           setCamera('idle');
           formRef.current?.requestSubmit();
         },
       );
+
+      /*
+       * Decide from the track that actually opened rather than from what was
+       * requested. Desktop browsers routinely report no `facingMode` at all,
+       * and a built-in laptop webcam is always user-facing, so anything that is
+       * not explicitly `environment` is treated as one.
+       */
+      const source = video.srcObject;
+      const track = source instanceof MediaStream ? source.getVideoTracks()[0] : undefined;
+      setMirrored(track?.getSettings().facingMode !== 'environment');
 
       setCamera('running');
     } catch (error) {
@@ -108,9 +134,16 @@ export function Scanner({ t }: { t: GuardDictionary }) {
           </div>
 
           <div className="relative aspect-[4/3] w-full bg-black">
+            {/*
+              Mirrored in CSS only. The decoder reads frames from the video
+              element's own buffer, which a transform never touches, so the
+              preview can be flipped while decoding still sees the true
+              orientation - which matters, because a QR code read back to front
+              does not decode.
+            */}
             <video
               ref={videoRef}
-              className="size-full object-cover"
+              className={clsx('size-full object-cover', mirrored && '-scale-x-100')}
               muted
               playsInline
               aria-label={t.scanHeading}
