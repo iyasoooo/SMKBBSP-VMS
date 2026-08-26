@@ -21,9 +21,15 @@ export interface GuardDictionary {
   walkIn: string;
   onSite: string;
   emergency: string;
+  history: string;
   signOut: string;
   language: string;
   theme: string;
+
+  // Visitor history screen
+  historyHeading: string;
+  historySubtitle: string;
+  historyEmpty: string;
 
   // Today screen
   todayHeading: string;
@@ -141,9 +147,15 @@ const en: GuardDictionary = {
   walkIn: 'Walk-in',
   onSite: 'On site',
   emergency: 'Emergency list',
+  history: 'Visitor history',
   signOut: 'Sign out',
   language: 'Language',
   theme: 'Theme',
+
+  historyHeading: 'Visitor history',
+  historySubtitle:
+    'Every recorded visit, with identity numbers masked. Search here to check whether a visitor has been to the school before.',
+  historyEmpty: 'Try widening the date range or clearing a filter.',
 
   todayHeading: 'Today at the gate',
   todaySubtitle: 'Expected arrivals, visitors on site, and recent activity.',
@@ -253,9 +265,15 @@ const ms: GuardDictionary = {
   walkIn: 'Pelawat tanpa temu janji',
   onSite: 'Berada di sekolah',
   emergency: 'Senarai kecemasan',
+  history: 'Sejarah pelawat',
   signOut: 'Log keluar',
   language: 'Bahasa',
   theme: 'Tema',
+
+  historyHeading: 'Sejarah pelawat',
+  historySubtitle:
+    'Setiap lawatan yang direkodkan, dengan nombor pengenalan dilindungi. Cari di sini untuk menyemak sama ada pelawat pernah datang ke sekolah.',
+  historyEmpty: 'Cuba luaskan julat tarikh atau kosongkan penapis.',
 
   todayHeading: 'Hari ini di pintu pagar',
   todaySubtitle: 'Ketibaan dijangka, pelawat di sekolah, dan aktiviti terkini.',

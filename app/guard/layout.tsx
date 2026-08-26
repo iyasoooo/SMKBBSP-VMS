@@ -29,6 +29,7 @@ export default async function GuardLayout({ children }: { children: React.ReactN
         { href: '/guard/scan', label: t.scan },
         { href: '/guard/walk-in', label: t.walkIn },
         { href: '/guard/active', label: t.onSite },
+        { href: '/guard/reports', label: t.history },
         { href: '/guard/emergency', label: t.emergency },
       ]}
     >

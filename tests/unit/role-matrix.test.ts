@@ -51,3 +51,20 @@ describe('who may administer', () => {
     expect(homeForRole(Role.GUARD)).toBe('/guard');
   });
 });
+
+/**
+ * Guards read visit history at the gate but cannot download it.
+ *
+ * The screen is safe to share - `runReport` masks every identity number - but
+ * the export hands over the school's entire visitor history as a file, and the
+ * gate terminal is a shared device that is often left signed in. The download
+ * button is absent from the guard screen; this pins the rule the *server* uses,
+ * which is what actually stops someone typing the export URL in directly.
+ */
+describe('who may download the visitor history', () => {
+  it('limits the export to the roles that hold oversight', () => {
+    expect(OVERSIGHT_ROLES).toEqual(expect.arrayContaining([Role.ADMIN, Role.PRINCIPAL]));
+    expect(OVERSIGHT_ROLES).not.toContain(Role.GUARD);
+    expect(OVERSIGHT_ROLES).not.toContain(Role.TEACHER);
+  });
+});
