@@ -9,31 +9,7 @@
         "dev"
       ],
       "port": 3000,
-      "autoPort": true
-    },
-    {
-      "name": "visitorpass-prod",
-      "runtimeExecutable": "npm",
-      "runtimeArgs": [
-        "run",
-        "start",
-        "--",
-        "-p",
-        "3100"
-      ],
-      "port": 3100
-    },
-    {
-      "name": "visitorpass-dev-alt",
-      "runtimeExecutable": "npm",
-      "runtimeArgs": [
-        "run",
-        "dev",
-        "--",
-        "-p",
-        "3200"
-      ],
-      "port": 3200
+      "autoPort": false
     }
   ]
 }
