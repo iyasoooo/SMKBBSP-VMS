@@ -4,7 +4,8 @@ import { listOnSiteVisits } from '@/lib/domain/gate';
 import { getSettings } from '@/lib/domain/settings';
 import { getLocale } from '@/lib/theme';
 import { getDictionary } from '@/lib/i18n/dictionary';
-import { isOverdue, toSafeVisitor } from '@/lib/domain/presenters';
+import { isOverdue, toSafeVisitor, type LastSeen } from '@/lib/domain/presenters';
+import { latestCheckpointsFor } from '@/lib/domain/checkpoints';
 import { formatDateTime, formatTime } from '@/lib/time';
 import { EmptyState } from '@/components/ui/surface';
 import { PrintButton } from '@/components/print-button';
@@ -40,6 +41,16 @@ export default async function EmergencyListPage() {
   const overdueCount = visits.filter((visit) =>
     isOverdue(visit, settings.overdueGraceMinutes, now),
   ).length;
+
+  /*
+   * Last confirmed place earns its space on an evacuation sheet: knowing a
+   * visitor was last seen in Block B is the difference between searching a
+   * building and searching a school. It adds no identity data, and the
+   * destination column is already printed here.
+   */
+  const lastSeenByVisit: Map<string, LastSeen> = settings.checkpointEnabled
+    ? await latestCheckpointsFor(visits.map((visit) => visit.id))
+    : new Map();
 
   return (
     <div className="mx-auto max-w-5xl">
@@ -99,6 +110,9 @@ export default async function EmergencyListPage() {
                 <th scope="col" className="px-4 py-3 text-center font-semibold">{t.partySize}</th>
                 <th scope="col" className="px-4 py-3 font-semibold">{t.checkInTime}</th>
                 <th scope="col" className="px-4 py-3 font-semibold">{t.expectedEnd}</th>
+                {settings.checkpointEnabled ? (
+                  <th scope="col" className="px-4 py-3 font-semibold">{t.lastSeen}</th>
+                ) : null}
               </tr>
             </thead>
             <tbody className="divide-y divide-[var(--line-soft)]">
@@ -130,6 +144,24 @@ export default async function EmergencyListPage() {
                         </strong>
                       ) : null}
                     </td>
+                    {settings.checkpointEnabled ? (
+                      <td className="px-4 py-3">
+                        {(() => {
+                          const lastSeen = lastSeenByVisit.get(visit.id);
+                          if (!lastSeen) {
+                            return <span className="text-xs">{t.lastSeenNever}</span>;
+                          }
+                          return (
+                            <>
+                              <span className="block">{lastSeen.destinationName ?? '-'}</span>
+                              <span className="block text-xs">
+                                {formatTime(lastSeen.at)} · {lastSeen.confirmedBy}
+                              </span>
+                            </>
+                          );
+                        })()}
+                      </td>
+                    ) : null}
                   </tr>
                 );
               })}

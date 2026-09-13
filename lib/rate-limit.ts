@@ -30,6 +30,15 @@ export const RATE_LIMITS = {
   passVerify: { name: 'guard.verify', limit: 120, windowSeconds: 60 },
   /** Manual fallback-code attempts, keyed by user. Tight: it is guessable. */
   fallbackCode: { name: 'guard.fallback', limit: 15, windowSeconds: 300 },
+  /**
+   * Checkpoint confirmations, keyed by user.
+   *
+   * Sized for the busiest realistic hand: a guard walking a corridor of
+   * visitors, or a teacher clearing a morning's queue. High enough never to
+   * block genuine work, low enough that a compromised teacher session cannot
+   * sweep the site's visits looking for which ids resolve.
+   */
+  checkpoint: { name: 'staff.checkpoint', limit: 60, windowSeconds: 300 },
   /*
    * Card reads, keyed by IP.
    *

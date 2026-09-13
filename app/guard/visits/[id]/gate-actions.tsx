@@ -4,7 +4,12 @@ import { useActionState, useState } from 'react';
 import { useFormStatus } from 'react-dom';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { checkInAction, checkOutAction, denyEntryAction } from '@/app/guard/actions';
+import {
+  checkInAction,
+  checkOutAction,
+  denyEntryAction,
+  recordSightingAction,
+} from '@/app/guard/actions';
 import { Button, buttonClasses } from '@/components/ui/button';
 import { Checkbox, Textarea } from '@/components/ui/field';
 import { Alert, Card } from '@/components/ui/surface';
@@ -225,6 +230,46 @@ export function DenyPanel({ visitId, t }: { visitId: string; t: GuardDictionary 
           </Button>
         </div>
       </form>
+    </Card>
+  );
+}
+
+/**
+ * Record that a guard has seen this visitor during rounds.
+ *
+ * Offered only while a visit is checked in. It answers the question the gate
+ * screen otherwise cannot - "has anybody laid eyes on this person since they
+ * came through?" - without asking the visitor for anything.
+ */
+export function SightingPanel({ visitId, t }: { visitId: string; t: GuardDictionary }) {
+  const [state, formAction] = useActionState<
+    ActionResult<{ visitorName: string; deduped: boolean }> | null,
+    FormData
+  >(recordSightingAction, null);
+
+  return (
+    <Card className="p-5">
+      <h2 className="text-base font-semibold">{t.recordPresence}</h2>
+      <p className="mt-1 text-sm text-muted">{t.recordSightingHelp}</p>
+
+      <form action={formAction} className="mt-4 flex flex-col gap-3">
+        <input type="hidden" name="visitId" value={visitId} />
+        <label htmlFor="sighting-note" className="text-sm font-medium">
+          {t.sightingNote}
+        </label>
+        <Textarea id="sighting-note" name="note" rows={2} maxLength={200} />
+        <SubmitButton label={t.confirm} busyLabel={t.loading} variant="primary" />
+      </form>
+
+      <p aria-live="polite" className="mt-2 text-sm">
+        {state?.ok === false ? (
+          <span style={{ color: 'var(--danger)' }}>{state.message}</span>
+        ) : state?.ok === true ? (
+          <span className="text-muted">
+            {state.data.deduped ? t.alreadyConfirmed : t.sightingRecorded}
+          </span>
+        ) : null}
+      </p>
     </Card>
   );
 }

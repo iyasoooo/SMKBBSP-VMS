@@ -5,6 +5,7 @@ import { useFormStatus } from 'react-dom';
 import { submitAppointmentRequest } from './actions';
 import { Button } from '@/components/ui/button';
 import { Checkbox, Field, Input, Select, Textarea, fieldAria } from '@/components/ui/field';
+import { SearchableSelect, type SearchableOption } from '@/components/ui/searchable-select';
 import { Alert, Card } from '@/components/ui/surface';
 import { IcScanAssist } from '@/components/ocr/ic-scan-assist';
 import { MAX_PARTY_SIZE } from '@/lib/constants';
@@ -18,7 +19,12 @@ export interface TeacherOption {
 export interface DestinationOption {
   id: string;
   nameEn: string;
+  /** Searchable, though not displayed - see `destinationOptions`. */
+  nameMs: string;
   instructionsEn: string | null;
+  /** Where it is on the plan, for telling same-named rooms apart. */
+  block: string | null;
+  levelName: string | null;
 }
 
 export interface VisitTypeOption {
@@ -35,6 +41,8 @@ interface RequestFormProps {
   openingTime: string;
   closingTime: string;
   minDate: string;
+  /** The day the picker opens on: the next day the school is actually open. */
+  defaultDate: string;
   maxDate: string;
   consentVersion: string;
 }
@@ -70,6 +78,7 @@ export function RequestForm({
   openingTime,
   closingTime,
   minDate,
+  defaultDate,
   maxDate,
   consentVersion,
 }: RequestFormProps) {
@@ -96,7 +105,13 @@ export function RequestForm({
   const [teacherId, setTeacherId] = useState('');
   const [visitTypeId, setVisitTypeId] = useState(visitTypes[0]?.id ?? '');
   const [destinationId, setDestinationId] = useState('');
-  const [visitDate, setVisitDate] = useState('');
+  /*
+   * Starts on the next open school day rather than empty. Most requests are for
+   * today or tomorrow, so this is one fewer thing to fill in - and the visitor
+   * can still change it. It is only a starting value: the server checks the day
+   * again, because a preset is a convenience and never an authorisation.
+   */
+  const [visitDate, setVisitDate] = useState(defaultDate);
   const [visitTime, setVisitTime] = useState('');
   const [purpose, setPurpose] = useState('');
   const [partySize, setPartySize] = useState(1);
@@ -166,6 +181,34 @@ export function RequestForm({
 
   const selectedVisitType = visitTypes.find((type) => type.id === visitTypeId);
   const selectedDestination = destinations.find((d) => d.id === destinationId);
+
+  /*
+   * The picker's rows.
+   *
+   * `detail` is the block and level, which is what separates the several rooms
+   * that share a name - the school has more than one science room and more than
+   * one computer lab, and a bare name asks the visitor to guess. The same text
+   * is searchable, so "block b" narrows the list as readily as a room name does.
+   */
+  const destinationOptions: SearchableOption[] = destinations.map((destination) => {
+    const where = [destination.levelName, destination.block ? `Block ${destination.block}` : null]
+      .filter(Boolean)
+      .join(' · ');
+
+    return {
+      value: destination.id,
+      label: destination.nameEn,
+      detail: where || undefined,
+      /*
+       * The Malay name is searchable but not shown. This is a Malaysian school
+       * and a parent told to go to "Bilik Sains" will type that, not "Science
+       * room" - without it the search silently returns nothing for the name the
+       * visitor was actually given. Showing both would double the length of
+       * every row for a gain the detail line already covers.
+       */
+      keywords: destination.nameMs,
+    };
+  });
 
   const identityHint =
     identityType === 'NRIC'
@@ -317,7 +360,7 @@ export function RequestForm({
           About your visit
         </legend>
 
-        <Field id="teacherId" label="Teacher you wish to meet" required error={errors.teacherId}>
+        <Field id="teacherId" label="Staff you wish to meet" required error={errors.teacherId}>
           <Select
             {...fieldAria('teacherId', { error: errors.teacherId })}
             name="teacherId"
@@ -327,7 +370,7 @@ export function RequestForm({
             hasError={Boolean(errors.teacherId)}
           >
             <option value="" disabled>
-              Choose a teacher
+              Choose a staff member
             </option>
             {teachers.map((teacher) => (
               <option key={teacher.id} value={teacher.id}>
@@ -359,22 +402,23 @@ export function RequestForm({
             id="destinationId"
             label="Where you are going"
             error={errors.destinationId}
-            hint="Optional. The office can direct you on arrival."
+            hint="Optional. Type to search, or leave it for the office to direct you."
           >
-            <Select
-              {...fieldAria('destinationId', { error: errors.destinationId, hint: true })}
+            <SearchableSelect
+              id="destinationId"
               name="destinationId"
               value={destinationId}
-              onChange={(event) => setDestinationId(event.target.value)}
+              onChange={setDestinationId}
+              options={destinationOptions}
+              emptyOption="Not sure / to be advised"
+              placeholder="Search for a room, block or level"
               hasError={Boolean(errors.destinationId)}
-            >
-              <option value="">Not sure / to be advised</option>
-              {destinations.map((destination) => (
-                <option key={destination.id} value={destination.id}>
-                  {destination.nameEn}
-                </option>
-              ))}
-            </Select>
+              describedBy={
+                fieldAria('destinationId', { error: errors.destinationId, hint: true })[
+                  'aria-describedby'
+                ]
+              }
+            />
           </Field>
         </div>
 
@@ -620,6 +664,21 @@ export function RequestForm({
             was on the school grounds. Identification numbers are encrypted and are shown to staff
             in masked form. Records are kept for the school&apos;s retention period and are not
             shared outside the school except where the law requires it.
+          </p>
+          {/*
+            The card photograph, stated plainly.
+
+            This has to match what the system actually does, not what sounds
+            most reassuring. The image is posted to the school's own reader to
+            have its text extracted, so it does leave this browser - claiming
+            otherwise would be false. What is true, and what matters, is that it
+            is used for that one request and is never written to the database or
+            to disk. Only the text the visitor reviews and accepts is stored.
+          */}
+          <p className="mt-2">
+            If you use the card scanner, the photograph of your identity card is sent to the
+            school&apos;s own reader, used once to read the text, and is never stored in our
+            database or saved to disk. Only the details you check and accept are kept.
           </p>
           {companions.length > 0 ? (
             <p className="mt-2">

@@ -4,7 +4,7 @@ import { getCurrentUser } from '@/lib/auth/session';
 import { homeForRole } from '@/lib/auth/authorize';
 import { getTheme } from '@/lib/theme';
 import { ButtonLink } from '@/components/ui/button';
-import { CrestTile } from '@/components/ui/crest';
+import { Crest } from '@/components/ui/crest';
 import { ThemeToggle } from '@/components/theme-toggle';
 /**
  * Rendered per request. These read school settings and the session from the
@@ -25,9 +25,11 @@ export default async function HomePage() {
       >
         <div className="mx-auto flex max-w-5xl items-center justify-between gap-4 px-5 py-4">
           <div className="flex items-center gap-3">
-            <CrestTile size={30} />
-            <div className="leading-tight">
-              <p className="text-sm font-semibold text-[var(--text-strong)]">VisitorPass</p>
+            <Crest size={56} className="h-11 w-auto sm:h-14" />
+            <div className="min-w-0 leading-tight">
+              <p className="text-[13px] leading-snug font-semibold text-[var(--text-strong)] sm:text-sm">
+                Visitor Management System
+              </p>
               <p className="text-xs text-muted">{settings.schoolShortName}</p>
             </div>
           </div>
@@ -64,6 +66,9 @@ export default async function HomePage() {
           <div className="mt-8 flex flex-wrap gap-3">
             <ButtonLink href="/visit/request" size="lg">
               Request a visit
+            </ButtonLink>
+            <ButtonLink href="/map" variant="secondary" size="lg">
+              School map
             </ButtonLink>
             <ButtonLink href="/visit/status" variant="secondary" size="lg">
               Check my request
@@ -119,7 +124,7 @@ export default async function HomePage() {
         className="border-t border-[var(--line-soft)] px-5 py-6 text-center text-xs text-muted"
       >
         <p>
-          {settings.schoolName} &middot; VisitorPass{' '}
+          {settings.schoolName} &middot; Visitor Management System{' '}
           <Link href="/login" className="underline underline-offset-2">
             Staff login
           </Link>

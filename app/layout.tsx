@@ -5,8 +5,8 @@ import './globals.css';
 
 export const metadata: Metadata = {
   title: {
-    default: 'SMKBBSP VisitorPass',
-    template: '%s | SMKBBSP VisitorPass',
+    default: 'SMKBBSP Visitor Management System',
+    template: '%s | SMKBBSP Visitor Management System',
   },
   description:
     'Appointment-based visitor management for SMK Bandar Baru Sri Petaling: request a visit, get teacher approval, and check in at the gate with a QR pass.',
@@ -28,7 +28,7 @@ export const metadata: Metadata = {
     // Launches without Safari chrome once added to the home screen. iOS has no
     // install prompt, so this only takes effect via Share > Add to Home Screen.
     capable: true,
-    title: 'VisitorPass',
+    title: 'SMKBBSP VMS',
     statusBarStyle: 'default',
   },
 };

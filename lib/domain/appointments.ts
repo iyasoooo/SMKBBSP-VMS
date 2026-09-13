@@ -502,7 +502,21 @@ export async function listAvailableTeachers() {
 export async function listActiveDestinations() {
   return prisma.destination.findMany({
     where: { isActive: true },
-    select: { id: true, nameEn: true, nameMs: true, instructionsEn: true, instructionsMs: true },
+    select: {
+      id: true,
+      nameEn: true,
+      nameMs: true,
+      instructionsEn: true,
+      instructionsMs: true,
+      /*
+       * Block and level, for telling apart the many rooms that share a name.
+       * The school has several "Bilik Sains", and a list that shows only the
+       * name asks the visitor to guess which one they were told to go to.
+       */
+      mapNode: {
+        select: { block: true, level: { select: { nameEn: true, nameMs: true } } },
+      },
+    },
     orderBy: { nameEn: 'asc' },
   });
 }

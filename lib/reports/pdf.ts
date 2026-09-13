@@ -61,7 +61,7 @@ export async function buildReportPdf(
 
   const pdf = await PDFDocument.create();
   pdf.setTitle('Visitor report');
-  pdf.setProducer('SMKBBSP VisitorPass');
+  pdf.setProducer('SMKBBSP Visitor Management System');
   pdf.setCreationDate(generatedAt);
 
   const regular = await pdf.embedFont(StandardFonts.Helvetica);

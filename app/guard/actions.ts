@@ -3,7 +3,7 @@
 import { revalidatePath } from 'next/cache';
 import { redirect } from 'next/navigation';
 import { z } from 'zod';
-import { Role } from '@prisma/client';
+import { CheckpointKind, CheckpointMethod, Role } from '@prisma/client';
 import { authorizeMutation, AuthorizationError } from '@/lib/auth/authorize';
 import { consumeRateLimit, RATE_LIMITS } from '@/lib/rate-limit';
 import {
@@ -16,6 +16,7 @@ import {
   registerWalkIn,
   type PassLookupResult,
 } from '@/lib/domain/gate';
+import { CheckpointError, recordCheckpoint } from '@/lib/domain/checkpoints';
 import { walkInSchema } from '@/lib/validation/appointment';
 import { flushNotificationsInBackground } from '@/lib/email/outbox';
 import { DENIAL_CODES } from '@/lib/constants';
@@ -279,4 +280,66 @@ export async function walkInAction(
   revalidatePath('/guard');
   revalidatePath('/guard/active');
   redirect(`/guard/badge/${visitId}?new=1`);
+}
+
+const guardSightingSchema = z.object({
+  visitId: z.string().min(1),
+  note: z.string().trim().max(200).optional(),
+});
+
+/**
+ * Guard recording that they have seen a visitor during rounds.
+ *
+ * Distinct from a scan because nothing was scanned: the guard recognised the
+ * badge in a corridor. The method is stored so a later reading of the timeline
+ * can tell a credential that was resolved from a person who was recognised,
+ * rather than presenting both as the same kind of fact.
+ */
+export async function recordSightingAction(
+  _previous: ActionResult<{ visitorName: string; deduped: boolean }> | null,
+  formData: FormData,
+): Promise<ActionResult<{ visitorName: string; deduped: boolean }>> {
+  let user;
+  try {
+    user = await authorizeGuard();
+  } catch (error) {
+    if (error instanceof AuthorizationError) return fail(error.message);
+    throw error;
+  }
+
+  const parsed = guardSightingSchema.safeParse({
+    visitId: formData.get('visitId'),
+    note: formData.get('note') ?? undefined,
+  });
+
+  if (!parsed.success) {
+    return fail('That sighting could not be recorded.', {
+      fieldErrors: toFieldErrors(parsed.error.issues),
+    });
+  }
+
+  const limit = await consumeRateLimit(RATE_LIMITS.checkpoint, user.id);
+  if (!limit.allowed) {
+    return fail('Too many confirmations at once. Please wait a moment.', { code: 'RATE_LIMITED' });
+  }
+
+  try {
+    const result = await recordCheckpoint({
+      visitId: parsed.data.visitId,
+      actor: { id: user.id, role: user.role },
+      kind: CheckpointKind.PRESENCE,
+      method: CheckpointMethod.GUARD_SIGHTING,
+      note: parsed.data.note || null,
+    });
+
+    revalidatePath('/guard');
+    revalidatePath('/guard/active');
+    revalidatePath(`/guard/visits/${parsed.data.visitId}`);
+
+    return ok({ visitorName: result.visitorName, deduped: result.deduped });
+  } catch (error) {
+    if (error instanceof CheckpointError) return fail(error.message, { code: error.code });
+    log.error('sighting failed', undefined, error);
+    return fail('We could not record that. Please try again.');
+  }
 }

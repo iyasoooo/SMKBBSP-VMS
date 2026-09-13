@@ -6,7 +6,7 @@ import {
   listAvailableTeachers,
 } from '@/lib/domain/appointments';
 import { getSettings } from '@/lib/domain/settings';
-import { addDays, toIsoDayString } from '@/lib/time';
+import { addDays, toIsoDayString, zonedDayOfWeek } from '@/lib/time';
 import { Alert } from '@/components/ui/surface';
 import { RequestForm } from './request-form';
 
@@ -34,6 +34,25 @@ export default async function RequestVisitPage() {
   const minDate = toIsoDayString(addDays(now, settings.minLeadMinutes >= 1440 ? 1 : 0));
   const maxDate = toIsoDayString(addDays(now, settings.maxAdvanceDays));
 
+  /*
+   * The day the picker opens on: today, unless the school is shut today.
+   *
+   * Presetting saves the visitor a step, but presetting a day the server will
+   * reject is worse than leaving it blank - it looks filled in and then fails.
+   * So the earliest allowed day is walked forward to the first one the school
+   * actually opens, which is today for most of the week and Monday over a
+   * weekend. The search is bounded by the booking window; if nothing in range
+   * is an open day the field simply starts empty, as it did before.
+   */
+  const firstOpenDay = (): string => {
+    const start = addDays(now, settings.minLeadMinutes >= 1440 ? 1 : 0);
+    for (let offset = 0; offset <= settings.maxAdvanceDays; offset += 1) {
+      const candidate = addDays(start, offset);
+      if (settings.openDays.includes(zonedDayOfWeek(candidate))) return toIsoDayString(candidate);
+    }
+    return '';
+  };
+
   const canSubmit = teachers.length > 0 && visitTypes.length > 0;
 
   return (
@@ -60,7 +79,10 @@ export default async function RequestVisitPage() {
           destinations={destinations.map((destination) => ({
             id: destination.id,
             nameEn: destination.nameEn,
+            nameMs: destination.nameMs,
             instructionsEn: destination.instructionsEn,
+            block: destination.mapNode?.block ?? null,
+            levelName: destination.mapNode?.level.nameEn ?? null,
           }))}
           visitTypes={visitTypes.map((type) => ({
             id: type.id,
@@ -71,6 +93,7 @@ export default async function RequestVisitPage() {
           openingTime={formatMinutes(settings.openMinutes)}
           closingTime={formatMinutes(settings.closeMinutes)}
           minDate={minDate}
+          defaultDate={firstOpenDay()}
           maxDate={maxDate}
           consentVersion={settings.consentVersion}
         />

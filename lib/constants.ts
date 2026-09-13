@@ -76,6 +76,7 @@ export const AUDIT_ACTIONS = {
   VISIT_DENIED: 'visit.denied',
   VISIT_NO_SHOW: 'visit.no_show',
   VISIT_BADGE_PRINTED: 'visit.badge_printed',
+  VISIT_CHECKPOINT_RECORDED: 'visit.checkpoint_recorded',
 
   WALK_IN_CREATED: 'walk_in.created',
   WALK_IN_BLOCKED: 'walk_in.blocked',

@@ -134,7 +134,7 @@ export async function submitVisitRequest(
   });
 
   await step('Choose the host teacher and visit type', async () => {
-    await selectHostTeacher(page, 'Teacher you wish to meet');
+    await selectHostTeacher(page, 'Staff you wish to meet');
 
     // The option text carries the duration too ("Parent meeting (30 min)"), so
     // resolve the value by partial text rather than matching a full label.

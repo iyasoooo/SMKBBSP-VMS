@@ -50,7 +50,7 @@ const envSchema = z.object({
   SMTP_SECURE: booleanish.default(false),
   SMTP_USER: z.string().optional().default(''),
   SMTP_PASSWORD: z.string().optional().default(''),
-  MAIL_FROM_NAME: z.string().min(1).default('SMKBBSP VisitorPass'),
+  MAIL_FROM_NAME: z.string().min(1).default('SMKBBSP Visitor Management System'),
   MAIL_FROM_ADDRESS: z.email().default('visitorpass@smkbbsp.test'),
 
   SEED_ADMIN_PASSWORD: z.string().min(8).default('Admin#Demo2025'),

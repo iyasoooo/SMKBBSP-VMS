@@ -51,6 +51,9 @@ export default async function WalkInPage() {
             destinations: destinations.map((destination) => ({
               id: destination.id,
               nameEn: destination.nameEn,
+              nameMs: destination.nameMs,
+              block: destination.mapNode?.block ?? null,
+              levelName: destination.mapNode?.level.nameEn ?? null,
             })),
             visitTypes: visitTypes.map((type) => ({
               id: type.id,

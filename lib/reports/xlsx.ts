@@ -29,7 +29,7 @@ export async function buildReportWorkbook(
   const generatedAt = options.generatedAt ?? new Date();
 
   const workbook = new ExcelJS.Workbook();
-  workbook.creator = 'SMKBBSP VisitorPass';
+  workbook.creator = 'SMKBBSP Visitor Management System';
   workbook.created = generatedAt;
 
   // --- Filters sheet -------------------------------------------------------

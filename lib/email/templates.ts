@@ -76,7 +76,7 @@ function layout(options: {
     <tr><td align="center">
       <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:560px;background:#ffffff;border:1px solid #e4e0d8;border-radius:12px;overflow:hidden;">
         <tr><td style="background:#a50e26;padding:18px 24px;color:#ffffff;">
-          <div style="font-size:15px;font-weight:600;">VisitorPass</div>
+          <div style="font-size:15px;font-weight:600;">Visitor Management System</div>
           <div style="font-size:12px;opacity:.85;">${escapeHtml(options.schoolName)}</div>
         </td></tr>
         <tr><td style="padding:24px;">

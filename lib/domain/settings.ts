@@ -110,6 +110,31 @@ export const SETTING_DEFINITIONS = {
     description: 'Minutes past the expected end before a visit is flagged overdue.',
     category: 'operations',
   },
+  'checkpoint.enabled': {
+    key: 'checkpoint.enabled',
+    type: SettingType.BOOL,
+    defaultValue: 'true',
+    label: 'Record arrival confirmations',
+    description: 'Let hosts and guards confirm that a visitor reached their destination.',
+    category: 'operations',
+  },
+  'checkpoint.alertsEnabled': {
+    key: 'checkpoint.alertsEnabled',
+    type: SettingType.BOOL,
+    defaultValue: 'false',
+    label: 'Alert on unconfirmed arrivals',
+    description:
+      'Off until staff are reliably confirming arrivals. Turning this on before then would flag ordinary visits, and guards would learn to ignore the panel.',
+    category: 'operations',
+  },
+  'checkpoint.arrivalGraceMinutes': {
+    key: 'checkpoint.arrivalGraceMinutes',
+    type: SettingType.INT,
+    defaultValue: '15',
+    label: 'Arrival confirmation window (minutes)',
+    description: 'Minutes after check-in before an unconfirmed arrival is flagged.',
+    category: 'operations',
+  },
   'notify.hostOnCheckout': {
     key: 'notify.hostOnCheckout',
     type: SettingType.BOOL,
@@ -154,6 +179,9 @@ export interface SchoolSettings {
   qrGraceAfterMinutes: number;
   badgePrefix: string;
   overdueGraceMinutes: number;
+  checkpointEnabled: boolean;
+  checkpointAlertsEnabled: boolean;
+  checkpointArrivalGraceMinutes: number;
   notifyHostOnCheckout: boolean;
   retentionDays: number;
   consentVersion: string;
@@ -204,6 +232,9 @@ export async function getSettings(db: Db = prisma): Promise<SchoolSettings> {
     qrGraceAfterMinutes: parseInteger(read('qr.graceAfterMinutes'), 30),
     badgePrefix: read('badge.prefix').trim() || 'V',
     overdueGraceMinutes: parseInteger(read('visit.overdueGraceMinutes'), 30),
+    checkpointEnabled: read('checkpoint.enabled').toLowerCase() === 'true',
+    checkpointAlertsEnabled: read('checkpoint.alertsEnabled').toLowerCase() === 'true',
+    checkpointArrivalGraceMinutes: parseInteger(read('checkpoint.arrivalGraceMinutes'), 15),
     notifyHostOnCheckout: read('notify.hostOnCheckout').toLowerCase() === 'true',
     retentionDays: parseInteger(read('privacy.retentionDays'), 365),
     consentVersion: read('privacy.consentVersion'),

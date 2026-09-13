@@ -7,7 +7,14 @@ import { getSettings } from '@/lib/domain/settings';
 import { getLocale } from '@/lib/theme';
 import { getDictionary } from '@/lib/i18n/dictionary';
 import { endOfZonedDay, formatDate, formatTime, formatTimeRange, startOfZonedDay } from '@/lib/time';
-import { SAFE_VISITOR_SELECT, isOverdue, toSafeVisitor } from '@/lib/domain/presenters';
+import {
+  SAFE_VISITOR_SELECT,
+  attentionFlags,
+  isOverdue,
+  toSafeVisitor,
+  type LastSeen,
+} from '@/lib/domain/presenters';
+import { latestCheckpointsFor } from '@/lib/domain/checkpoints';
 import { searchGateVisits } from '@/lib/domain/gate';
 import { Alert, Card, CardHeader, EmptyState, PageHeading, Pill } from '@/components/ui/surface';
 import { ButtonLink } from '@/components/ui/button';
@@ -69,6 +76,30 @@ export default async function GuardHomePage({
   const overdue = onSite.filter((visit) => isOverdue(visit, settings.overdueGraceMinutes, now));
   const peopleOnSite = onSite.length;
 
+  /*
+   * Last-seen data is only fetched when confirmations are switched on, so a
+   * school that has not adopted them pays nothing for the feature.
+   */
+  const lastSeenByVisit: Map<string, LastSeen> = settings.checkpointEnabled
+    ? await latestCheckpointsFor(onSite.map((visit) => visit.id))
+    : new Map();
+
+  const flagsFor = (visit: (typeof onSite)[number]) =>
+    attentionFlags(visit, {
+      lastSeen: lastSeenByVisit.get(visit.id),
+      overdueGraceMinutes: settings.overdueGraceMinutes,
+      arrivalGraceMinutes: settings.checkpointArrivalGraceMinutes,
+      arrivalAlertsEnabled: settings.checkpointEnabled && settings.checkpointAlertsEnabled,
+      now,
+    });
+
+  /*
+   * A visitor nobody can place outranks one who is simply staying late: the
+   * first is unaccounted for, the second is somewhere known with an expired
+   * clock.
+   */
+  const awaitingArrival = onSite.filter((visit) => flagsFor(visit).includes('AWAITING_ARRIVAL'));
+
   return (
     <>
       <PageHeading
@@ -85,6 +116,29 @@ export default async function GuardHomePage({
           </div>
         }
       />
+
+      {awaitingArrival.length > 0 ? (
+        <div className="mb-5">
+          <Alert
+            tone="danger"
+            title={`${awaitingArrival.length} ${t.awaitingArrival.toLowerCase()}`}
+          >
+            <p>{t.awaitingArrivalHelp}</p>
+            <ul className="mt-2 space-y-1">
+              {awaitingArrival.map((visit) => (
+                <li key={visit.id}>
+                  <strong>{toSafeVisitor(visit.visitor).fullName}</strong>
+                  {' — '}
+                  {t.checkInTime.toLowerCase()}{' '}
+                  {visit.checkedInAt ? formatTime(visit.checkedInAt) : '-'}
+                  {' · '}
+                  {visit.teacher.name}
+                </li>
+              ))}
+            </ul>
+          </Alert>
+        </div>
+      ) : null}
 
       {overdue.length > 0 ? (
         <div className="mb-5">
@@ -138,6 +192,10 @@ export default async function GuardHomePage({
                   key={visit.id}
                   visit={visit}
                   overdue={isOverdue(visit, settings.overdueGraceMinutes, now)}
+                  lastSeen={settings.checkpointEnabled ? lastSeenByVisit.get(visit.id) ?? null : null}
+                  showLastSeen={settings.checkpointEnabled}
+                  awaiting={flagsFor(visit).includes('AWAITING_ARRIVAL')}
+                  labels={{ lastSeen: t.lastSeen, lastSeenNever: t.lastSeenNever, awaitingArrival: t.awaitingArrival }}
                 />
               ))}
             </ul>
@@ -223,7 +281,21 @@ interface VisitRowData {
   destination: { nameEn: string } | null;
 }
 
-function VisitRow({ visit, overdue }: { visit: VisitRowData; overdue: boolean }) {
+function VisitRow({
+  visit,
+  overdue,
+  lastSeen = null,
+  showLastSeen = false,
+  awaiting = false,
+  labels,
+}: {
+  visit: VisitRowData;
+  overdue: boolean;
+  lastSeen?: LastSeen | null;
+  showLastSeen?: boolean;
+  awaiting?: boolean;
+  labels?: { lastSeen: string; lastSeenNever: string; awaitingArrival: string };
+}) {
   const visitor = toSafeVisitor(visit.visitor);
 
   return (
@@ -247,9 +319,23 @@ function VisitRow({ visit, overdue }: { visit: VisitRowData; overdue: boolean })
             {' · '}
             <span className="font-mono">{visit.badgeNumber}</span>
           </span>
+          {showLastSeen && labels ? (
+            <span className="mt-0.5 block truncate text-xs text-muted">
+              {labels.lastSeen}:{' '}
+              {lastSeen ? (
+                <>
+                  {lastSeen.destinationName ?? '-'} · {formatTime(lastSeen.at)} ·{' '}
+                  {lastSeen.confirmedBy}
+                </>
+              ) : (
+                labels.lastSeenNever
+              )}
+            </span>
+          ) : null}
         </span>
         <span className="flex shrink-0 flex-col items-end gap-1">
           <VisitStatusPill status={visit.status} overdue={overdue} />
+          {awaiting && labels ? <Pill tone="danger">{labels.awaitingArrival}</Pill> : null}
           {overdue ? <Pill tone="warning">late</Pill> : null}
         </span>
       </Link>
