@@ -6,6 +6,7 @@ import { prisma } from '@/lib/db/prisma';
 import { deriveFallbackCode, formatFallbackCode, hashToken } from '@/lib/crypto/tokens';
 import { buildPassUrl, renderQrDataUrl } from '@/lib/qr';
 import { getSettings } from '@/lib/domain/settings';
+import { DEFAULT_ORIGIN_CODE } from '@/lib/map/campus-plan';
 import { consumeRateLimit, RATE_LIMITS } from '@/lib/rate-limit';
 import { getEnv } from '@/lib/env';
 import { formatDate, formatDateTime, formatTimeRange } from '@/lib/time';
@@ -58,7 +59,7 @@ export default async function VisitorStatusPage({
     include: {
       visitor: { select: { fullName: true, identityType: true, identityLast4: true } },
       teacher: { select: { name: true } },
-      destination: true,
+      destination: { include: { mapNode: { select: { code: true } } } },
       visitType: true,
       visit: true,
       credentials: { orderBy: { createdAt: 'desc' }, take: 1 },
@@ -180,9 +181,25 @@ export default async function VisitorStatusPage({
         </Card>
       ) : null}
 
-      {appointment.destination?.instructionsEn && isApproved ? (
+      {isApproved && (appointment.destination?.instructionsEn || appointment.destination?.mapNode) ? (
         <Alert tone="info" title="Finding your way">
           {appointment.destination.instructionsEn}
+          {/* The written instruction stays; the map is an extra way to read it,
+              not a replacement. A visitor on a bad connection at the gate still
+              gets the sentence. */}
+          {appointment.destination.mapNode ? (
+            <p className="mt-2">
+              <Link
+                href={{
+                  pathname: '/map',
+                  query: { from: DEFAULT_ORIGIN_CODE, to: appointment.destination.mapNode.code },
+                }}
+                className="font-semibold underline underline-offset-2"
+              >
+                See the walking route from the guard house
+              </Link>
+            </p>
+          ) : null}
         </Alert>
       ) : null}
 

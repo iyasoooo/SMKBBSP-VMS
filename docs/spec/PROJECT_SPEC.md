@@ -213,6 +213,7 @@ Visit status transitions:
 | FR-019 | P0 | Support English and Bahasa Melayu on main guard pages and support dark mode. |
 | FR-020 | P0 | Derive overdue visitors and upcoming/expired/no-show operational alerts using explicit rules. |
 | FR-021 | P1 | Assist form entry with OCR on a self-hosted vision model and discard the source image immediately. The image is never written to disk and no extracted value is persisted before the visitor submits the form. |
+| FR-022 | P1 | Show a public school map that routes a visitor on foot from a chosen starting point to any room across the four levels, drawing the path and stating it as written turn-by-turn directions in English and Bahasa Melayu. Routing is computed server-side from map data held in the database; no map data or personal data reaches a third party. |
 
 ## 9. Information architecture
 
@@ -339,6 +340,23 @@ Use UUID/CUID-style non-sequential public identifiers. Internal database IDs mus
 
 Add indexes for appointment status/date/teacher, visit status/check-in/date/teacher, visitor identity HMAC/phone/email, QR hashes, blacklist active match fields, audit time/action/actor, and notification status.
 
+
+### School map
+
+`MapLevel` is one storey of the school. `MapNode` is a point in the walkable
+graph; a node that also carries a width and height is a drawn room, and a node
+of kind `STAIR` exists at the same coordinates on every level it serves.
+`MapEdge` joins two nodes with a weight in metres - derived from the
+coordinates for a walk, fixed for a stair.
+
+`Destination.mapNodeId` binds a bookable destination to the room it means. The
+binding is optional and is cleared rather than cascaded if a room is removed:
+an unbound destination stops being routable and keeps working everywhere else.
+
+Plan coordinates are not survey data. They are transcribed from the school's
+own floor plans, room widths are proportional rather than measured, and every
+distance the interface shows is rounded to five metres to avoid implying a
+precision the source does not have.
 ## 11. Security and privacy design
 
 ### Identity data

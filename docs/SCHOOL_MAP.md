@@ -4,8 +4,9 @@ Interactive campus wayfinding for SMKBBSP VisitorPass. A visitor standing at the
 guard house taps a destination (for example Kantin) and the screen draws the walking
 path from where they are to where they are going.
 
-Status: proposed. Not part of `docs/spec/PROJECT_SPEC.md` yet. Treat this as a scope
-addition and add it to the spec before building it.
+Status: BUILT (September 2026). Recorded in the specification as FR-022, with the
+three map tables documented under the data model. What follows is the reasoning
+behind the approach; `## What was built` at the end describes what actually shipped.
 
 ## Recommended toolchain (all free, all offline)
 
@@ -20,7 +21,7 @@ tiny graph of walkable points, with the shortest path computed in TypeScript.
 
 | Need | Tool | Licence | Why |
 | --- | --- | --- | --- |
-| Draw the campus map | **Inkscape** (or Figma free tier) | GPL / free tier | Vector SVG, gives every building an `id` you can target from code. Trace over a satellite screenshot or the school's fire-evacuation plan, then delete the screenshot layer. |
+| Draw the school map | **Inkscape** (or Figma free tier) | GPL / free tier | Vector SVG, gives every building an `id` you can target from code. Trace over a satellite screenshot or the school's fire-evacuation plan, then delete the screenshot layer. |
 | Shrink the export | **svgo** | MIT | Inkscape SVGs are bloated; svgo cuts them ~70% and keeps the ids. |
 | Shortest path | **graphology** + **graphology-shortest-path** | MIT | Dijkstra over your node graph in ~10 lines. A hand-written A* (~60 lines) is also fine and is easier to defend in a viva - pick one and be consistent. |
 | Pan and zoom on the guard tablet | **react-zoom-pan-pinch** | MIT | Pinch-zoom, double-tap, wheel. No canvas, keeps the SVG in the DOM so it stays accessible. |
@@ -210,3 +211,120 @@ It is deliberately dependency-free so the pathfinding and the rendering can be r
 one sitting. The `findRoute` function in it is about 25 lines. When porting into the app,
 that function moves to `lib/map/route.ts` unchanged, and `NODES` / `EDGES` / `BUILDINGS`
 come from Postgres instead of being literals.
+
+## What was built
+
+Live at `/map`, linked from the home page, the guard tablet's navigation, and any
+approved visitor's pass.
+
+**Data.** The four floor plans are transcribed in `lib/map/campus-plan.ts` - 4 levels,
+350 nodes, 388 edges, every room on every level. Room widths are relative and
+normalised per block, because the plans are drawn to a grid and pretending to know a
+store room is 3.4m wide would be invention. The seed writes the whole graph into
+Postgres; nothing routes off the literal.
+
+**Routing.** `lib/map/route.ts` is a pure module: Dijkstra over a graph, plus the
+turn-by-turn generator. It knows nothing about Prisma or React, which is why the tests
+can drive the whole building without a database. Stairs are a distinct edge kind with a
+fixed 18m cost, so climbing two floors is correctly preferred over walking the long way
+round on one.
+
+**Rendering.** Server-computed, so the route is a function of the URL alone: the graph
+never reaches the browser, every route is a link you can send to a visitor, and the page
+works with JavaScript off. The client component owns only what a round trip would make
+worse - the level switcher, the search filter, and zoom. The animated route is the
+Pavilion technique verbatim: a flat base line with a dashed line marching along it.
+
+**Directions in words.** Every route is also an ordered list of sentences in BM and EN.
+This is the primary output, not a fallback - a line on a plan is unusable with a screen
+reader and hard to follow on a bright kiosk outdoors.
+
+### Corrections after the first pass
+
+Four things were wrong in the first version, all of them found by looking at the
+rendered plan rather than at the tests:
+
+- **Both ends are now chosen by the visitor.** The start was pinned to the guard
+  house, which is only right for someone who has just walked through the gate. A
+  parent already inside for an assembly starts somewhere else. Start and
+  destination are now symmetric: one search list, a two-way toggle, and the URL
+  carries both, so a guard can still hand over a route that begins at the gate.
+- **Stair towers no longer cut through rooms.** Towers D and C stand in the
+  Gelanggang, which Block C's corridor faces and Block B's back does not, so
+  linking them to Block B drew a route straight through the store rooms along its
+  northern wall. They now serve Block C alone, and Block B is reached on the
+  flank walkways, which run clear of every room. A test samples every walkway
+  edge against every room rectangle so this cannot come back.
+- **Block A's corridor moved to its inside face.** It was drawn along the south
+  side, so every route left the block on the outside edge of the plan. It now
+  runs along the north face onto the Laman Sri Endah, which is where it is. The
+  hall keeps its door on the main covered walkway, because the plan's own caption
+  for that walkway is "ke Dewan, Dataran & Kantin".
+- **Room labels are wrapped and auto-sized, not truncated.** "Student prayer
+  room" used to render as an ellipsis. The label now searches down from 21px for
+  the largest size at which the wrapped name fits the box; only a single word too
+  long for the smallest size is ever cut.
+
+The same pass also found the east corridor end sitting a few units inside the
+last room of each block, which put the turn at the end of the corridor inside the
+switch room and drew a line through it. The corridor ends now sit outside the
+room strip by construction.
+
+### Second round of corrections
+
+- **Toilets carry their floor.** Eight rows all called "Toilets" is a search
+  result nobody can act on. Names are now "Boys toilet L1", "Girls toilet G", and
+  where a floor has two, the block as well: "Toilet (Block C) L2". The suffix is
+  generated from the level, so a new floor cannot be added without one.
+- **A hallway on every floor links Block B to Block C.** The plan has a gap in
+  Block B's room row - between the bookshop and the pump room on the ground
+  floor, between the stores upstairs - that reaches the covered walkway on the
+  block's northern face and so to Staircases C and D. Without it, routing went
+  the long way round the eastern flank.
+- **The eastern flank walkway is ground-level only.** It exists to reach the
+  canteen, and the canteen is on the ground; the upper plans show its roof. It
+  was also shorter on paper than the hallway, so routing kept choosing it.
+- **The main gate sits below the guard house.** They are one entrance: a visitor
+  passes the hut to reach the gate, so the graph chains them rather than putting
+  them side by side on the road.
+- **Circulation space is drawn but never offered.** The concourse in Block B is
+  somewhere you walk through, not somewhere you are sent. The rule is by
+  category, so it holds for anything else marked as circulation.
+- **The place list is alphabetical** by the name on screen, in whichever
+  language is selected, and the journey starts at the guard house by default.
+- **Makmal Sains A**, not Makmal A Sains. Same for B, C and D.
+
+### Worth knowing
+
+- Outdoor areas exist on the ground level only. The upper plans draw them as BUMBUNG
+  (roof) precisely because you cannot walk onto them from up there, and a test asserts
+  the graph agrees.
+- Distances are rounded to five metres and legs under nine metres are folded into the
+  next instruction. Both are deliberate: the plan is not a survey, and "walk 2m, turn
+  left, walk 2m, turn right" is not directions.
+- Reachability is asserted exhaustively, not sampled. The failure mode for hand-typed
+  map data is not a broken algorithm, it is one room nobody connected to a corridor.
+
+### Files
+
+| Path | What |
+| --- | --- |
+| `lib/map/campus-plan.ts` | The four floor plans as data, and the expansion to a graph |
+| `lib/map/route.ts` | Dijkstra and the turn-by-turn generator - no I/O |
+| `lib/map/campus.ts` | Loads the map from Postgres and answers routing questions |
+| `lib/i18n/map-dictionary.ts` | BM/EN strings and the step renderer |
+| `app/map/` | The page, the layout, and the client map surface |
+| `tests/unit/map-route.test.ts` | 22 tests: plan integrity, routing, written directions |
+| `tests/integration/campus-map.test.ts` | 6 tests: the round trip through Postgres |
+
+`docs/prototypes/school-map-demo.html` is the throwaway proof of concept that preceded
+this. It is superseded and kept only as a record of the approach.
+
+### Not done
+
+- No admin editor. Redrawing a room means editing `campus-plan.ts` and re-seeding.
+  That is the right trade at 350 nodes transcribed once; it would not be at ten times
+  the size or if the school reorganised rooms termly.
+- The upper levels reuse the ground level's frame, so they render with empty space
+  below. That is deliberate - a shared frame is what keeps a staircase in the same
+  place on screen when you switch levels.

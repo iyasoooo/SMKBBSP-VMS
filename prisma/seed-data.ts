@@ -9,6 +9,7 @@
  * NRIC values are structurally valid (12 digits) but use the reserved-looking
  * `99` state code and are not issued to anyone.
  */
+import { DestinationZone } from '@prisma/client';
 
 export interface SeedTeacher {
   name: string;
@@ -78,6 +79,13 @@ export interface SeedDestination {
   instructionsEn: string;
   instructionsMs: string;
   isActive: boolean;
+  /**
+   * COMMON marks somewhere a visitor may legitimately be on their own, so no
+   * confirmation is expected there and none of them raises an alert. Without
+   * this the canteen would make every visitor who stops to eat look unaccounted
+   * for, and guards would stop reading the alert panel within a day.
+   */
+  zone: DestinationZone;
 }
 
 export const SEED_DESTINATIONS: SeedDestination[] = [
@@ -85,56 +93,63 @@ export const SEED_DESTINATIONS: SeedDestination[] = [
     code: 'OFFICE',
     nameEn: 'General Office',
     nameMs: 'Pejabat Am',
-    instructionsEn: 'Ground floor of Block A, immediately right of the main entrance.',
-    instructionsMs: 'Aras bawah Blok A, sebelah kanan pintu masuk utama.',
+    instructionsEn: 'Level 1, Block A, at the east end past the staff room. Staircase A is the nearest.',
+    instructionsMs: 'Aras 1 Blok A, di hujung timur selepas Bilik Guru. Tangga A paling hampir.',
+    zone: DestinationZone.HOST_ONLY,
     isActive: true,
   },
   {
     code: 'COUNSEL',
     nameEn: 'Counselling Room',
     nameMs: 'Bilik Kaunseling',
-    instructionsEn: 'Block B, first floor. Please wait in the seating area outside.',
-    instructionsMs: 'Blok B, tingkat satu. Sila tunggu di ruang menunggu di luar.',
+    instructionsEn: 'Level 2, Block A. Please wait in the seating area outside.',
+    instructionsMs: 'Aras 2 Blok A. Sila tunggu di ruang menunggu di luar.',
+    zone: DestinationZone.HOST_ONLY,
     isActive: true,
   },
   {
     code: 'STAFFRM',
     nameEn: 'Teachers Staff Room',
     nameMs: 'Bilik Guru',
-    instructionsEn: 'Block A, first floor. Report to the duty teacher at the door.',
-    instructionsMs: 'Blok A, tingkat satu. Lapor diri kepada guru bertugas di pintu.',
+    instructionsEn: 'Level 1, Block A. Report to the duty teacher at the door.',
+    instructionsMs: 'Aras 1 Blok A. Lapor diri kepada guru bertugas di pintu.',
+    zone: DestinationZone.HOST_ONLY,
     isActive: true,
   },
   {
     code: 'HALL',
     nameEn: 'School Hall',
     nameMs: 'Dewan Sekolah',
-    instructionsEn: 'Behind Block C. Use the side gate on event days.',
-    instructionsMs: 'Di belakang Blok C. Gunakan pintu sisi pada hari majlis.',
+    instructionsEn: 'Dewan Seri Endah, ground floor of Block A. Enter from the main covered walkway.',
+    instructionsMs: 'Dewan Seri Endah, aras bawah Blok A. Masuk dari laluan berbumbung utama.',
+    zone: DestinationZone.COMMON,
     isActive: true,
   },
   {
     code: 'LIBRARY',
     nameEn: 'Library / Resource Centre',
     nameMs: 'Pusat Sumber',
-    instructionsEn: 'Block C, ground floor. Bags must be left on the outside rack.',
-    instructionsMs: 'Blok C, aras bawah. Beg perlu diletakkan di rak luar.',
+    instructionsEn: 'Bejana Ilmu (PSS), Level 1 of Block B. Bags must be left on the outside rack.',
+    instructionsMs: 'Bejana Ilmu (PSS), Aras 1 Blok B. Beg perlu diletakkan di rak luar.',
+    zone: DestinationZone.HOST_ONLY,
     isActive: true,
   },
   {
     code: 'LABSCI',
     nameEn: 'Science Laboratory',
     nameMs: 'Makmal Sains',
-    instructionsEn: 'Block D. Contractors must sign the laboratory safety register.',
-    instructionsMs: 'Blok D. Kontraktor perlu menandatangani daftar keselamatan makmal.',
+    instructionsEn: 'Science Lab A, ground floor of Block B. Contractors must sign the laboratory safety register.',
+    instructionsMs: 'Makmal A Sains, aras bawah Blok B. Kontraktor perlu menandatangani daftar keselamatan makmal.',
+    zone: DestinationZone.HOST_ONLY,
     isActive: true,
   },
   {
     code: 'CANTEEN',
     nameEn: 'Canteen',
     nameMs: 'Kantin',
-    instructionsEn: 'Between Block B and Block C.',
-    instructionsMs: 'Antara Blok B dan Blok C.',
+    instructionsEn: 'East side of the campus, past the walkway beside Block B.',
+    instructionsMs: 'Di sebelah timur kampus, melalui laluan di sisi Blok B.',
+    zone: DestinationZone.COMMON,
     isActive: false,
   },
 ];

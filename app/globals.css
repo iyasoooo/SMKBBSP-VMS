@@ -94,6 +94,22 @@
     /* Forest green carries every action. Crimson is reserved for identity and
        for danger, so a primary button can never be mistaken for a destructive
        one. */
+    /* Campus map. The eight fills mirror the PETUNJUK legend printed on the
+       school's own floor plan, so the screen and the paper agree. */
+    --map-paper: #ffffff;
+    --map-classroom: #fbdcbb;
+    --map-special: #d6e9fb;
+    --map-admin: #ffffff;
+    --map-block: #fbe08f;
+    --map-service: #eef1f5;
+    --map-circulation: #e2e8f0;
+    --map-open: #bfe3f7;
+    --map-landscape: #a8e6b8;
+    --map-outline: #94a3b8;
+    --map-ink: #1f2a37;
+    --map-route-base: #cbd5e1;
+    --map-route: #c62030;
+
     --accent: #00693e;
     --accent-hover: #005a34;
     --accent-soft: #d6f3e2;
@@ -168,6 +184,22 @@
     --info: #8fb8ff;
     --info-soft: #12233f;
     --info-text: #8fb8ff;
+
+    /* Dark mode keeps the legend's hue relationships but drops the value, so a
+       guard on a night shift is not looking at a sheet of white paper. */
+    --map-paper: #131a24;
+    --map-classroom: #6b4a2a;
+    --map-special: #24425e;
+    --map-admin: #1e293b;
+    --map-block: #6d5713;
+    --map-service: #222c3a;
+    --map-circulation: #2b3646;
+    --map-open: #1d4a5f;
+    --map-landscape: #1d5030;
+    --map-outline: #4a5a6e;
+    --map-ink: #e6edf5;
+    --map-route-base: #3d4f66;
+    --map-route: #ff8f8f;
 
     --focus-ring: #f5c451;
   }
@@ -323,5 +355,27 @@
 
   .ocr-progress-sweep {
     animation: ocr-progress-sweep 1.4s ease-in-out infinite;
+  }
+}
+
+@layer utilities {
+  /* The route is drawn twice: a flat base line showing the whole walk, and a
+     dashed line marching along it. The movement is what makes a static plan
+     read as a direction of travel rather than a highlighted corridor. */
+  @keyframes map-route-draw {
+    to {
+      stroke-dashoffset: -48;
+    }
+  }
+
+  .map-route-line {
+    animation: map-route-draw 1.2s linear infinite;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .map-route-line {
+      animation: none;
+      stroke-dasharray: none;
+    }
   }
 }
