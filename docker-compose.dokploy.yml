@@ -1,0 +1,179 @@
+# SMKBBSP VisitorPass - Dokploy production stack.
+#
+# This is the PRODUCTION compose file for a Dokploy deployment. It is NOT the
+# local dev file (docker-compose.yml) - the differences are deliberate:
+#
+#   - No published ports on postgres / ollama / mailpit. On a public VPS a
+#     published port is reachable from the internet. These services must only
+#     be reachable on the internal Docker network, so they carry no `ports:`.
+#   - Only `app` is exposed, and only through Traefik on the external
+#     `dokploy-network`, which is what gives it a domain and HTTPS.
+#   - Secrets come from Dokploy's Environment tab. Dokploy writes them to a
+#     `.env` beside this file, and the `${VAR:?...}` references below read from
+#     it. A missing secret fails the deploy with a clear message rather than
+#     starting the app with a placeholder.
+#
+# In Dokploy: create a "Compose" service, set the compose path to
+# `docker-compose.dokploy.yml`, and fill the Environment tab (see the block at
+# the end of this comment for the required keys).
+#
+# Point the app at your domain by setting APP_DOMAIN in the Environment tab.
+#
+# Required env keys (Dokploy Environment tab):
+#   APP_DOMAIN, APP_URL, POSTGRES_PASSWORD,
+#   SESSION_SECRET, IDENTITY_ENCRYPTION_KEY, IDENTITY_HMAC_KEY
+#   (optional overrides: OCR_OLLAMA_MODEL, OCR_TIMEOUT_MS, MAIL_*, SEED_*)
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    # No `ports:` - reachable only on the internal network as host `postgres`.
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-visitorpass}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in the Dokploy Environment tab}
+      POSTGRES_DB: ${POSTGRES_DB:-visitorpass}
+      POSTGRES_INITDB_ARGS: '--encoding=UTF8 --locale=C'
+      TZ: UTC
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - internal
+    healthcheck:
+      test:
+        ['CMD-SHELL', 'pg_isready -U ${POSTGRES_USER:-visitorpass} -d ${POSTGRES_DB:-visitorpass}']
+      interval: 5s
+      timeout: 5s
+      retries: 12
+      start_period: 10s
+
+  # Self-hosted vision model for card reading. Internal-only: Ollama has no
+  # authentication of any kind, so it must never publish a port or receive a
+  # domain. The app reaches it at http://ollama:11434 over the internal network.
+  #
+  # The model is NOT baked into the image. After the first deploy, pull it once
+  # (it persists in the named volume) from the service shell in Dokploy:
+  #
+  #     ollama pull qwen3.5:0.8b        # whatever OCR_OLLAMA_MODEL is set to
+  #
+  # Never pull a "*:cloud" tag - that proxies the identity card to ollama.com.
+  ollama:
+    image: ollama/ollama:latest
+    restart: unless-stopped
+    volumes:
+      - ollama_models:/root/.ollama
+    networks:
+      - internal
+    healthcheck:
+      test: ['CMD', 'ollama', 'list']
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 20s
+
+  # Local mail capture. Kept internal-only: the app sends to mailpit:1025 and
+  # emails are captured, but the web UI is NOT published to the internet.
+  #
+  # Mailpit CAPTURES mail, it does not DELIVER it. For visitors to receive real
+  # emails, remove this service and point the SMTP_* vars at a real provider.
+  mailpit:
+    image: axllent/mailpit:latest
+    restart: unless-stopped
+    environment:
+      MP_SMTP_AUTH_ACCEPT_ANY: 1
+      MP_SMTP_AUTH_ALLOW_INSECURE: 1
+      MP_MAX_MESSAGES: 5000
+    networks:
+      - internal
+    healthcheck:
+      test: ['CMD', 'wget', '-qO-', 'http://localhost:8025/readyz']
+      interval: 5s
+      timeout: 5s
+      retries: 12
+      start_period: 5s
+
+  # One-shot schema migration. Runs to completion and exits; `app` waits for it.
+  migrate:
+    build:
+      context: .
+      target: runtime
+    image: smkbbsp-visitorpass:latest
+    restart: 'no'
+    command: ['npx', 'prisma', 'migrate', 'deploy']
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER:-visitorpass}:${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in the Dokploy Environment tab}@postgres:5432/${POSTGRES_DB:-visitorpass}?schema=public
+    networks:
+      - internal
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  app:
+    build:
+      context: .
+      target: runtime
+    image: smkbbsp-visitorpass:latest
+    restart: unless-stopped
+    # `expose`, not `ports`: Traefik reaches the app on the dokploy-network.
+    # The port is never published to the host / internet.
+    expose:
+      - 3000
+    environment:
+      NODE_ENV: production
+      PORT: 3000
+      DATABASE_URL: postgresql://${POSTGRES_USER:-visitorpass}:${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in the Dokploy Environment tab}@postgres:5432/${POSTGRES_DB:-visitorpass}?schema=public
+      SMTP_HOST: mailpit
+      SMTP_PORT: 1025
+      SMTP_SECURE: 'false'
+      APP_URL: ${APP_URL:?set APP_URL to your public https origin}
+      APP_TIMEZONE: ${APP_TIMEZONE:-Asia/Kuala_Lumpur}
+      SESSION_SECRET: ${SESSION_SECRET:?set SESSION_SECRET in the Dokploy Environment tab}
+      IDENTITY_ENCRYPTION_KEY: ${IDENTITY_ENCRYPTION_KEY:?set IDENTITY_ENCRYPTION_KEY in the Dokploy Environment tab}
+      IDENTITY_HMAC_KEY: ${IDENTITY_HMAC_KEY:?set IDENTITY_HMAC_KEY in the Dokploy Environment tab}
+      IDENTITY_KEY_VERSION: ${IDENTITY_KEY_VERSION:-1}
+      MAIL_FROM_NAME: ${MAIL_FROM_NAME:-SMKBBSP VisitorPass}
+      MAIL_FROM_ADDRESS: ${MAIL_FROM_ADDRESS:-visitorpass@smkbbsp.test}
+      SEED_ADMIN_PASSWORD: ${SEED_ADMIN_PASSWORD:?set SEED_ADMIN_PASSWORD in the Dokploy Environment tab}
+      SEED_GUARD_PASSWORD: ${SEED_GUARD_PASSWORD:?set SEED_GUARD_PASSWORD in the Dokploy Environment tab}
+      SEED_TEACHER_PASSWORD: ${SEED_TEACHER_PASSWORD:?set SEED_TEACHER_PASSWORD in the Dokploy Environment tab}
+      # Card reading runs on the internal Ollama service. A CPU-only VPS is much
+      # slower than a GPU laptop, so the timeout is raised well above the local
+      # default. If OCR_OLLAMA_MODEL is left empty the scan panel disappears and
+      # the form is simply typed in.
+      OCR_OLLAMA_URL: http://ollama:11434
+      OCR_OLLAMA_MODEL: ${OCR_OLLAMA_MODEL:-qwen3.5:0.8b}
+      OCR_TIMEOUT_MS: ${OCR_TIMEOUT_MS:-120000}
+    networks:
+      - internal
+      - dokploy-network
+    labels:
+      - traefik.enable=true
+      - traefik.docker.network=dokploy-network
+      - traefik.http.routers.smkbbsp-app.rule=Host(`${APP_DOMAIN:?set APP_DOMAIN to your public hostname}`)
+      - traefik.http.routers.smkbbsp-app.entrypoints=websecure
+      - traefik.http.routers.smkbbsp-app.tls.certresolver=letsencrypt
+      - traefik.http.services.smkbbsp-app.loadbalancer.server.port=3000
+    depends_on:
+      postgres:
+        condition: service_healthy
+      mailpit:
+        condition: service_healthy
+      ollama:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+
+volumes:
+  postgres_data:
+    name: smkbbsp_postgres_data
+  ollama_models:
+    name: smkbbsp_ollama_models
+
+# `internal` is created by this compose project for service-to-service traffic.
+# `dokploy-network` is the shared external network Traefik lives on; only `app`
+# joins it, which is what makes the app - and nothing else - publicly routable.
+networks:
+  internal:
+    driver: bridge
+  dokploy-network:
+    external: true
