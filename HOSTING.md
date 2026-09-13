@@ -168,10 +168,34 @@ docker compose up -d --build
 ```
 
 Follow the logs with `docker compose logs -f app` (Ctrl-C to stop watching).
-Compose brings up Postgres and Mailpit, runs the migration to completion, seeds
-the database, then starts the app. Caddy gets a TLS certificate on first
-request. Visit `https://vms.yourschool.edu.my` and log in with the admin
-account (email from the seed, password from step 4).
+Compose brings up Postgres and Mailpit, runs the migration to completion, writes
+the school map, then starts the app. Caddy gets a TLS certificate on first
+request.
+
+The one-shot `migrate` container does two things, in order:
+
+1. `prisma migrate deploy` - creates and updates the tables.
+2. `npm run map:sync` - writes the school map into them.
+
+The second step exists because migrations create the map's tables but do not
+fill them, and the map is the school's own floor plan rather than invented
+data, so it belongs in production. It is safe to re-run and is idempotent.
+
+### 6a. Create the first accounts
+
+A fresh database has no users, so there is nobody to log in as. The
+demonstration seed creates the staff accounts, visit types and the curated
+destinations, and it deliberately refuses to run against `NODE_ENV=production`
+because it also invents visitors and appointments. Run it once, explicitly:
+
+```bash
+docker compose run --rm -e NODE_ENV=development migrate npm run db:seed
+```
+
+Then visit `https://vms.yourschool.edu.my` and log in with the admin account
+(email from the seed output, password from step 4). **Change that password**,
+and delete the demonstration visitors from the admin console before the school
+starts using the system for real.
 
 ### 7. Lock down the firewall
 

@@ -63,7 +63,14 @@ services:
     image: smkbbsp-visitorpass:latest
     container_name: smkbbsp_migrate
     restart: 'no'
-    command: ['npx', 'prisma', 'migrate', 'deploy']
+    command:
+      - sh
+      - -c
+      # Migrations create the map's tables; they do not fill them. The map is
+      # reference data - the school's own floor plan - so it is written here,
+      # before the app starts, rather than by the demo seed (which refuses to
+      # run against a production database, and rightly so).
+      - npx prisma migrate deploy && npm run map:sync
     environment:
       DATABASE_URL: postgresql://${POSTGRES_USER:-visitorpass}:${POSTGRES_PASSWORD:-visitorpass_local_dev}@postgres:5432/${POSTGRES_DB:-visitorpass}?schema=public
     depends_on:

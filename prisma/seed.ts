@@ -15,6 +15,8 @@ import {
   AppointmentStatus,
   BlacklistCategory,
   BlacklistStatus,
+  CheckpointKind,
+  CheckpointMethod,
   IdentityType,
   MatchPolicy,
   NotificationChannel,
@@ -48,6 +50,7 @@ import {
 import { allocateBadgeNumber } from '@/lib/domain/badges';
 import { ensureSettingDefaults } from '@/lib/domain/settings';
 import { CONSENT_VERSION } from '@/lib/constants';
+import { syncSchoolMap } from '@/lib/map/sync';
 import { addDays, toIsoDayString, zonedTimeToUtc, getZonedParts } from '@/lib/time';
 import {
   SEED_BLACKLIST_REVIEW_SUBJECT,
@@ -101,6 +104,7 @@ function isWeekend(date: Date): boolean {
 
 async function clearOperationalData(): Promise<void> {
   // Ordered so foreign keys never block a delete.
+  await prisma.visitCheckpoint.deleteMany();
   await prisma.visitEvent.deleteMany();
   await prisma.visit.deleteMany();
   await prisma.qrCredential.deleteMany();
@@ -473,6 +477,7 @@ async function seedHistory(context: HistoryContext): Promise<void> {
     context,
     startHour: 8,
     status: VisitStatus.CHECKED_OUT,
+    confirmArrival: true,
     label: 'completed-today',
   });
 
@@ -482,6 +487,7 @@ async function seedHistory(context: HistoryContext): Promise<void> {
     startHour: Math.max(8, getZonedParts(today).hour - 1),
     status: VisitStatus.CHECKED_IN,
     partySize: 1,
+    confirmArrival: true,
     label: 'active-normal',
   });
 
@@ -585,11 +591,24 @@ interface TodayVisitOptions {
   partySize?: number;
   durationMinutes?: number;
   withCredential?: boolean;
+  /**
+   * Whether the host confirmed the visitor reached them. Left false for one
+   * on-site visit on purpose, so the dashboard has a visitor nobody has placed
+   * and the arrival alert has something to show once it is switched on.
+   */
+  confirmArrival?: boolean;
   label: string;
 }
 
 async function createTodayVisit(options: TodayVisitOptions): Promise<void> {
-  const { context, startHour, status, partySize = 1, withCredential = false } = options;
+  const {
+    context,
+    startHour,
+    status,
+    partySize = 1,
+    withCredential = false,
+    confirmArrival = false,
+  } = options;
   const { visitorIds, teachers, guards, destinations, visitTypes, badgePrefix } = context;
 
   const activeTeachers = teachers.filter((_, index) => SEED_TEACHERS[index]?.isAcceptingVisits);
@@ -710,6 +729,31 @@ async function createTodayVisit(options: TodayVisitOptions): Promise<void> {
   }
 
   if (events.length > 0) await prisma.visitEvent.createMany({ data: events });
+
+  if (checkedInAt && confirmArrival) {
+    const confirmedAt = new Date(checkedInAt.getTime() + 4 * 60_000);
+
+    await prisma.visitCheckpoint.create({
+      data: {
+        visitId: visit.id,
+        destinationId: destination.id,
+        scannedById: teacher.id,
+        kind: CheckpointKind.ARRIVAL,
+        method: CheckpointMethod.HOST_CONFIRM,
+        createdAt: confirmedAt,
+      },
+    });
+
+    await prisma.visitEvent.create({
+      data: {
+        visitId: visit.id,
+        type: VisitEventType.CHECKPOINT_RECORDED,
+        actorUserId: teacher.id,
+        metadata: { kind: CheckpointKind.ARRIVAL, method: CheckpointMethod.HOST_CONFIRM },
+        createdAt: confirmedAt,
+      },
+    });
+  }
 }
 
 async function seedNotifications(): Promise<void> {
@@ -772,6 +816,16 @@ async function main(): Promise<void> {
 
   const { destinations, visitTypes } = await seedReferenceData();
   console.log(`  reference: ${destinations.length} destinations, ${visitTypes.length} visit types`);
+
+  // Shared with `npm run map:sync`, which is what a production deploy runs:
+  // the map is the school's floor plan, not demonstration data.
+  const mapCounts = await syncSchoolMap(prisma, (message) => console.warn(`  ! ${message}`));
+  console.log(
+    `  school map: ${mapCounts.levels} levels, ${mapCounts.nodes} nodes, ${mapCounts.edges} edges`,
+  );
+  console.log(
+    `  school map: ${mapCounts.bound} curated destinations bound, ${mapCounts.derived} derived from rooms`,
+  );
 
   const visitorIds = await seedVisitors();
   console.log(`  visitors: ${visitorIds.length}`);
