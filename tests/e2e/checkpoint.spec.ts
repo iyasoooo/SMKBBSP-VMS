@@ -75,9 +75,19 @@ test('a host confirms their visitor, and the gate sees where they were last seen
   await expect(afterRow).toBeVisible();
   await expect(afterRow.getByText('Not confirmed since the gate')).toBeHidden();
 
-  // The confirming teacher is named on the row: a sighting with no witness
-  // would be worth nothing, so the witness is what gets rendered.
-  await expect(afterRow.getByText(/Puan Aminah/)).toBeVisible();
+  /*
+   * The confirming teacher is named in the "last seen" cell: a sighting with
+   * no witness would be worth nothing, so the witness is what gets rendered.
+   *
+   * Matched together with the "confirmed by" label rather than on the name
+   * alone. The host column carries the same name - she is both the teacher
+   * this visitor came to see and the person who confirmed them - so the bare
+   * name appears twice in this row and Playwright rejects the ambiguity. The
+   * label is also what makes the assertion mean what it says: that she is
+   * recorded as the witness, not merely that she is mentioned somewhere.
+   */
+  const lastSeenCell = afterRow.getByRole('cell').filter({ hasText: /confirmed by/i });
+  await expect(lastSeenCell).toContainText(/Puan Aminah/);
 
   await logout(page);
 
