@@ -219,8 +219,13 @@ async function assertModelPresent(signal: AbortSignal): Promise<void> {
     /*
      * Refused rather than silently falling back. Ollama will happily answer
      * with a different model if asked loosely, and on a host that also carries
-     * a `*:cloud` tag that means an identity card leaving the country. The
-     * failure has to be loud and the name has to match exactly.
+     * a cloud-routed tag - `gpt-oss:120b-cloud` and the like - that means an
+     * identity card leaving the country. The failure has to be loud and the
+     * name has to match exactly.
+     *
+     * This check cannot catch a cloud tag that was asked for deliberately: it
+     * is installed on the host, so it matches and passes. `isCloudRoutedModel`
+     * in lib/env.ts is what refuses that, before the application starts.
      */
     throw new OcrUnavailableError(`model ${wanted} is not installed on the host`);
   }

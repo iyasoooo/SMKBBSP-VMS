@@ -333,11 +333,24 @@ Two consequences worth being deliberate about:
 
 ### Never point this at a hosted model
 
-An Ollama install can carry `*:cloud` tags, which proxy to ollama.com. Pointing
-`OCR_OLLAMA_MODEL` at one would send a photograph of a child's parent's identity
-card to a third-party company. `lib/ocr/ollama.ts` checks the host's installed
-model list and refuses a name it does not find, but the pinned name in `.env` is
-the thing that actually keeps this safe. Keep it a local tag.
+An Ollama install can carry cloud-routed tags, which proxy to ollama.com.
+Ollama publishes them with a `-cloud` suffix — `gpt-oss:120b-cloud` — and the
+bare `:cloud` form appears too. Pointing `OCR_OLLAMA_MODEL` at either would send
+a photograph of a child's parent's identity card to a third-party company.
+
+This is now refused rather than merely discouraged:
+
+- **The application will not start.** `isCloudRoutedModel` in `lib/env.ts`
+  rejects both spellings during environment validation, naming the risk in the
+  error. A typo is a boot failure, not a quiet leak.
+- **The production stack will not download one.** The `ollama-pull` service in
+  `docker-compose.dokploy.yml` refuses a cloud tag before pulling it.
+- **A loose name still cannot drift.** `lib/ocr/ollama.ts` checks the host's
+  installed model list and refuses a name it does not find. Note that this
+  check alone cannot catch a cloud tag — it is installed on the host, so it
+  passes — which is precisely why the startup guard exists.
+
+Keep it a local tag.
 
 ## Real email (production, not demo)
 

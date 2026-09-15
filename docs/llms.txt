@@ -184,9 +184,13 @@ confidence figure sourced from the model.
 **The model's output is untrusted input.** It arrives as text that is *asked* to be JSON and
 frequently is not - fenced, prefaced with prose, or truncated. `extractJsonObject` pulls the first
 balanced object out (string-aware, so a brace inside a name cannot cut it short) and a Zod schema
-discards everything else. Pin the model by name: an Ollama host can carry `*:cloud` tags that proxy
-to ollama.com, and a loose model name would eventually send someone's identity card to a third
-party. `lib/ocr/ollama.ts` checks the host's model list and refuses a mismatch.
+discards everything else. Pin the model by name: an Ollama host can carry cloud-routed tags that
+proxy to ollama.com — `gpt-oss:120b-cloud` is the published shape — and a loose model name would
+eventually send someone's identity card to a third party. Two separate refusals cover this, and
+they cover different mistakes. `isCloudRoutedModel` in `lib/env.ts` refuses a cloud tag at startup,
+because the model-list check cannot: a cloud tag genuinely is installed on the host and so passes
+it. `lib/ocr/ollama.ts` then checks the host's model list and refuses a name it does not find,
+which is what stops a loose name resolving to whatever happens to be there.
 
 **Only what the form can use is requested.** A card carries an address, a birthplace and a
 religion; none have a field on the visitor form, so none are asked for. Extracting them would put
