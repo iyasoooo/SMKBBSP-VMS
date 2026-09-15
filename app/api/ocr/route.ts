@@ -72,14 +72,25 @@ function json(body: unknown, status: number): NextResponse {
  * dropzone and explaining that scanning is unavailable here.
  */
 export async function GET(): Promise<NextResponse> {
-  return json({ available: isOcrConfigured() }, isOcrConfigured() ? 200 : 503);
+  const configured = isOcrConfigured();
+  return json(
+    configured ? { available: true } : { available: false, error: 'not_configured' },
+    configured ? 200 : 503,
+  );
 }
 
 export async function POST(request: Request): Promise<NextResponse> {
   if (!isOcrConfigured()) {
     // Not an error. A deployment without a model host simply has no card
     // reader, and the panel is hidden rather than offered and then broken.
-    return json({ error: 'unavailable' }, 503);
+    //
+    // Distinguished from the host being *down* below. Both are 503 and both
+    // end with the form being typed in, but they are not the same situation:
+    // this one is permanent for the deployment and nothing is going to change
+    // it, while an unreachable host is worth retrying in a minute. Collapsing
+    // the two into one message cost real time diagnosing a container that had
+    // simply never been given OCR_OLLAMA_URL.
+    return json({ error: 'not_configured' }, 503);
   }
 
   const headerList = await headers();

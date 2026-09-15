@@ -139,7 +139,7 @@ async function seedUsers(): Promise<{
   const admin = await prisma.user.create({
     data: {
       email: 'admin@smkbbsp.test',
-      name: 'Encik Hasrul bin Idris (Pentadbir)',
+      name: 'Mohd Asyraf bin Muhammad Hilmi (Admin)',
       passwordHash: adminHash,
       role: Role.ADMIN,
       preferredLocale: 'en',

@@ -61,6 +61,9 @@ type Status =
   | 'error'
   | 'rejected'
   | 'throttled'
+  /* Configured, but the model host did not answer. Temporary; worth retrying. */
+  | 'offline'
+  /* No model host configured for this deployment. Permanent; do not retry. */
   | 'unsupported';
 
 /** Why the camera is not available, so the panel can say something useful. */
@@ -145,7 +148,9 @@ const COPY = {
       'Nothing could be read from that photo. Try better lighting, or type the details in yourself.',
     failed: 'The card could not be read. Please type the details in yourself.',
     uncertain: 'This may be wrong - check it carefully',
-    unsupported: 'Card scanning is not available here. Please type the details in yourself.',
+    unsupported: 'Card scanning is not set up here. Please type the details in yourself.',
+    offline:
+      'The card reader is not responding right now. Try again in a moment, or type the details in yourself.',
     throttled:
       'Too many scans from this connection. Wait a few minutes, or type the details in yourself.',
     cardMismatch: 'That does not look like a MyKad. Check that you scanned the right document.',
@@ -185,7 +190,9 @@ const COPY = {
       'Tiada apa-apa dapat dibaca daripada gambar itu. Cuba pencahayaan lebih baik, atau taip sendiri.',
     failed: 'Kad tidak dapat dibaca. Sila taip butiran sendiri.',
     uncertain: 'Mungkin salah - semak dengan teliti',
-    unsupported: 'Imbasan kad tidak tersedia di sini. Sila taip butiran sendiri.',
+    unsupported: 'Imbasan kad tidak disediakan di sini. Sila taip butiran sendiri.',
+    offline:
+      'Pembaca kad tidak memberi respons sekarang. Cuba sebentar lagi, atau taip butiran sendiri.',
     throttled:
       'Terlalu banyak imbasan dari sambungan ini. Tunggu beberapa minit, atau taip butiran sendiri.',
     cardMismatch: 'Ini tidak kelihatan seperti MyKad. Sila semak dokumen yang diimbas.',
@@ -333,7 +340,20 @@ export function IcScanAssist({ onApply, locale = 'en' }: IcScanAssistProps) {
     if (controller.signal.aborted) return;
 
     if (response.status === 503) {
-      setStatus('unsupported');
+      /*
+       * Two different situations share this status, and the difference is the
+       * whole point: `not_configured` means this deployment has no reader at
+       * all and never will, while anything else means the host exists and did
+       * not answer - worth trying again. Reading the body rather than assuming
+       * is what stops an unreachable host from being reported as a deployment
+       * that was never meant to scan.
+       */
+      const reason = await response
+        .json()
+        .then((body: { error?: string }) => body.error)
+        .catch(() => undefined);
+
+      setStatus(reason === 'not_configured' ? 'unsupported' : 'offline');
       return;
     }
     if (response.status === 429) {
@@ -588,7 +608,8 @@ export function IcScanAssist({ onApply, locale = 'en' }: IcScanAssistProps) {
       {status === 'idle' ||
       status === 'error' ||
       status === 'rejected' ||
-      status === 'throttled' ? (
+      status === 'throttled' ||
+      status === 'offline' ? (
         <div className="mt-4">
           {/*
             The input stays in the accessibility tree and keyboard tab order -
@@ -685,6 +706,16 @@ export function IcScanAssist({ onApply, locale = 'en' }: IcScanAssistProps) {
           {status === 'throttled' ? (
             <div className="mt-3">
               <Alert tone="warning">{t.throttled}</Alert>
+            </div>
+          ) : null}
+          {/*
+            Shown above the dropzone rather than replacing it: the host may well
+            be back by the time the photo is retaken, so the way out stays in
+            reach instead of the panel becoming a dead end.
+          */}
+          {status === 'offline' ? (
+            <div className="mt-3">
+              <Alert tone="warning">{t.offline}</Alert>
             </div>
           ) : null}
         </div>

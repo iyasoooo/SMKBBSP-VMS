@@ -51,12 +51,18 @@ services:
   # authentication of any kind, so it must never publish a port or receive a
   # domain. The app reaches it at http://ollama:11434 over the internal network.
   #
-  # The model is NOT baked into the image. After the first deploy, pull it once
-  # (it persists in the named volume) from the service shell in Dokploy:
+  # The model is NOT baked into the image - `ollama-pull` below fetches it on
+  # first deploy, and it then persists in the named volume.
   #
-  #     ollama pull qwen3.5:0.8b        # whatever OCR_OLLAMA_MODEL is set to
+  # `ollama` is not installed on the VPS host, only inside this container, so a
+  # manual pull has to go through docker rather than being typed at the host
+  # shell:
   #
-  # Never pull a "*:cloud" tag - that proxies the identity card to ollama.com.
+  #     docker exec -it "$(docker ps --filter name=ollama --format '{{.Names}}' | head -1)" \
+  #       ollama pull qwen3.5:0.8b
+  #
+  # Never pull a cloud-routed tag - `gpt-oss:120b-cloud` and the like proxy the
+  # identity card to ollama.com. `ollama-pull` below refuses one outright.
   ollama:
     image: ollama/ollama:latest
     restart: unless-stopped
@@ -70,6 +76,48 @@ services:
       timeout: 5s
       retries: 12
       start_period: 20s
+
+  # One-shot model download, so a fresh deploy does not need a human to
+  # remember a command. The Ollama image ships with no models at all, and a
+  # missing model is indistinguishable from a broken card reader from the
+  # outside - which is exactly the confusion this removes.
+  #
+  # Nothing waits for it. The pull takes minutes and the application must not
+  # be held back by an optional feature, so `app` starts immediately and card
+  # reading reports itself unavailable until the model lands.
+  ollama-pull:
+    image: ollama/ollama:latest
+    restart: 'no'
+    depends_on:
+      ollama:
+        condition: service_healthy
+    environment:
+      # Runs as a *client* against the server container, so the model is
+      # written into the server's volume and this container needs none.
+      OLLAMA_HOST: http://ollama:11434
+      MODEL: ${OCR_OLLAMA_MODEL:-qwen3.5:0.8b}
+    entrypoint: ['/bin/sh', '-c']
+    command:
+      - |
+        # Both spellings. Ollama publishes hosted models with a `-cloud` suffix
+        # on the tag - `gpt-oss:120b-cloud` - and the bare `:cloud` form turns
+        # up too. Matching only the bare one, as this did, let every real
+        # hosted tag through and pulled it. Mirrors `isCloudRoutedModel` in
+        # lib/env.ts, which stops the application starting with the same value.
+        case "$$MODEL" in
+          *:cloud|*-cloud)
+            echo "refusing $$MODEL: a cloud-routed tag sends the card to ollama.com" >&2
+            exit 1
+            ;;
+        esac
+        for attempt in 1 2 3; do
+          ollama pull "$$MODEL" && exit 0
+          echo "pull attempt $$attempt failed; retrying in 15s" >&2
+          sleep 15
+        done
+        exit 1
+    networks:
+      - internal
 
   # Local mail capture. Kept internal-only: the app sends to mailpit:1025 and
   # emails are captured, but the web UI is NOT published to the internet.
@@ -165,10 +213,13 @@ services:
         condition: service_healthy
       mailpit:
         condition: service_healthy
-      ollama:
-        condition: service_healthy
       migrate:
         condition: service_completed_successfully
+    # Deliberately no dependency on `ollama`. Waiting for it would mean a model
+    # host that failed to start could keep the entire visitor system down -
+    # gate check-ins included - over an optional typing aid. Card reading is
+    # specified to degrade to "unavailable" on its own, so the app comes up
+    # whether or not the model does.
 
 volumes:
   postgres_data:

@@ -107,6 +107,30 @@ services:
       SEED_ADMIN_PASSWORD: ${SEED_ADMIN_PASSWORD:-Admin#Demo2025}
       SEED_GUARD_PASSWORD: ${SEED_GUARD_PASSWORD:-Guard#Demo2025}
       SEED_TEACHER_PASSWORD: ${SEED_TEACHER_PASSWORD:-Teacher#Demo2025}
+      # Card reading. The model host is not part of this stack - it runs on the
+      # developer's own machine - so the container reaches it through the Docker
+      # host gateway.
+      #
+      # Deliberately *not* `${OCR_OLLAMA_URL}`. Compose substitutes that from
+      # `.env`, where it is `http://127.0.0.1:11434` because that is correct for
+      # `npm run dev` on the host. Inside a container 127.0.0.1 is the container
+      # itself, so inheriting it would point the app at nothing and the scan
+      # panel would report itself unavailable - which is exactly what happened.
+      # The same reasoning already applies to DATABASE_URL and SMTP_HOST above.
+      OCR_OLLAMA_URL: http://host.docker.internal:11434
+      OCR_OLLAMA_MODEL: ${OCR_OLLAMA_MODEL:-qwen3.5:0.8b}
+      # Longer than the host default: a model sharing a laptop with Docker is
+      # slower than one with the machine to itself.
+      OCR_TIMEOUT_MS: ${OCR_TIMEOUT_MS:-120000}
+    # Makes the name above resolve on Linux too.
+    #
+    # Docker Desktop provides `host.docker.internal` for free on Windows and
+    # macOS, so this line changes nothing there. Plain Docker on Linux does not,
+    # and without the mapping the name simply fails to resolve: the card reader
+    # reports itself unavailable and the compose file looks broken for reasons
+    # the comment above has already explained once.
+    extra_hosts:
+      - 'host.docker.internal:host-gateway'
     depends_on:
       postgres:
         condition: service_healthy
