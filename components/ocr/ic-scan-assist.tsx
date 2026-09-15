@@ -6,6 +6,7 @@ import {
   BLUR_THRESHOLD,
   CARD_ASPECT,
   prepareFile,
+  UndecodableImageError,
   prepareVideoFrame,
   toUploadBlob,
   type PreparedImage,
@@ -60,6 +61,8 @@ type Status =
   | 'done'
   | 'error'
   | 'rejected'
+  /* The browser could not decode the chosen file - HEIC, usually. */
+  | 'undecodable'
   | 'throttled'
   /* Configured, but the model host did not answer. Temporary; worth retrying. */
   | 'offline'
@@ -137,6 +140,8 @@ const COPY = {
     browse: 'or tap to browse for a file',
     camera: 'Take a photo',
     notImage: 'That file is not an image. Choose a photo of the card.',
+    undecodable:
+      'This browser could not open that photo - phone cameras often save a format it cannot read. Take a new photo with the camera button, or choose a JPEG.',
     reading: 'Reading the card. This takes a few seconds...',
     loading: 'Preparing the photo...',
     review: 'Check these values, correct anything wrong, then apply them.',
@@ -179,6 +184,8 @@ const COPY = {
     browse: 'atau ketik untuk memilih fail',
     camera: 'Ambil gambar',
     notImage: 'Fail itu bukan gambar. Sila pilih gambar kad.',
+    undecodable:
+      'Pelayar ini tidak dapat membuka gambar itu - kamera telefon selalunya menyimpan format yang tidak boleh dibaca. Ambil gambar baharu dengan butang kamera, atau pilih fail JPEG.',
     reading: 'Sedang membaca kad. Ini mengambil beberapa saat...',
     loading: 'Menyediakan gambar...',
     review: 'Semak nilai ini, betulkan jika salah, kemudian gunakannya.',
@@ -397,6 +404,19 @@ export function IcScanAssist({ onApply, locale = 'en' }: IcScanAssistProps) {
       } catch (error) {
         // An abort is this component cancelling its own request, not a failure.
         if (error instanceof DOMException && error.name === 'AbortError') return;
+
+        /*
+         * A file this browser cannot decode never reached the reader, so
+         * saying the card could not be read would be untrue and would send
+         * the visitor to photograph it again - producing another file in the
+         * same format.
+         */
+        if (error instanceof UndecodableImageError) {
+          log.warn('chosen file could not be decoded');
+          setStatus('undecodable');
+          return;
+        }
+
         // Never surface the underlying error: it can contain local file paths.
         log.error('card read failed', undefined, error);
         setStatus('error');
@@ -608,6 +628,7 @@ export function IcScanAssist({ onApply, locale = 'en' }: IcScanAssistProps) {
       {status === 'idle' ||
       status === 'error' ||
       status === 'rejected' ||
+      status === 'undecodable' ||
       status === 'throttled' ||
       status === 'offline' ? (
         <div className="mt-4">
@@ -617,11 +638,24 @@ export function IcScanAssist({ onApply, locale = 'en' }: IcScanAssistProps) {
             keeps one native control doing the work, so a keyboard user opens
             the same picker a pointer user does.
           */}
+          {/*
+            Named formats rather than `image/*`, and this is the fix rather
+            than the guard: asked for `image/*`, a phone hands over the file as
+            it sits in the camera roll, and on an iPhone or a recent Samsung
+            that is HEIC - which the browser cannot decode, so the scan failed
+            before anything was ever uploaded. Listing only formats that decode
+            everywhere makes iOS transcode the chosen photo to JPEG on its way
+            out, and makes an Android picker hide the ones that would fail.
+
+            These are the same three the server accepts. The browser re-encodes
+            to JPEG before upload regardless, so this constrains what can be
+            *chosen*, not what is sent.
+          */}
           <input
             ref={inputRef}
             id="ic-photo"
             type="file"
-            accept="image/*"
+            accept="image/jpeg,image/png,image/webp"
             className="peer sr-only"
             onChange={(event) => {
               const file = event.target.files?.[0];
@@ -690,6 +724,19 @@ export function IcScanAssist({ onApply, locale = 'en' }: IcScanAssistProps) {
               <Alert tone="warning">
                 {cameraFault === 'denied' ? t.cameraDenied : t.cameraUnavailable}
               </Alert>
+            </div>
+          ) : null}
+
+          {/*
+            Above the read failures, because it is a different kind of problem:
+            nothing was read, so nothing about the card or the lighting is worth
+            changing. The dropzone and the camera button both stay in reach, and
+            the camera is the way out - it produces a frame this browser encoded
+            itself, so it cannot be in a format it then cannot decode.
+          */}
+          {status === 'undecodable' ? (
+            <div className="mt-3">
+              <Alert tone="warning">{t.undecodable}</Alert>
             </div>
           ) : null}
 

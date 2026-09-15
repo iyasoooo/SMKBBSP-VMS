@@ -178,9 +178,37 @@ function draw(
   return { canvas, context };
 }
 
+/**
+ * The browser could not decode the chosen file.
+ *
+ * Distinguished from every other failure because it is the only one the person
+ * holding the phone can do something about, and because the honest message is
+ * the opposite of the one they were getting: the card was never read, so
+ * nothing about the card is wrong.
+ */
+export class UndecodableImageError extends Error {
+  constructor() {
+    super('the browser could not decode that image');
+    this.name = 'UndecodableImageError';
+  }
+}
+
 /** Prepare a chosen or dropped photograph. The whole image is used. */
 export async function prepareFile(file: File): Promise<PreparedImage> {
-  const bitmap = await createImageBitmap(file);
+  /*
+   * `createImageBitmap` throws on a format this browser cannot decode, and a
+   * phone's own camera roll is where that happens: iPhones and recent Samsungs
+   * save HEIC, which no desktop-class browser decodes. The throw used to travel
+   * up as an ordinary failure and be reported as "the card could not be read",
+   * which is misleading in the worst way - it blames the document, so the
+   * obvious response is to photograph it again, which produces another HEIC.
+   */
+  let bitmap: ImageBitmap;
+  try {
+    bitmap = await createImageBitmap(file);
+  } catch {
+    throw new UndecodableImageError();
+  }
 
   try {
     const { canvas, context } = draw(bitmap, {
