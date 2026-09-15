@@ -88,6 +88,31 @@ export async function deliverNotification(notificationId: string): Promise<boole
   if (notification.status === NotificationStatus.SENT) return true;
   if (notification.attempts >= MAX_ATTEMPTS) return false;
 
+  /*
+   * Claim the row before sending anything.
+   *
+   * `attempts` doubles as an optimistic lock: the update only matches while the
+   * count is still what was just read, so of two callers racing the same row
+   * exactly one wins and the loser returns without sending. Without this the
+   * periodic sweep and the inline flush that follows every action would
+   * eventually both pick up the same notification and a visitor would receive
+   * their pass twice.
+   *
+   * Incrementing here rather than after the attempt also means a process that
+   * dies mid-send has still spent an attempt, so a message that reliably kills
+   * the worker cannot be retried forever.
+   */
+  const claimed = await prisma.notification.updateMany({
+    where: {
+      id: notification.id,
+      attempts: notification.attempts,
+      status: { not: NotificationStatus.SENT },
+    },
+    data: { attempts: { increment: 1 } },
+  });
+
+  if (claimed.count === 0) return false;
+
   const env = getEnv();
   const payload = (notification.payload ?? {}) as TemplatePayload;
 
@@ -104,10 +129,10 @@ export async function deliverNotification(notificationId: string): Promise<boole
 
     await prisma.notification.update({
       where: { id: notification.id },
+      // `attempts` was already incremented by the claim above.
       data: {
         status: NotificationStatus.SENT,
         sentAt: new Date(),
-        attempts: { increment: 1 },
         lastErrorCode: null,
       },
     });
@@ -118,9 +143,9 @@ export async function deliverNotification(notificationId: string): Promise<boole
 
     await prisma.notification.update({
       where: { id: notification.id },
+      // `attempts` was already incremented by the claim above.
       data: {
         status: NotificationStatus.FAILED,
-        attempts: { increment: 1 },
         lastErrorCode: code,
       },
     });
@@ -185,10 +210,26 @@ export async function retryNotification(notificationId: string): Promise<boolean
   return deliverNotification(notificationId);
 }
 
-/** Process everything still pending. Exposed for a scheduled command. */
+/**
+ * Deliver everything still owed, oldest first.
+ *
+ * Run on a timer by `instrumentation.ts`, and available as `npm run mail:drain`
+ * for an operator or an external scheduler.
+ *
+ * `FAILED` is included, and that is the point. Every transport failure records
+ * `FAILED` immediately, so a sweep that looked only for `PENDING` found almost
+ * nothing: a row is `PENDING` only in the moment between the business
+ * transaction committing and the inline flush attempting it. The rows that
+ * actually need a second chance - the ones queued while the mail server was
+ * briefly unreachable - were all sitting in `FAILED` where nothing looked for
+ * them. `attempts` is what bounds the retrying, not the status.
+ */
 export async function processPendingNotifications(limit = 50): Promise<number> {
   const pending = await prisma.notification.findMany({
-    where: { status: NotificationStatus.PENDING, attempts: { lt: MAX_ATTEMPTS } },
+    where: {
+      status: { in: [NotificationStatus.PENDING, NotificationStatus.FAILED] },
+      attempts: { lt: MAX_ATTEMPTS },
+    },
     orderBy: { createdAt: 'asc' },
     take: limit,
     select: { id: true },

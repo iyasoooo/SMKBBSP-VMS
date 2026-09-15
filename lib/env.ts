@@ -8,6 +8,24 @@ import { z } from 'zod';
  * boot rather than silently degrade to an insecure default at runtime.
  */
 
+/**
+ * Does this model name route inference through Ollama's hosted service?
+ *
+ * Ollama marks those models with a `cloud` suffix on the tag - `gpt-oss:120b-cloud`
+ * is the usual shape, and the bare `model:cloud` form appears too. Either one
+ * means the image is forwarded to ollama.com, so both are refused. Matching on
+ * the suffix rather than a fixed list is deliberate: the list of hosted models
+ * changes without any warning this repository would see, and a new one must
+ * fail closed rather than be quietly accepted.
+ *
+ * Exported for tests, because this is a rule worth pinning: it is the only
+ * thing standing between a typo and an identity card leaving the country.
+ */
+export function isCloudRoutedModel(name: string): boolean {
+  const tag = name.trim().toLowerCase().split(':').pop() ?? '';
+  return tag === 'cloud' || tag.endsWith('-cloud');
+}
+
 /** A base64-encoded 32-byte key, the size required by AES-256 and HMAC-SHA-256. */
 const base64Key32 = z
   .string()
@@ -69,12 +87,27 @@ const envSchema = z.object({
   OCR_OLLAMA_URL: z.string().default(''),
   /*
    * Pinned by name on purpose. An Ollama install can carry cloud-routed models
-   * alongside local ones - `*:cloud` tags proxy to ollama.com - and defaulting
-   * to whatever happens to be installed would eventually send a photograph of
+   * alongside local ones - cloud tags proxy to ollama.com - and defaulting to
+   * whatever happens to be installed would eventually send a photograph of
    * someone's identity card to a third party. This value is compared against
    * the host's model list at call time and a mismatch is refused.
+   *
+   * The refusal below is the part that matters. Until it existed this rule was
+   * only ever a comment - here, in `lib/ocr/ollama.ts`, and in the compose file
+   * - and the model-list check could not catch the mistake it was warning
+   * about, because a cloud tag *is* installed on the host and so passes. One
+   * mistyped environment variable was the whole distance between "reads cards
+   * locally" and "uploads identity cards to a company abroad", which is far too
+   * short a distance to leave guarded by prose.
    */
-  OCR_OLLAMA_MODEL: z.string().min(1).default('qwen3.5:0.8b'),
+  OCR_OLLAMA_MODEL: z
+    .string()
+    .min(1)
+    .refine((name) => !isCloudRoutedModel(name), {
+      message:
+        'refers to a cloud-routed model, which would send identity card photographs to a third party. Use a locally served tag.',
+    })
+    .default('qwen3.5:0.8b'),
   /** How long one page is given to read a card before the request is dropped. */
   OCR_TIMEOUT_MS: z.coerce.number().int().positive().default(45_000),
 });

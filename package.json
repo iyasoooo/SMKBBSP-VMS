@@ -26,7 +26,8 @@
     "local:mail": "tsx scripts/local-mail.ts",
     "postinstall": "prisma generate",
     "pwa:icons": "tsx scripts/generate-pwa-icons.ts",
-    "map:sync": "tsx scripts/sync-map.ts"
+    "map:sync": "tsx scripts/sync-map.ts",
+    "mail:drain": "tsx scripts/drain-notifications.ts"
   },
   "prisma": {
     "seed": "tsx prisma/seed.ts"
