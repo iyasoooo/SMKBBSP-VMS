@@ -27,7 +27,7 @@ export const SETTING_DEFINITIONS = {
     type: SettingType.STRING,
     defaultValue: 'SMK Bandar Baru Sri Petaling',
     label: 'School name',
-    description: 'Printed on badges, passes, reports and emails.',
+    description: 'Shown on badges, passes, reports and emails.',
     category: 'school',
   },
   'school.shortName': {

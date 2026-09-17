@@ -65,8 +65,9 @@ export default async function RequestSuccessPage({
               <li>We have emailed you a private link to track this request.</li>
               <li>Your host teacher will approve or decline it.</li>
               <li>
-                If it is approved, the same link becomes your QR visitor pass. Show it at the guard
-                house on the day of your visit.
+                If it is approved, the same link becomes your QR visitor pass. It stays on your
+                phone - there is nothing to print - and you show it at the guard house on the day
+                of your visit.
               </li>
             </ol>
           </Alert>

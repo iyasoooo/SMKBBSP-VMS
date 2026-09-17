@@ -220,6 +220,11 @@ export function renderEmail(templateKey: TemplateKey, payload: TemplatePayload):
           ? paragraph(`Note from your host: ${payload.decisionNote}`)
           : '') +
         (payload.statusUrl ? button(payload.statusUrl, 'Open my QR visitor pass') : '') +
+        (payload.statusUrl
+          ? paragraph(
+              'Your pass is digital. Open that link on your phone at the guard house - there is nothing to print.',
+            )
+          : '') +
         (payload.fallbackCode
           ? paragraph(
               `If the guard cannot scan your QR code, give them this code instead: ${payload.fallbackCode}`,
@@ -245,6 +250,9 @@ export function renderEmail(templateKey: TemplateKey, payload: TemplatePayload):
           payload.decisionNote ? `Note from your host: ${payload.decisionNote}` : null,
           '',
           payload.statusUrl ? `Open your pass: ${payload.statusUrl}` : null,
+          payload.statusUrl
+            ? 'Your pass is digital. Show it on your phone at the guard house - there is nothing to print.'
+            : null,
           payload.fallbackCode ? `Manual code: ${payload.fallbackCode}` : null,
           '',
           'Please bring your physical identification.',

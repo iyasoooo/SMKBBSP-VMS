@@ -113,7 +113,8 @@ export default async function VisitorStatusPage({
           <div className="border-b border-[var(--line-soft)] px-5 py-4">
             <h2 className="text-base font-semibold">Your visitor pass</h2>
             <p className="mt-0.5 text-sm text-muted">
-              Show this at the guard house. Screen brightness helps the scanner.
+              Show this on your phone at the guard house. There is nothing to print. Screen
+              brightness helps the scanner.
             </p>
           </div>
 

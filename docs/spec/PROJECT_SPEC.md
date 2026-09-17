@@ -85,7 +85,7 @@ The current paper process is slow, exposes previous visitors' personal details, 
 5. Guard today screen and QR/manual lookup.
 6. Check-in/check-out state machine.
 7. Guard-assisted walk-in registration.
-8. Printable visitor badge/pass.
+8. Printable visitor badge issued by the guard at check-in.
 9. Email notifications through SMTP and local Mailpit.
 10. Visitor/visit history and search.
 11. Blacklist management and blocking checks.

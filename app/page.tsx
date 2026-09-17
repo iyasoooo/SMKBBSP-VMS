@@ -55,12 +55,12 @@ export default async function HomePage() {
             {settings.schoolName}
           </p>
           <h1 className="mt-3 text-3xl font-semibold tracking-tight sm:text-4xl">
-            Request a school visit, and collect your pass at the gate.
+            Request a school visit, and carry your pass on your phone.
           </h1>
           <p className="mt-4 text-base leading-relaxed text-muted">
             Choose the teacher you want to meet and a time that suits you. The teacher reviews your
-            request, and once it is approved you will receive a QR visitor pass by email. Show it at
-            the guard house on the day of your visit.
+            request, and once it is approved you will receive a QR visitor pass by email. The pass
+            is digital, so just show it on your phone at the guard house on the day of your visit.
           </p>
 
           <div className="mt-8 flex flex-wrap gap-3">
@@ -91,7 +91,7 @@ export default async function HomePage() {
             {
               step: '3',
               title: 'Scan in at the gate',
-              body: 'The guard scans your pass, checks your physical ID, and prints your badge.',
+              body: 'The guard scans the pass on your phone, checks your physical ID, and gives you a badge.',
             },
           ].map((item) => (
             <li key={item.step} className="surface-card rounded-xl p-5">
