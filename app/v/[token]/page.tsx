@@ -86,6 +86,17 @@ export default async function VisitorStatusPage({
     ? formatFallbackCode(deriveFallbackCode(tokenHash))
     : null;
 
+  /*
+   * Show the "pass appears here" placeholder only while a decision is still
+   * outstanding. REVIEW_REQUIRED is deliberately folded in with PENDING: the
+   * visitor is never told their request was flagged, so both states must read
+   * identically here as well as in `describeStatus`.
+   */
+  const isAwaitingDecision =
+    (appointment.status === AppointmentStatus.PENDING ||
+      appointment.status === AppointmentStatus.REVIEW_REQUIRED) &&
+    !visit;
+
   const canCancel =
     (appointment.status === AppointmentStatus.PENDING ||
       appointment.status === AppointmentStatus.REVIEW_REQUIRED ||
@@ -147,6 +158,47 @@ export default async function VisitorStatusPage({
                 {formatDate(credential.validFrom)}
               </p>
             </div>
+          </div>
+        </Card>
+      ) : isAwaitingDecision ? (
+        /*
+         * The pass and this page share one token, so the visitor is already
+         * holding the link their QR will appear in. Saying so is the whole
+         * point of this card: without it the page looks like a dead end and
+         * the link reads as a receipt rather than something worth keeping.
+         *
+         * It deliberately promises nothing about the outcome - an approval
+         * that has not happened must not be implied by the pass slot existing.
+         */
+        <Card className="overflow-hidden">
+          <div className="border-b border-[var(--line-soft)] px-5 py-4">
+            <h2 className="text-base font-semibold">Your visitor pass</h2>
+            <p className="mt-0.5 text-sm text-muted">Not ready yet.</p>
+          </div>
+
+          <div className="flex flex-col items-center gap-4 p-6">
+            <div
+              aria-hidden="true"
+              className="flex h-[200px] w-[200px] items-center justify-center rounded-lg border-2 border-dashed border-[var(--line-soft)] bg-[var(--surface-inset)]"
+            >
+              <span className="text-sm text-muted">QR pass</span>
+            </div>
+
+            {/*
+             * Approval rotates the private token (see `lib/domain/decisions.ts`),
+             * which retires this URL and emails a fresh one. So this must not
+             * tell the visitor to keep *this* link - it points them at the newest
+             * email instead, which is the one that will still work.
+             */}
+            <p className="max-w-sm text-center text-sm leading-relaxed text-muted">
+              If your request is approved, we will email you a{' '}
+              <strong className="font-semibold text-[var(--text-strong)]">new link</strong> that
+              carries your QR pass. Always open the most recent email from the school.
+            </p>
+
+            <p className="max-w-sm text-center text-xs text-muted">
+              The pass becomes scannable shortly before your visit time, not straight away.
+            </p>
           </div>
         </Card>
       ) : null}
