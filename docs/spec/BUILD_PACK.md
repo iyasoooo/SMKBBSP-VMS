@@ -19,7 +19,7 @@ The revised system removes dependencies and research claims that are difficult t
 - No campus route tracking.
 - No paid SMS dependency.
 
-The project instead demonstrates a complete operational workflow: appointment requests, teacher approval, QR passes, guard check-in/check-out, walk-in registration, badges, blacklist checks, email notifications, searchable history, emergency lists, reports, exports, privacy controls, and audit logs. Optional Malaysian IC OCR is included only as assisted data entry. It does not claim to authenticate identity.
+The project instead demonstrates a complete operational workflow: appointment requests, teacher approval, QR passes, guard check-in/check-out, walk-in registration, badges, blacklist checks, in-app staff notifications, searchable history, emergency lists, reports, exports, privacy controls, and audit logs. Optional Malaysian IC OCR is included only as assisted data entry. It does not claim to authenticate identity.
 
 ## Files in this pack
 
@@ -40,7 +40,7 @@ The project instead demonstrates a complete operational workflow: appointment re
 5. Let Claude continue through implementation and verification. Approve normal package installation and local Docker commands when prompted.
 6. At the end, follow the commands and demo credentials reported by Claude.
 
-Use Node.js 22 LTS and Docker Desktop if possible. The specification uses a local PostgreSQL container and Mailpit so the project can be demonstrated without paid cloud accounts or external service credentials.
+Use Node.js 22 LTS and Docker Desktop if possible. The specification uses a local PostgreSQL container and sends no email, so the project can be demonstrated without paid cloud accounts, a mail server, or external service credentials.
 
 ## Expected result
 

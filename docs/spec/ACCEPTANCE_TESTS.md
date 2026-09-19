@@ -20,7 +20,7 @@ Given a Teacher session, when the user requests Guard or Admin pages or invokes 
 
 ## AT-003 - Submit an online appointment [P0]
 
-Given an active teacher, destination, and visit type, when a visitor submits valid future appointment data and consent, then one visitor/request is stored as `PENDING`, a safe reference is shown, a private status email is queued/sent, the assigned teacher is notified, and no raw token or identity number appears in logs or the public success URL.
+Given an active teacher, destination, and visit type, when a visitor submits valid future appointment data and consent, then one visitor/request is stored as `PENDING`, the visitor is taken to their private request page, which shows a safe reference and tells them to save the link, and the assigned teacher receives an in-app notification. No email is sent. No raw token or identity number appears in logs, notifications, audit records, or any URL other than the private page itself.
 
 ## AT-004 - Reject invalid request data [P0]
 
@@ -32,11 +32,11 @@ Given an active hard-block identity entry, when a matching visitor submits a req
 
 ## AT-006 - Teacher approves a request [P0]
 
-Given a Teacher's own `PENDING` request, when the Teacher approves it, then a single transaction produces `APPROVED`, exactly one `EXPECTED` visit, exactly one active expiring QR credential, visitor notification, and audit entry. Repeating the approval does not duplicate any of them.
+Given a Teacher's own `PENDING` request, when the Teacher approves it, then a single transaction produces `APPROVED`, exactly one `EXPECTED` visit, exactly one active expiring QR credential, and an audit entry. The credential is bound to the private token issued at submission, so the link the visitor saved now shows the QR pass. Repeating the approval does not duplicate any of them.
 
 ## AT-007 - Teacher rejects a request [P0]
 
-Given a Teacher's own `PENDING` request, when the Teacher rejects with a visitor-safe reason, then status is `REJECTED`, the visitor sees/receives the decision, no usable QR credential exists, and the decision is audited.
+Given a Teacher's own `PENDING` request, when the Teacher rejects with a visitor-safe reason, then status is `REJECTED`, the visitor sees the decision and reason on their private page, no usable QR credential exists, and the decision is audited.
 
 ## AT-008 - Private visitor link isolation [P0]
 
@@ -48,7 +48,7 @@ Given an approved appointment, when its QR is decoded, then the payload is only 
 
 ## AT-010 - Valid approved check-in [P0]
 
-Given an approved appointment within its valid gate window and no blacklist block, when the Guard scans the pass, confirms required physical-ID sighting, and checks in, then the visit becomes `CHECKED_IN`, timestamps and Guard are recorded in Kuala Lumpur display time/UTC storage, a badge number is created, host notification is queued, and audit/event records exist.
+Given an approved appointment within its valid gate window and no blacklist block, when the Guard scans the pass, confirms required physical-ID sighting, and checks in, then the visit becomes `CHECKED_IN`, timestamps and Guard are recorded in Kuala Lumpur display time/UTC storage, a badge number is created, the host receives an in-app notification, and audit/event records exist.
 
 ## AT-011 - Invalid pass states [P0]
 
@@ -64,7 +64,7 @@ Given camera permission is denied or no camera is available, when the Guard open
 
 ## AT-014 - Clear walk-in [P0]
 
-Given a visitor with no blacklist match, when the Guard completes the walk-in form and required ID-sighting confirmation, then the system creates a `WALK_IN` source record and a `CHECKED_IN` visit, assigns a badge, notifies the host when contact exists, and writes audit/event records.
+Given a visitor with no blacklist match, when the Guard completes the walk-in form and required ID-sighting confirmation, then the system creates a `WALK_IN` source record and a `CHECKED_IN` visit, assigns a badge, notifies the host in-app, and writes audit/event records. No visitor email is required.
 
 ## AT-015 - Blocked walk-in [P0]
 
@@ -106,9 +106,9 @@ Given an active staff session, when an Admin deactivates that account or resets 
 
 Given the critical workflows, when the Admin reads audit entries, then actor/action/target/time and safe metadata are present, but password, raw session/public/QR token, full identity, encryption key material, and IC image data are absent. No audit edit/delete action exists.
 
-## AT-025 - Email delivery and failure [P0]
+## AT-025 - In-app notifications, and no email [P0]
 
-Given Mailpit is healthy, when a required event occurs, then the expected safe email is delivered. Given SMTP is unavailable, the business transaction still completes when safe, notification becomes `FAILED` or retryable, no secret appears in the UI, and Admin can inspect/retry delivery.
+Given a required event, then the in-app notification is written in the same transaction for the correct staff member, with no identity value or raw token in its text. A rolled-back change leaves no notification behind. A staff member cannot read or mark another staff member's notifications. The application starts and runs every workflow with no mail server configured and never opens an SMTP connection.
 
 ## AT-026 - Localization and dark mode [P0]
 
@@ -116,11 +116,11 @@ Given a Guard, when Bahasa Melayu and dark mode are selected, then all main guar
 
 ## AT-027 - Sensitive identity handling [P0]
 
-Given a stored identity, then ordinary lists, Teacher pages, Guard pages, email, badge, exports, URLs, and logs show no full value. Only an Admin can perform explicit reveal, and the reveal action itself is audited. Database fields contain ciphertext/HMAC/last4, not a plain identity value.
+Given a stored identity, then ordinary lists, Teacher pages, Guard pages, notifications, badge, exports, URLs, and logs show no full value. Only an Admin can perform explicit reveal, and the reveal action itself is audited. Database fields contain ciphertext/HMAC/last4, not a plain identity value.
 
 ## AT-028 - Clean setup [P0]
 
-Given a clean machine with documented prerequisites, when the README setup sequence is followed, then containers become healthy, migrations apply, seed succeeds, app starts, demo accounts log in, and Mailpit displays emails without external credentials.
+Given a clean machine with documented prerequisites, when the README setup sequence is followed, then containers become healthy, migrations apply, seed succeeds, app starts, and demo accounts log in, all without external credentials or a mail server.
 
 ## AT-029 - Quality gates [P0]
 
@@ -144,7 +144,7 @@ Given OCR is implemented, when a visitor/Guard selects an IC image, then extract
 
 ### Integration
 
-- public request transaction and outbox
+- public request transaction and in-app notifications
 - approval/rejection transaction
 - check-in/check-out transaction
 - walk-in clear/blocked transaction
@@ -153,7 +153,7 @@ Given OCR is implemented, when a visitor/Guard selects an IC image, then extract
 
 ### Playwright critical path
 
-1. Visitor submits -> Teacher approves -> Visitor pass opens -> Guard checks in -> badge renders -> emergency list includes -> Guard checks out -> emergency list excludes.
+1. Visitor submits -> lands on private page -> Teacher approves -> same private page now shows the pass -> Guard checks in -> badge renders -> emergency list includes -> Guard checks out -> emergency list excludes.
 2. Teacher rejects -> visitor sees rejection -> pass cannot check in.
 3. Guard walk-in -> blacklist clear and blocked branches.
 4. Admin filters -> exports -> audit record appears.

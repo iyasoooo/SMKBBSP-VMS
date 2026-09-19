@@ -23,7 +23,6 @@ lib/
   db/
   domain/
   crypto/
-  email/
   qr/
   reports/
   i18n/
@@ -175,3 +174,18 @@ Exit check: P1 features are honest, isolated, tested, and removable without affe
 - [x] Review all copy and docs for excluded-technology claims.
 
 Exit check: a fresh clone can be launched from documentation, every P0 check is green, and the final completion report is evidence-based.
+
+## Phase 10 - Remove email delivery
+
+Decision: the system sends no email to anyone. Visitors get their private link on screen at submission and follow the request there; staff are notified in-app. Earlier phases that mention Mailpit, SMTP, the outbox, or email templates describe what was built before this change.
+
+- [ ] Redirect a successful submission to the visitor's private page, and make that page tell the visitor to save the link.
+- [ ] Bind the approval credential to the existing private token instead of rotating it, so the saved link becomes the pass.
+- [ ] Show a reissued pass link once to the administrator who reissued it.
+- [ ] Replace every staff email with an in-app notification written in the same transaction.
+- [ ] Make visitor email optional on the public form; keep it for records and blacklist matching only.
+- [ ] Remove the outbox, email templates, SMTP configuration, mail scripts, delivery viewer, background sweep, and Mailpit service.
+- [ ] Update seed, tests, README, HOSTING, and demo walkthrough.
+- [ ] Run lint, typecheck, unit/integration tests, and build; verify the visitor flow in a browser.
+
+Exit check: no code path opens an SMTP connection; a submitted request can be followed to check-in using only the link shown at submission.

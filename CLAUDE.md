@@ -28,7 +28,7 @@ The model host is a separate machine from the application server, reached over a
 - Next.js App Router, TypeScript strict, Tailwind CSS.
 - PostgreSQL 16 with the current generally available Prisma ORM.
 - Node.js 22 LTS and npm.
-- Mailpit through SMTP for local email.
+- No email. The system sends nothing to anyone: visitors get their private link on screen at submission, and staff are notified in-app. Do not add an SMTP dependency.
 - Vitest and Playwright.
 
 Keep these scripts working:
@@ -65,7 +65,7 @@ Roles: `ADMIN`, `GUARD`, `TEACHER`.
 - Admin: full system administration, reporting, blacklist, users, destinations, audit.
 - Guard: today's approved visits, walk-ins, identity sighting confirmation, check-in/out, badge printing, emergency list.
 - Teacher: own appointment queue and own visit history only.
-- Visitor: no account; can submit and view a request through expiring opaque tokens.
+- Visitor: no account; can submit and view a request through an expiring opaque token, shown on screen once at submission. There is no recovery if it is lost.
 
 Sessions are database-backed and revocable. Cookies are `httpOnly`, `sameSite=lax`, path `/`, production-only `secure`, and expire. Rotate or revoke sessions after password/security changes.
 
@@ -86,6 +86,7 @@ Sessions are database-backed and revocable. Cookies are `httpOnly`, `sameSite=la
 
 - Appointment: `PENDING -> APPROVED | REJECTED | CANCELLED | EXPIRED`.
 - Approved appointment may create one visit/pass. Rejection never creates a usable pass.
+- Approval binds the pass to the token issued at submission and never rotates it; with no email, a rotated link could not reach the visitor. Only an administrator's reissue rotates it.
 - Visit: `EXPECTED -> CHECKED_IN -> CHECKED_OUT`; alternate terminal states are `CANCELLED`, `NO_SHOW`, and `DENIED`.
 - Check-in requires an approved/current appointment or a completed guard walk-in registration, no active blacklist block, and guard confirmation that physical ID was sighted when required.
 - Check-out requires `CHECKED_IN` and records the responsible guard.
