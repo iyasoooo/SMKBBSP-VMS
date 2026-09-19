@@ -5,7 +5,6 @@ import { z } from 'zod';
 import { assertSameOrigin } from '@/lib/auth/authorize';
 import { hashToken } from '@/lib/crypto/tokens';
 import { cancelAppointmentByToken } from '@/lib/domain/decisions';
-import { flushNotificationsInBackground } from '@/lib/email/outbox';
 import { fail, ok, type ActionResult } from '@/lib/result';
 import { createLogger } from '@/lib/logger';
 
@@ -42,7 +41,6 @@ export async function cancelRequestAction(
       );
     }
 
-    flushNotificationsInBackground(result.notificationIds);
   } catch (error) {
     log.error('cancel failed', undefined, error);
     return fail('We could not cancel the request just now. Please try again in a moment.');

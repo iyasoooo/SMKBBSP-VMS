@@ -756,41 +756,51 @@ async function createTodayVisit(options: TodayVisitOptions): Promise<void> {
   }
 }
 
+/**
+ * A little in-app history for the demo teacher, so their notification page is
+ * not empty on first login. Shaped exactly like the rows the application
+ * writes: IN_APP, owned by a user, complete on write. One is left unread so
+ * the unread state is visible too.
+ */
 async function seedNotifications(): Promise<void> {
   const now = new Date();
+  const teacher = await prisma.user.findUniqueOrThrow({
+    where: { email: 'teacher@smkbbsp.test' },
+    select: { id: true },
+  });
+
+  const inApp = {
+    channel: NotificationChannel.IN_APP,
+    status: NotificationStatus.SENT,
+    recipient: 'in-app',
+    templateKey: 'in-app',
+    userId: teacher.id,
+  };
 
   await prisma.notification.createMany({
     data: [
       {
-        type: 'visitor.request_received',
-        channel: NotificationChannel.EMAIL,
-        recipient: 'nurul.huda@contoh.test',
-        templateKey: 'visitor-request-received',
-        payload: { reference: 'VP-26C4-9XQT' },
-        status: NotificationStatus.SENT,
-        attempts: 1,
-        sentAt: addDays(now, -2),
-      },
-      {
+        ...inApp,
         type: 'teacher.new_request',
-        channel: NotificationChannel.EMAIL,
-        recipient: 'teacher@smkbbsp.test',
-        templateKey: 'teacher-new-request',
-        payload: { reference: 'VP-26C4-9XQT' },
-        status: NotificationStatus.SENT,
-        attempts: 1,
+        payload: {
+          title: 'New visit request awaiting your decision',
+          body: 'A parent has asked to meet you. Reference VP-26C4-9XQT.',
+        },
+        link: '/teacher/requests',
         sentAt: addDays(now, -2),
+        createdAt: addDays(now, -2),
       },
       {
-        // A realistic failure so the admin retry screen has something to act on.
-        type: 'visitor.approved',
-        channel: NotificationChannel.EMAIL,
-        recipient: 'kamarul.ariffin@contoh.test',
-        templateKey: 'visitor-approved',
-        payload: { reference: 'VP-26C4-2LMN' },
-        status: NotificationStatus.FAILED,
-        attempts: 3,
-        lastErrorCode: 'ECONNREFUSED',
+        ...inApp,
+        type: 'host.arrival',
+        payload: {
+          title: 'Your visitor has arrived',
+          body: 'Your visitor checked in at the guard house (reference VP-26C4-2LMN).',
+        },
+        link: '/teacher/visits',
+        sentAt: addDays(now, -1),
+        createdAt: addDays(now, -1),
+        readAt: addDays(now, -1),
       },
     ],
   });

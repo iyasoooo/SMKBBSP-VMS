@@ -40,13 +40,21 @@ export const appointmentRequestSchema = z
       .min(2, 'Enter your full name as it appears on your identification.')
       .max(120, 'That name is too long.'),
 
+    /*
+     * Optional. Nothing is ever sent to it - the system has no email - so it
+     * is kept only for the school's records and for blacklist matching.
+     * Blank means "not given", never an error.
+     */
     email: z
       .string()
       .trim()
       .toLowerCase()
-      .min(1, 'Enter your email address so we can send your pass.')
       .max(254, 'That email address is too long.')
-      .pipe(z.email('Enter a valid email address.')),
+      .optional()
+      .transform((value) => (value && value.length > 0 ? value : undefined))
+      .refine((value) => value === undefined || z.email().safeParse(value).success, {
+        message: 'Enter a valid email address or leave it blank.',
+      }),
 
     phone: z
       .string()

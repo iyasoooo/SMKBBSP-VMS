@@ -3,9 +3,13 @@
 **Smart Visitor Management System with QR Code and Appointment-Based Access Control for Secondary Schools**
 
 A web application that replaces the paper visitor logbook at SMK Bandar Baru Sri Petaling. A visitor
-requests an appointment without creating an account, the host teacher approves or rejects it, and an
-approved visitor receives an expiring QR pass by email. At the gate a guard scans the pass, records
-that physical identification was sighted, checks the visitor in, and prints a badge.
+requests an appointment without creating an account and is given a private link on screen; the host
+teacher approves or rejects it, and on approval that same link becomes an expiring QR pass. At the
+gate a guard scans the pass, records that physical identification was sighted, checks the visitor in,
+and prints a badge.
+
+> **No email.** The system sends nothing to anyone and needs no mail server. Visitors follow their
+> request through the private link they are shown when they submit; staff are notified in-app.
 
 > **What this system does not claim.** The QR pass authorises an *approved appointment*. It does not
 > verify who the holder is — that is why the guard also inspects physical identification and records
@@ -67,7 +71,7 @@ node -e "console.log(require('crypto').randomBytes(32).toString('base64'))"
 Run it three times — `SESSION_SECRET`, `IDENTITY_ENCRYPTION_KEY` and `IDENTITY_HMAC_KEY` must all
 differ. The app refuses to start if any is missing, the wrong length, or reused.
 
-### 2. Start PostgreSQL and a mail catcher
+### 2. Start PostgreSQL
 
 #### Option A — with Docker (recommended)
 
@@ -75,8 +79,7 @@ differ. The app refuses to start if any is missing, the wrong length, or reused.
 npm run db:up
 ```
 
-Starts PostgreSQL 16 on `localhost:5432` and Mailpit on `localhost:1025` (SMTP), with the Mailpit
-inbox at <http://localhost:8025>.
+Starts PostgreSQL 16 on `localhost:5432`.
 
 **Running the whole system in containers.** `docker compose` also builds and runs the application
 itself, which is the simplest way to operate it beyond development:
@@ -85,7 +88,7 @@ itself, which is the simplest way to operate it beyond development:
 docker compose up -d --build
 ```
 
-That starts PostgreSQL and Mailpit, waits for both to report healthy, runs `prisma migrate deploy`
+That starts PostgreSQL, waits for it to report healthy, runs `prisma migrate deploy`
 to completion, and only then starts the app on <http://localhost:3000>. Load the demonstration data
 once with:
 
@@ -112,20 +115,15 @@ start if `SESSION_SECRET`, `IDENTITY_ENCRYPTION_KEY` or `IDENTITY_HMAC_KEY` are 
 
 #### Option B — without Docker
 
-If Docker is unavailable, two npm-only substitutes provide the same ports and credentials, so
-nothing in `.env` changes. Run each in its own terminal and leave them running:
+If Docker is unavailable, an npm-only substitute provides the same port and credentials, so nothing
+in `.env` changes. Run it in its own terminal and leave it running:
 
 ```bash
 npm run local:pg
 ```
 
-```bash
-npm run local:mail
-```
-
 `local:pg` runs a real PostgreSQL 16 server from the `embedded-postgres` package, storing data in
-`.local/pgdata`. `local:mail` runs a small SMTP catcher whose inbox is at <http://localhost:8025>,
-the same address as Mailpit.
+`.local/pgdata`.
 
 ### 3. Apply migrations and load the demonstration data
 
@@ -180,7 +178,7 @@ public internet.
 | `npm run db:reset` | Drop, re-migrate and re-seed. |
 | `npm run db:studio` | Prisma Studio. |
 | `npm run db:up` / `db:down` | Start/stop the Docker services. |
-| `npm run local:pg` / `local:mail` | No-Docker PostgreSQL and mail catcher. |
+| `npm run local:pg` | No-Docker PostgreSQL. |
 
 ---
 
@@ -189,16 +187,17 @@ public internet.
 A ten-minute walkthrough that exercises every P0 feature.
 
 1. **Visitor submits a request.** Open <http://localhost:3000>, choose **Request a visit**, and
-   complete the form, picking **Puan Aminah binti Zulkifli** as the host. The confirmation page shows
-   a reference number only — the private token never appears in a URL.
-2. **Check the email.** Open <http://localhost:8025>. Two messages: an acknowledgement to the
-   visitor containing the private link, and a notification to the teacher. Neither subject contains
-   personal data.
-3. **Teacher approves.** Sign in as the teacher. The pending request is on the overview. Open it —
-   the identity number is masked — and approve with a note. Approval creates exactly one expected
-   visit and one active pass, and emails the visitor their QR.
-4. **Visitor opens the pass.** In the inbox, open the approval email and follow **Open my QR visitor
-   pass**. The page shows the QR, the 8-character fallback code, and the validity window.
+   complete the form, picking **Puan Aminah binti Zulkifli** as the host. Email is optional — leave it
+   blank. On submit you land on the visitor's private page, which says plainly to save the link:
+   nothing will be sent. **Copy that address**; it is the visitor's only way back.
+2. **Teacher is notified in-app.** Sign in as the teacher and open **Notifications** — the new
+   request is there. Nothing was emailed to anyone.
+3. **Teacher approves.** The pending request is also on the overview. Open it — the identity number
+   is masked — and approve with a note. Approval creates exactly one expected visit and one active
+   pass, bound to the link the visitor already has.
+4. **Visitor reopens the same link.** Paste the address from step 1. The page that said "Awaiting
+   approval" now shows the QR, the 8-character fallback code, the teacher's note, and the validity
+   window.
 5. **Guard processes arrivals.** Sign in as the guard. **Today at the gate** lists expected arrivals,
    visitors on site, and overdue visitors. Use **Scan pass** — the camera scanner is there, and the
    manual code box works without it. Try language **MS** and dark mode; both persist across reloads.
@@ -226,7 +225,7 @@ Single Next.js App Router codebase, TypeScript strict throughout.
 ```text
 app/            routes; server components read, server actions mutate
   login/        credentials sign-in
-  visit/        public request form, success, status help
+  visit/        public request form, status help
   v/[token]/    private visitor status and QR pass
   teacher/      own queue and own visit history only
   guard/        today, scan, walk-in, active, emergency, badge print
@@ -235,8 +234,7 @@ components/     presentational UI, no business logic
 lib/
   auth/         sessions and server-side authorization
   crypto/       identity encryption/HMAC, password hashing, token generation
-  domain/       business services (appointments, decisions, gate, blacklist, admin)
-  email/        transactional outbox and templates
+  domain/       business services (appointments, decisions, gate, blacklist, admin, in-app notifications)
   reports/      shared report query, PDF and XLSX writers
   i18n/         guard dictionary (English / Bahasa Melayu)
   validation/   Zod schemas for every mutation boundary
@@ -248,10 +246,14 @@ tests/          unit, integration (real PostgreSQL), e2e (Playwright)
 
 - **Domain services own the rules.** React components never contain a state transition. Approval,
   check-in, check-out and walk-in are transactional and idempotent, so a double tap or a retried
-  request cannot create a second visit, badge or email.
-- **Transactional outbox.** A notification row is written inside the same transaction as the change
-  that caused it, and delivery happens after commit. An SMTP outage therefore cannot roll back a
-  check-in, and a rolled-back approval cannot leave an email queued.
+  request cannot create a second visit, badge or notification.
+- **No email, by design.** The system sends nothing and depends on no mail server. Staff notifications
+  are in-app rows written inside the same transaction as the change that caused them, so a
+  rolled-back approval cannot leave a notice behind — and there is no delivery step that could fail.
+- **One link, shown once.** Submission redirects the visitor to `/v/<token>`, the only place the raw
+  token ever appears. Approval binds the pass to that same token rather than rotating it, so the link
+  the visitor saved becomes their pass. Only an administrator's reissue rotates it, and the new link is
+  handed back to that administrator to give to the visitor.
 - **UTC in, Kuala Lumpur out.** Every instant is stored in UTC; every date boundary, report range and
   "today" is evaluated against the Malaysian calendar day.
 - **Authorization lives in the data layer.** A teacher's queries carry `teacherId` in the `where`
@@ -357,8 +359,12 @@ Documented deliberately; none blocks the P0 feature set.
    rather than pretending a write succeeded.
 3. **Retention is preview-only.** The retention period is configurable and surfaced, but destructive
    purging is not automated.
-4. **Email retry is manual.** Failed deliveries are retried on demand from the admin **Email**
-   screen; there is no background retry scheduler.
+4. **No email means no reminders and no lost-link recovery.** Visitors are never notified of a
+   decision; they must reopen their link to see it. A visitor who loses their link before approval
+   cannot get it back — there is nothing to resend, and a public lookup would reveal who has visited —
+   so they resubmit or are registered as a walk-in. Once approved, an administrator can reissue the pass
+   and hand the new link over in person. This is the deliberate cost of needing no mail server and no
+   visitor contact details to deliver a pass.
 5. **Same-day online bookings are impossible by design.** Requests need 60 minutes' notice
    (configurable) and passes open 30 minutes before the start, so a visitor needing immediate entry
    is handled as a walk-in. The end-to-end test reflects this: it asserts the correct refusal for a

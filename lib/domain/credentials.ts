@@ -9,17 +9,16 @@ import {
 } from '@/lib/crypto/tokens';
 import { buildPassUrl } from '@/lib/qr';
 import { getSettings } from '@/lib/domain/settings';
-import { queueEmail } from '@/lib/email/outbox';
 import { recordAudit } from '@/lib/audit';
 import { AUDIT_ACTIONS, PUBLIC_TOKEN_TRAILING_DAYS } from '@/lib/constants';
-import { addDays, formatDateTime, formatTimeRange } from '@/lib/time';
+import { addDays } from '@/lib/time';
 
 /**
  * Manual pass revocation and reissue (administrator only).
  *
  * Revocation already happens automatically on rejection, cancellation and
- * re-approval. This module covers the cases those do not: a pass that has been
- * forwarded to someone else, printed and lost, or sent to a mistyped address.
+ * re-approval. This module covers the cases those do not: a pass link that has
+ * been shared with someone else, or lost by the visitor.
  *
  * Reissue rotates the private token as well as the credential. That is the
  * point of the operation - if the old link kept working, revoking would
@@ -97,31 +96,39 @@ export async function revokePass(options: {
   });
 }
 
+export interface ReissueResult {
+  referenceNumber: string;
+  /**
+   * The new private link. Returned once so the administrator can hand it to
+   * the visitor - nothing can be sent to them. It is not stored or logged, so
+   * it cannot be shown again; a lost one needs another reissue.
+   */
+  passUrl: string;
+  /** The new manual code, formatted for reading aloud. */
+  fallbackCode: string;
+}
+
 /**
  * Retire the current pass and issue a fresh one.
  *
- * Rotates the private status token too, so the previously emailed link stops
- * resolving. The visitor is emailed the new pass; if they have no email
- * address on file the caller is told, because the new link would otherwise be
- * unreachable.
+ * Rotates the private status token too, so the previous link stops resolving.
+ * That is the point of a reissue: it exists for a link that has been shared
+ * with someone else. Because nothing can be sent to the visitor, the new link
+ * comes back to the administrator, who passes it on in person or by phone.
  */
 export async function reissuePass(options: {
   appointmentId: string;
   actorUserId: string;
   appUrl: string;
   now?: Date;
-}): Promise<{
-  referenceNumber: string;
-  emailed: boolean;
-  notificationIds: string[];
-}> {
+}): Promise<ReissueResult> {
   const now = options.now ?? new Date();
   const settings = await getSettings();
 
   return prisma.$transaction(async (tx) => {
     const appointment = await tx.appointment.findUnique({
       where: { id: options.appointmentId },
-      include: { visitor: true, teacher: true, destination: true, visit: true },
+      include: { visit: true },
     });
 
     if (!appointment) {
@@ -145,7 +152,6 @@ export async function reissuePass(options: {
     const rawToken = generateToken();
     const tokenHash = hashToken(rawToken);
     const fallbackCode = deriveFallbackCode(tokenHash);
-    const statusUrl = buildPassUrl(options.appUrl, rawToken);
 
     const validFrom = new Date(
       appointment.scheduledStart.getTime() - settings.qrGraceBeforeMinutes * 60_000,
@@ -179,51 +185,22 @@ export async function reissuePass(options: {
       },
     });
 
-    const notificationIds: string[] = [];
-
-    if (appointment.visitor.email) {
-      notificationIds.push(
-        await queueEmail(
-          {
-            type: 'visitor.approved',
-            templateKey: 'visitor-approved',
-            recipient: appointment.visitor.email,
-            payload: {
-              reference: appointment.referenceNumber,
-              visitorName: appointment.visitor.fullName,
-              teacherName: appointment.teacher.name,
-              schoolName: settings.schoolName,
-              destinationName: appointment.destination?.nameEn,
-              scheduledAt: formatDateTime(appointment.scheduledStart),
-              windowText: formatTimeRange(validFrom, expiresAt),
-              fallbackCode: formatFallbackCode(fallbackCode),
-              instructions: appointment.destination?.instructionsEn ?? undefined,
-              statusUrl,
-            },
-          },
-          tx,
-        ),
-      );
-    }
-
+    // The audit records that a reissue happened, never the link itself.
     await recordAudit(
       {
         action: AUDIT_ACTIONS.CREDENTIAL_REISSUED,
         targetType: 'Appointment',
         targetId: appointment.id,
         actorUserId: options.actorUserId,
-        metadata: {
-          reference: appointment.referenceNumber,
-          emailed: Boolean(appointment.visitor.email),
-        },
+        metadata: { reference: appointment.referenceNumber },
       },
       tx,
     );
 
     return {
       referenceNumber: appointment.referenceNumber,
-      emailed: Boolean(appointment.visitor.email),
-      notificationIds,
+      passUrl: buildPassUrl(options.appUrl, rawToken),
+      fallbackCode: formatFallbackCode(fallbackCode),
     };
   });
 }

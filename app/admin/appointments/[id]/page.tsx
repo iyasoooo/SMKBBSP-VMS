@@ -5,12 +5,7 @@ import { AppointmentStatus, VisitStatus } from '@prisma/client';
 import { prisma } from '@/lib/db/prisma';
 import { CompanionList, COMPANION_SELECT } from '@/components/companion-list';
 import { canAdminister, requireOversight } from '@/lib/auth/authorize';
-import {
-  adminApproveAction,
-  reissuePassAction,
-  resolveReviewAction,
-  revokePassAction,
-} from '@/app/admin/actions';
+import { adminApproveAction, resolveReviewAction, revokePassAction } from '@/app/admin/actions';
 import {
   SAFE_VISITOR_SELECT,
   identityTypeLabel,
@@ -22,6 +17,7 @@ import { Alert, Card, DetailRow, PageHeading } from '@/components/ui/surface';
 import { AppointmentStatusPill, VisitStatusPill } from '@/components/status-pill';
 import { ActionForm } from '@/components/action-form';
 import { RevealIdentity } from './reveal-identity';
+import { ReissuePassForm } from './reissue-form';
 
 export const metadata: Metadata = { title: 'Appointment detail' };
 export const dynamic = 'force-dynamic';
@@ -208,7 +204,7 @@ export default async function AdminAppointmentDetailPage({
                   hidden={{ appointmentId: appointment.id, outcome: 'REJECT' }}
                   submitLabel="Reject request"
                   variant="danger"
-                  confirm="Reject this request? The visitor will be notified."
+                  confirm="Reject this request? The visitor will see the decision on their private page."
                   successMessage="Rejected."
                 />
               </div>
@@ -226,7 +222,7 @@ export default async function AdminAppointmentDetailPage({
                 hidden={{ appointmentId: appointment.id }}
                 submitLabel="Approve now"
                 confirm="Approve this request on the teacher's behalf?"
-                successMessage="Approved and the pass has been emailed."
+                successMessage="Approved. The pass now appears on the visitor's private page."
               />
             </Card>
           ) : null}
@@ -277,29 +273,16 @@ export default async function AdminAppointmentDetailPage({
                     hidden={{ appointmentId: appointment.id }}
                   >
                     <p className="mb-3 text-sm text-muted">
-                      Use this if the pass has been shared with someone else or sent to the wrong
-                      address. The appointment stays approved.
+                      Use this if the pass link has been shared with someone else. The appointment
+                      stays approved.
                     </p>
                   </ActionForm>
                 ) : null}
 
-                <ActionForm
-                  action={reissuePassAction}
-                  submitLabel={activeCredential ? 'Replace with a new pass' : 'Issue a new pass'}
-                  busyLabel="Issuing..."
-                  variant="secondary"
-                  confirm="Issue a new pass? Any earlier link will stop working."
-                  successMessage="A new pass was issued and emailed to the visitor."
-                  hidden={{ appointmentId: appointment.id }}
-                >
-                  <p className="mb-3 text-sm text-muted">
-                    Issues a fresh QR code and manual code, and emails the visitor a new private
-                    link. Any earlier link stops working.
-                    {visitor.hasEmail
-                      ? ''
-                      : ' This visitor has no email address on file, so you will need to give them the new link another way.'}
-                  </p>
-                </ActionForm>
+                <ReissuePassForm
+                  appointmentId={appointment.id}
+                  hasActivePass={Boolean(activeCredential)}
+                />
               </div>
             ) : null}
           </Card>

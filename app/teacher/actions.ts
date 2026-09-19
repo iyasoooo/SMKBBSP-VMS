@@ -8,8 +8,6 @@ import { decisionSchema } from '@/lib/validation/appointment';
 import { approveAppointment, DecisionError, rejectAppointment } from '@/lib/domain/decisions';
 import { CheckpointError, recordCheckpoint } from '@/lib/domain/checkpoints';
 import { consumeRateLimit, RATE_LIMITS } from '@/lib/rate-limit';
-import { flushNotificationsInBackground } from '@/lib/email/outbox';
-import { getEnv } from '@/lib/env';
 import { fail, ok, toFieldErrors, type ActionResult } from '@/lib/result';
 import { createLogger } from '@/lib/logger';
 
@@ -54,10 +52,8 @@ export async function decideRequestAction(
         actorUserId: user.id,
         actorRole: Role.TEACHER,
         note: parsed.data.note,
-        appUrl: getEnv().APP_URL,
       });
 
-      flushNotificationsInBackground(result.notificationIds);
       revalidatePath('/teacher');
       revalidatePath(`/teacher/requests/${parsed.data.appointmentId}`);
 
@@ -71,7 +67,6 @@ export async function decideRequestAction(
       note: parsed.data.note ?? 'The school is unable to accommodate this visit.',
     });
 
-    flushNotificationsInBackground(result.notificationIds);
     revalidatePath('/teacher');
     revalidatePath(`/teacher/requests/${parsed.data.appointmentId}`);
 

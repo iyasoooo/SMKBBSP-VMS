@@ -23,8 +23,7 @@ import {
   validateSettingValue,
   type SettingKey,
 } from '@/lib/domain/settings';
-import { retryNotification } from '@/lib/email/outbox';
-import { flushNotificationsInBackground } from '@/lib/email/outbox';
+import { renderQrDataUrl } from '@/lib/qr';
 import { recordAudit } from '@/lib/audit';
 import { AUDIT_ACTIONS, PASSWORD_MIN_LENGTH_HINT } from '@/lib/constants';
 import { getEnv } from '@/lib/env';
@@ -207,14 +206,12 @@ export async function adminApproveAction(
     const user = await admin();
     const appointmentId = String(formData.get('appointmentId') ?? '');
 
-    const result = await approveAppointment({
+    await approveAppointment({
       appointmentId,
       actorUserId: user.id,
       actorRole: Role.ADMIN,
-      appUrl: getEnv().APP_URL,
     });
 
-    flushNotificationsInBackground(result.notificationIds);
     revalidatePath('/admin/appointments');
     return ok();
   } catch (error) {
@@ -461,33 +458,8 @@ export async function toggleVisitTypeAction(
 }
 
 // ---------------------------------------------------------------------------
-// Notifications and batch jobs
+// Passes and batch jobs
 // ---------------------------------------------------------------------------
-
-export async function retryNotificationAction(
-  _previous: ActionResult<undefined> | null,
-  formData: FormData,
-): Promise<ActionResult<undefined>> {
-  try {
-    const user = await admin();
-    const notificationId = String(formData.get('notificationId') ?? '');
-
-    const delivered = await retryNotification(notificationId);
-
-    await recordAudit({
-      action: AUDIT_ACTIONS.NOTIFICATION_RETRIED,
-      targetType: 'Notification',
-      targetId: notificationId,
-      actorUserId: user.id,
-      metadata: { delivered },
-    });
-
-    revalidatePath('/admin/notifications');
-    return delivered ? ok() : fail('Delivery failed again. Check that the mail server is running.');
-  } catch (error) {
-    return handle(error, 'The retry could not be completed.');
-  }
-}
 
 /**
  * Revoke a visitor's active pass without replacing it.
@@ -515,11 +487,23 @@ export async function revokePassAction(
   }
 }
 
-/** Retire the current pass, issue a replacement, and email the new link. */
+export interface ReissuedPass {
+  passUrl: string;
+  fallbackCode: string;
+  qrDataUrl: string;
+}
+
+/**
+ * Retire the current pass, issue a replacement, and hand the new link back.
+ *
+ * Nothing can be sent to the visitor, so the link comes to the administrator
+ * to pass on. It is returned once, in this response only: it is not stored,
+ * logged or audited, so the page cannot show it again after a reload.
+ */
 export async function reissuePassAction(
-  _previous: ActionResult<{ emailed: boolean }> | null,
+  _previous: ActionResult<ReissuedPass> | null,
   formData: FormData,
-): Promise<ActionResult<{ emailed: boolean }>> {
+): Promise<ActionResult<ReissuedPass>> {
   try {
     const user = await admin();
     const appointmentId = String(formData.get('appointmentId') ?? '');
@@ -531,11 +515,12 @@ export async function reissuePassAction(
       appUrl: getEnv().APP_URL,
     });
 
-    flushNotificationsInBackground(result.notificationIds);
+    // A visitor standing at the office can scan this straight onto their phone.
+    const qrDataUrl = await renderQrDataUrl(result.passUrl, { width: 240 });
 
     revalidatePath(`/admin/appointments/${appointmentId}`);
     revalidatePath('/admin/appointments');
-    return ok({ emailed: result.emailed });
+    return ok({ passUrl: result.passUrl, fallbackCode: result.fallbackCode, qrDataUrl });
   } catch (error) {
     return handle(error, 'A new pass could not be issued.');
   }

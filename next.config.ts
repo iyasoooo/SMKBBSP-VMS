@@ -32,7 +32,7 @@ if (process.env.NODE_ENV === 'production') {
  * the dev server rejects that as cross-origin unless the address is listed.
  * Hard-coding one address meant every change of network silently broke the
  * tablet again, so the value is derived from APP_URL - the same address the
- * emails, QR passes and badge codes already point at - and cannot drift from
+ * private links, QR passes and badge codes already point at - and cannot drift from
  * it. The private-range wildcards keep a DHCP lease change from breaking it
  * before anyone has updated `.env`.
  *
@@ -55,7 +55,7 @@ const nextConfig: NextConfig = {
   allowedDevOrigins: devOrigins(),
   poweredByHeader: false,
   typedRoutes: false,
-  serverExternalPackages: ['@prisma/client', 'nodemailer', 'exceljs'],
+  serverExternalPackages: ['@prisma/client', 'exceljs'],
   eslint: {
     // Linting is a separate, enforced quality gate (`npm run lint`).
     ignoreDuringBuilds: true,

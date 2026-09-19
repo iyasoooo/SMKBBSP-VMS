@@ -6,7 +6,7 @@ project, not just for the FYP demo.
 ## The short answer
 
 This repo is a **self-contained Docker Compose stack** (`docker-compose.yml`):
-application + PostgreSQL + Mailpit + a one-shot migration step. The whole thing
+application + PostgreSQL + a one-shot migration step. The whole thing
 starts with one command:
 
 ```bash
@@ -53,10 +53,10 @@ handover, DO's tooling pays for itself.
    site must be served over TLS with a real domain. The setup below uses
    **Caddy**, which fetches and renews Let's Encrypt certificates automatically.
 
-2. **Mailpit does not send real email.** It is a local mail *catcher* - approval
-   emails and visitor links only appear in its web UI, they never leave the
-   server. That is fine for a demo. For a real deployment, point SMTP at a real
-   provider (Brevo, Resend, SendGrid, or even Gmail SMTP). See "Real email".
+2. **There is no email to configure.** The system sends nothing to anyone, so
+   there is no mail server, SMTP account or provider to set up. Visitors are
+   shown their private link on screen when they submit, and staff are notified
+   in-app. See "No email".
 
 ## Step-by-step: deploy on a Droplet (DigitalOcean or IONOS)
 
@@ -115,8 +115,8 @@ ENV
 ```
 
 Then run `cat .env`, note the seeded passwords, and keep the file private. Set
-`APP_URL` to your real HTTPS domain - QR passes, badge codes, and email links
-are all generated from it, so it must be correct.
+`APP_URL` to your real HTTPS domain - QR passes, badge codes, and visitors'
+private links are all generated from it, so it must be correct.
 
 ### 5. Add HTTPS with Caddy
 
@@ -168,7 +168,7 @@ docker compose up -d --build
 ```
 
 Follow the logs with `docker compose logs -f app` (Ctrl-C to stop watching).
-Compose brings up Postgres and Mailpit, runs the migration to completion, writes
+Compose brings up Postgres, runs the migration to completion, writes
 the school map, then starts the app. Caddy gets a TLS certificate on first
 request.
 
@@ -205,7 +205,7 @@ Allow only SSH and web:
 ufw allow OpenSSH && ufw allow 80 && ufw allow 443 && ufw enable
 ```
 
-Do **not** expose Postgres (5432) or Mailpit (8025/1025) to the internet. With
+Do **not** expose Postgres (5432) to the internet. With
 the override above, the app port is no longer public either - only Caddy is.
 
 Do not open 11434 either. The model host is reached over the tailnet, described
@@ -352,40 +352,29 @@ This is now refused rather than merely discouraged:
 
 Keep it a local tag.
 
-## Real email (production, not demo)
+## No email
 
-Mailpit only catches mail locally. To actually deliver approval/visitor emails,
-set the app's `SMTP_*` variables in the **Dokploy Environment tab** — the
-production compose reads them as overrides, so no file edit is needed. Any
-unset variable falls back to the internal Mailpit service.
+The system sends no email, by design, so there is nothing to configure: no mail
+server, no SMTP account, no provider. When a visitor submits a request they are
+taken to their private page and told to save the link; that link later becomes
+their QR pass. Staff are notified in-app.
 
-The mailer reads `SMTP_HOST`, `SMTP_PORT`, `SMTP_SECURE`, `SMTP_USER`, and
-`SMTP_PASSWORD` (see `lib/env.ts`). Example values:
+This makes a deployment simpler, but it moves one job onto the school office:
+**a visitor who loses their link before approval cannot get it back.** They
+resubmit, or the guard registers them as a walk-in. Once a visit is approved, an
+administrator can open the appointment, choose **Replace with a new pass**, and
+hand the new link over in person (the visitor can scan the QR shown on screen).
 
-```
-# Gmail (free, ~500 emails/day; SMTP_USER must be the sending Gmail address)
-SMTP_HOST=smtp.gmail.com
-SMTP_PORT=465
-SMTP_SECURE=true
-SMTP_USER=youraccount@gmail.com
-SMTP_PASSWORD=your-16-char-app-password
-MAIL_FROM_ADDRESS=youraccount@gmail.com
+**Upgrading a deployment that had email.** Any `SMTP_*` or `MAIL_FROM_*`
+variables left in the Dokploy Environment tab are now ignored and can be
+deleted. The Mailpit service is gone from both compose files; an existing
+Mailpit container is left running by a plain redeploy, so remove it with:
 
-# Brevo (free tier ~300 emails/day; can send from your own domain)
-# SMTP_HOST=smtp-relay.brevo.com
-# SMTP_PORT=587
-# SMTP_SECURE=false
-# SMTP_USER=your-brevo-login
-# SMTP_PASSWORD=your-brevo-smtp-key
+```bash
+docker compose up -d --remove-orphans
 ```
 
-Gmail requires 2-Step Verification enabled and an **App Password** (Google
-Account → Security → App passwords) — your normal password will not authenticate
-over SMTP. On a free Gmail account the `From` is forced to your Gmail address.
-
-Redeploy, then verify with `npm run mail:test you@example.com` — it connects,
-authenticates, and sends one message, reporting the exact reason on failure. You
-can drop the `mailpit` service once real mail works.
+Old email rows in the notifications table are kept as history and never shown.
 
 ## Backups (the Postgres volume is NOT a backup)
 

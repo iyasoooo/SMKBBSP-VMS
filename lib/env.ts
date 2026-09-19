@@ -4,7 +4,7 @@ import { z } from 'zod';
  * Fail-fast environment validation.
  *
  * This module is imported by every server entry point that touches the
- * database, crypto, or mail. A misconfigured secret must stop the process at
+ * database or crypto. A misconfigured secret must stop the process at
  * boot rather than silently degrade to an insecure default at runtime.
  */
 
@@ -44,12 +44,6 @@ const base64Key32 = z
     { message: 'must decode to exactly 32 bytes of base64' },
   );
 
-const booleanish = z
-  .union([z.boolean(), z.string()])
-  .transform((value) =>
-    typeof value === 'boolean' ? value : ['1', 'true', 'yes', 'on'].includes(value.toLowerCase()),
-  );
-
 const envSchema = z.object({
   NODE_ENV: z.enum(['development', 'test', 'production']).default('development'),
 
@@ -62,14 +56,6 @@ const envSchema = z.object({
   IDENTITY_ENCRYPTION_KEY: base64Key32,
   IDENTITY_HMAC_KEY: base64Key32,
   IDENTITY_KEY_VERSION: z.coerce.number().int().positive().default(1),
-
-  SMTP_HOST: z.string().min(1).default('localhost'),
-  SMTP_PORT: z.coerce.number().int().positive().default(1025),
-  SMTP_SECURE: booleanish.default(false),
-  SMTP_USER: z.string().optional().default(''),
-  SMTP_PASSWORD: z.string().optional().default(''),
-  MAIL_FROM_NAME: z.string().min(1).default('SMKBBSP Visitor Management System'),
-  MAIL_FROM_ADDRESS: z.email().default('visitorpass@smkbbsp.test'),
 
   SEED_ADMIN_PASSWORD: z.string().min(8).default('Admin#Demo2025'),
   SEED_GUARD_PASSWORD: z.string().min(8).default('Guard#Demo2025'),

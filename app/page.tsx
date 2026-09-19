@@ -58,9 +58,10 @@ export default async function HomePage() {
             Request a school visit, and carry your pass on your phone.
           </h1>
           <p className="mt-4 text-base leading-relaxed text-muted">
-            Choose the teacher you want to meet and a time that suits you. The teacher reviews your
-            request, and once it is approved you will receive a QR visitor pass by email. The pass
-            is digital, so just show it on your phone at the guard house on the day of your visit.
+            Choose the teacher you want to meet and a time that suits you. When you submit, you get
+            a private link to your request - save it. Once the teacher approves, that same link
+            becomes your QR visitor pass, so just show it on your phone at the guard house on the
+            day of your visit.
           </p>
 
           <div className="mt-8 flex flex-wrap gap-3">
@@ -81,12 +82,12 @@ export default async function HomePage() {
             {
               step: '1',
               title: 'Submit a request',
-              body: 'Tell us who you are visiting, when, and why. No account is needed.',
+              body: 'Tell us who you are visiting, when, and why. No account is needed. Save the private link you are given.',
             },
             {
               step: '2',
               title: 'Teacher approves',
-              body: 'Your host teacher reviews the request and you are notified by email either way.',
+              body: 'Your host teacher reviews the request. Open your link to see the decision.',
             },
             {
               step: '3',

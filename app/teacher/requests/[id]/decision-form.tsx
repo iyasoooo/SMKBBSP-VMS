@@ -50,8 +50,8 @@ export function DecisionForm({ appointmentId }: { appointmentId: string }) {
         {state.data.decision === 'ALREADY_APPROVED' || state.data.decision === 'ALREADY_REJECTED'
           ? 'This request had already been decided. Nothing was duplicated.'
           : approved
-            ? 'The visitor has been emailed their QR pass and the guard house now expects them.'
-            : 'The visitor has been emailed your decision. No pass was issued.'}
+            ? 'The QR pass now appears on the visitor’s private page, and the guard house expects them.'
+            : 'The visitor will see your decision on their private page. No pass was issued.'}
         <p className="mt-3">
           <button
             type="button"
@@ -99,8 +99,8 @@ export function DecisionForm({ appointmentId }: { appointmentId: string }) {
             error={state && !state.ok ? state.fieldErrors?.note : undefined}
             hint={
               mode === 'APPROVE'
-                ? 'For example where to wait, or what to bring. Included in their approval email.'
-                : 'The visitor will read this. Keep it brief and courteous.'
+                ? 'For example where to wait, or what to bring. Shown on the visitor’s private page.'
+                : 'The visitor will read this on their private page. Keep it brief and courteous.'
             }
           >
             <Textarea

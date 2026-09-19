@@ -252,10 +252,9 @@ export function RequestForm({
         <div className="grid gap-4 sm:grid-cols-2">
           <Field
             id="email"
-            label="Email address"
-            required
+            label="Email address (optional)"
             error={errors.email}
-            hint="Your pass and updates are sent here."
+            hint="For the school's records only. Nothing is sent to it."
           >
             <Input
               {...fieldAria('email', { error: errors.email, hint: true })}
@@ -264,7 +263,6 @@ export function RequestForm({
               autoComplete="email"
               autoCapitalize="none"
               spellCheck={false}
-              required
               value={email}
               onChange={(event) => setEmail(event.target.value)}
               hasError={Boolean(errors.email)}

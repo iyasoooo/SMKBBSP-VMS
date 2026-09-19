@@ -66,7 +66,9 @@ describe('listInAppNotifications', () => {
     expect(adminList[0]?.title).toBe('For the admin');
   });
 
-  it('does not include email notifications', async () => {
+  // Rows written before email was removed are still EMAIL-channel. They are
+  // history, and must never surface in anyone's in-app list.
+  it('does not surface legacy email rows', async () => {
     await testDb.notification.create({
       data: {
         type: 'visitor.approved',

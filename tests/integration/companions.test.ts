@@ -14,7 +14,6 @@ import { computeIdentityHmac, decryptIdentity, normalizeIdentity } from '@/lib/c
  * for matching, and never stored in the clear.
  */
 
-const APP_URL = 'http://localhost:3000';
 let fixtures: BaseFixtures;
 
 beforeEach(async () => {
@@ -123,7 +122,7 @@ describe('storage', () => {
     const parsed = appointmentRequestSchema.parse(
       buildInput({ partySize: 3, companions: [companion(), companion({ identityNumber: '889912105503', fullName: 'Devi a/p Subramaniam', relation: 'Sister' })] }),
     );
-    const result = await createAppointmentRequest(parsed, APP_URL);
+    const result = await createAppointmentRequest(parsed);
 
     const appointment = await testDb.appointment.findUniqueOrThrow({
       where: { referenceNumber: result.referenceNumber },
@@ -139,7 +138,7 @@ describe('storage', () => {
     const parsed = appointmentRequestSchema.parse(
       buildInput({ partySize: 2, companions: [companion()] }),
     );
-    const result = await createAppointmentRequest(parsed, APP_URL);
+    const result = await createAppointmentRequest(parsed);
 
     const stored = await testDb.companion.findFirstOrThrow({
       where: { appointment: { referenceNumber: result.referenceNumber } },
@@ -165,7 +164,7 @@ describe('storage', () => {
     const parsed = appointmentRequestSchema.parse(
       buildInput({ partySize: 2, companions: [companion({ phone: '012-345 6790' })] }),
     );
-    const result = await createAppointmentRequest(parsed, APP_URL);
+    const result = await createAppointmentRequest(parsed);
 
     const stored = await testDb.companion.findFirstOrThrow({
       where: { appointment: { referenceNumber: result.referenceNumber } },
@@ -177,7 +176,7 @@ describe('storage', () => {
     const parsed = appointmentRequestSchema.parse(
       buildInput({ partySize: 2, companions: [companion()] }),
     );
-    const result = await createAppointmentRequest(parsed, APP_URL);
+    const result = await createAppointmentRequest(parsed);
 
     await testDb.appointment.delete({ where: { referenceNumber: result.referenceNumber } });
     expect(await testDb.companion.count()).toBe(0);
@@ -204,7 +203,7 @@ describe('blacklist screening', () => {
     const parsed = appointmentRequestSchema.parse(
       buildInput({ partySize: 2, companions: [companion()] }),
     );
-    const result = await createAppointmentRequest(parsed, APP_URL);
+    const result = await createAppointmentRequest(parsed);
 
     // Screening only the form-filler would leave an obvious way past the
     // blacklist: arrive as somebody else's guest.
@@ -215,7 +214,7 @@ describe('blacklist screening', () => {
     const parsed = appointmentRequestSchema.parse(
       buildInput({ partySize: 2, companions: [companion()] }),
     );
-    const result = await createAppointmentRequest(parsed, APP_URL);
+    const result = await createAppointmentRequest(parsed);
     expect(result.status).toBe(AppointmentStatus.PENDING);
   });
 });

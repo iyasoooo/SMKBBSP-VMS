@@ -12,6 +12,7 @@ import { getEnv } from '@/lib/env';
 import { formatDate, formatDateTime, formatTimeRange } from '@/lib/time';
 import { Alert, Card, DetailRow, Pill } from '@/components/ui/surface';
 import { CancelRequestForm } from './cancel-form';
+import { CopyLinkButton } from './copy-link';
 
 export const metadata: Metadata = { title: 'Your visit request', robots: { index: false } };
 export const dynamic = 'force-dynamic';
@@ -31,10 +32,14 @@ export const dynamic = 'force-dynamic';
  */
 export default async function VisitorStatusPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ token: string }>;
+  searchParams: Promise<{ new?: string }>;
 }) {
-  const { token } = await params;
+  const [{ token }, query] = await Promise.all([params, searchParams]);
+  // Set only by the submission redirect. It changes a banner, nothing else.
+  const justSubmitted = query.new === '1';
   const settings = await getSettings();
 
   const headerList = await headers();
@@ -97,6 +102,15 @@ export default async function VisitorStatusPage({
       appointment.status === AppointmentStatus.REVIEW_REQUIRED) &&
     !visit;
 
+  /*
+   * Ask the visitor to save the link for as long as they still need it: from
+   * submission until they arrive. After check-in the printed badge takes over,
+   * and a closed request has nothing left to come back for.
+   */
+  const stillNeedsLink =
+    (isAwaitingDecision || appointment.status === AppointmentStatus.APPROVED) &&
+    (!visit || visit.status === VisitStatus.EXPECTED);
+
   const canCancel =
     (appointment.status === AppointmentStatus.PENDING ||
       appointment.status === AppointmentStatus.REVIEW_REQUIRED ||
@@ -113,6 +127,34 @@ export default async function VisitorStatusPage({
         </div>
         <p className="mt-2 font-mono text-sm text-muted">{appointment.referenceNumber}</p>
       </header>
+
+      {justSubmitted ? (
+        <Alert tone="success" title="Request submitted">
+          Your request has been sent to your host teacher. This page is your request.
+        </Alert>
+      ) : null}
+
+      {/*
+        There is no email and no account, so this page is the visitor's only
+        way back. Saying so plainly, and early, is the whole defence against a
+        lost link - there is no recovery once it is gone.
+      */}
+      {stillNeedsLink ? (
+        <Card className="border-2 border-[var(--accent)] p-5">
+          <h2 className="text-base font-semibold">Save this page now</h2>
+          <p className="mt-1 text-sm leading-relaxed text-muted">
+            This link is the only way back to your request.{' '}
+            <strong className="font-semibold text-[var(--text-strong)]">
+              Nothing will be emailed or texted to you
+            </strong>
+            , and the school cannot look it up for you. Bookmark it, copy it somewhere safe, or take
+            a screenshot.
+          </p>
+          <div className="mt-4 max-w-xs">
+            <CopyLinkButton />
+          </div>
+        </Card>
+      ) : null}
 
       <Alert tone={statusPresentation.tone === 'success' ? 'success' : statusPresentation.alertTone}>
         {statusPresentation.description}
@@ -164,8 +206,7 @@ export default async function VisitorStatusPage({
         /*
          * The pass and this page share one token, so the visitor is already
          * holding the link their QR will appear in. Saying so is the whole
-         * point of this card: without it the page looks like a dead end and
-         * the link reads as a receipt rather than something worth keeping.
+         * point of this card: without it the page looks like a dead end.
          *
          * It deliberately promises nothing about the outcome - an approval
          * that has not happened must not be implied by the pass slot existing.
@@ -185,15 +226,14 @@ export default async function VisitorStatusPage({
             </div>
 
             {/*
-             * Approval rotates the private token (see `lib/domain/decisions.ts`),
-             * which retires this URL and emails a fresh one. So this must not
-             * tell the visitor to keep *this* link - it points them at the newest
-             * email instead, which is the one that will still work.
+             * True because approval binds the pass to this page's own token
+             * rather than rotating it (see `lib/domain/decisions.ts`). If that
+             * ever changes, this sentence becomes a lie that strands visitors.
              */}
             <p className="max-w-sm text-center text-sm leading-relaxed text-muted">
-              If your request is approved, we will email you a{' '}
-              <strong className="font-semibold text-[var(--text-strong)]">new link</strong> that
-              carries your QR pass. Always open the most recent email from the school.
+              If your request is approved, your QR pass will appear{' '}
+              <strong className="font-semibold text-[var(--text-strong)]">here, on this page</strong>.
+              Come back to this same link to check.
             </p>
 
             <p className="max-w-sm text-center text-xs text-muted">
@@ -300,7 +340,7 @@ export default async function VisitorStatusPage({
 function Unavailable({
   schoolName,
   title = 'This link is not available',
-  body = 'The link may have expired, been cancelled, or been typed incorrectly. Please check the most recent email from the school, or submit a new request.',
+  body = 'The link may have expired, been cancelled, or been typed incorrectly. If you have lost your link, please submit a new request, or ask at the guard house when you arrive.',
 }: {
   schoolName: string;
   title?: string;
@@ -378,7 +418,7 @@ function describeStatus(
         tone: 'warning',
         alertTone: 'info',
         description:
-          'Your request has been received and is waiting for a decision. We will email you as soon as it is reviewed.',
+          'Your request has been received and is waiting for your host teacher to decide. Come back to this page to see the decision.',
       };
 
     case AppointmentStatus.APPROVED:

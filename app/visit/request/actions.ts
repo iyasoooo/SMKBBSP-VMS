@@ -2,7 +2,6 @@
 
 import { headers } from 'next/headers';
 import { redirect } from 'next/navigation';
-import { getEnv } from '@/lib/env';
 import { assertSameOrigin } from '@/lib/auth/authorize';
 import { consumeRateLimit, RATE_LIMITS } from '@/lib/rate-limit';
 import { appointmentRequestSchema } from '@/lib/validation/appointment';
@@ -11,7 +10,6 @@ import {
   HostUnavailableError,
   ScheduleError,
 } from '@/lib/domain/appointments';
-import { flushNotificationsInBackground } from '@/lib/email/outbox';
 import { fail, toFieldErrors, type ActionResult } from '@/lib/result';
 import { createLogger } from '@/lib/logger';
 import { MAX_PARTY_SIZE } from '@/lib/constants';
@@ -21,9 +19,16 @@ const log = createLogger('visit-request');
 /**
  * Public appointment submission.
  *
- * The success redirect carries only the reference number. The private token
- * never appears in a URL, browser history, or the Referer header of any later
- * navigation - it is delivered by email alone.
+ * On success the visitor is redirected straight to their private page,
+ * `/v/<token>`. There is no email, so this redirect is the only delivery of
+ * the token, and the page it lands on is the thing they are told to save.
+ *
+ * The token therefore does enter the browser's history, exactly as it did when
+ * visitors opened the link from an email, and a reverse proxy's access log
+ * would record the path just as it did then. Beyond that the application keeps
+ * it out of everything it controls: no query string, log line, notification or
+ * audit record contains it, and the site's `strict-origin-when-cross-origin`
+ * referrer policy stops it leaking to another origin in a Referer header.
  */
 export async function submitAppointmentRequest(
   _previous: ActionResult<undefined> | null,
@@ -61,7 +66,7 @@ export async function submitAppointmentRequest(
   const parsed = appointmentRequestSchema.safeParse({
     companions: companions.filter(Boolean),
     fullName: formData.get('fullName'),
-    email: formData.get('email'),
+    email: formData.get('email') || undefined,
     phone: formData.get('phone'),
     identityType: formData.get('identityType'),
     identityNumber: formData.get('identityNumber'),
@@ -83,15 +88,11 @@ export async function submitAppointmentRequest(
     });
   }
 
-  let reference: string;
+  let rawToken: string;
 
   try {
-    const result = await createAppointmentRequest(parsed.data, getEnv().APP_URL);
-    reference = result.referenceNumber;
-
-    // Delivery happens after the transaction committed. A slow or dead SMTP
-    // server must not hold up the visitor's confirmation page.
-    flushNotificationsInBackground(result.notificationIds);
+    const result = await createAppointmentRequest(parsed.data);
+    rawToken = result.rawToken;
   } catch (error) {
     if (error instanceof ScheduleError) {
       const field =
@@ -109,5 +110,7 @@ export async function submitAppointmentRequest(
     return fail('We could not submit your request just now. Please try again in a moment.');
   }
 
-  redirect(`/visit/request/success?ref=${encodeURIComponent(reference)}`);
+  // `new=1` only switches on the "request submitted, save this link" banner.
+  // It carries nothing: the page works identically without it.
+  redirect(`/v/${rawToken}?new=1`);
 }

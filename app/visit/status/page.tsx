@@ -15,10 +15,11 @@ export const metadata: Metadata = { title: 'Check your request' };
 /**
  * There is deliberately no lookup form here.
  *
- * A page that accepted a reference number or email address and reported
+ * A page that accepted a reference number, name or phone number and reported
  * whether a matching request exists would be an enumeration oracle: anyone
  * could confirm that a particular person had visited the school. The private
- * emailed link is the only way in, so this page explains that instead.
+ * link shown at submission is the only way in, so this page explains that
+ * instead - and, since nothing is ever emailed, what to do when it is lost.
  */
 export default async function VisitStatusHelpPage() {
   const settings = await getSettings();
@@ -34,25 +35,25 @@ export default async function VisitStatusHelpPage() {
         <h2 className="text-sm font-semibold">Where to find your link</h2>
         <ol className="mt-3 list-decimal space-y-2 pl-5 text-sm leading-relaxed text-muted">
           <li>
-            Open the email titled <strong>&ldquo;Visit request received&rdquo;</strong> from{' '}
-            {settings.schoolShortName}.
+            When you submitted your request, you were taken to a private page for it. That page&apos;s
+            address is your link.
           </li>
           <li>
-            Select <strong>&ldquo;View or cancel my request&rdquo;</strong>. That page shows the
-            current status.
+            Open it wherever you saved it - a bookmark, a note, a message to yourself, or a
+            screenshot of the address.
           </li>
           <li>
-            Once your host approves the visit, you will receive a second email containing your QR
-            pass link.
+            The page shows the current status. Once your host approves the visit, your QR pass
+            appears on that same page.
           </li>
         </ol>
       </Card>
 
       <div className="mt-6">
-        <Alert tone="info" title="Cannot find the email?">
-          Check your spam or junk folder first. If it is not there, the address may have been typed
-          incorrectly when the request was submitted. Please submit a new request, or contact the
-          school office during working hours.
+        <Alert tone="info" title="Lost your link?">
+          {settings.schoolShortName} does not send emails or text messages, so the link cannot be
+          sent to you again. Please submit a new request, or come to the guard house during visiting
+          hours and the guard can register you there.
         </Alert>
       </div>
 

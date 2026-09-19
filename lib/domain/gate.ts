@@ -25,7 +25,7 @@ import { normalizeEmail, normalizeName, normalizePhone } from '@/lib/domain/cont
 import { checkBlacklist, type BlacklistDecision } from '@/lib/domain/blacklist';
 import { getSettings } from '@/lib/domain/settings';
 import { SAFE_VISITOR_SELECT, toSafeVisitor, type SafeVisitor } from '@/lib/domain/presenters';
-import { queueEmail } from '@/lib/email/outbox';
+import { queueInAppNotification } from '@/lib/domain/in-app-notifications';
 import { recordAudit } from '@/lib/audit';
 import { AUDIT_ACTIONS, DENIAL_CODES, PUBLIC_TOKEN_TRAILING_DAYS, type DenialCode } from '@/lib/constants';
 import { addDays, formatDateTime, toIsoDayString } from '@/lib/time';
@@ -43,6 +43,23 @@ import type { WalkInInput } from '@/lib/validation/appointment';
  *     because an administrator may have blocked the visitor in between.
  *   - Nothing returned to a guard reveals why a visitor is blocked.
  */
+
+/**
+ * The host's arrival notice, shared by the approved and walk-in paths so the
+ * two read the same. Name, party, badge and place only - never an identity
+ * number or the visit purpose.
+ */
+function describeArrival(arrival: {
+  visitorName: string;
+  partySize: number;
+  badgeNumber: string;
+  destinationName?: string;
+  at: Date;
+}): string {
+  const party = arrival.partySize > 1 ? ` with ${arrival.partySize - 1} other(s)` : '';
+  const place = arrival.destinationName ? `, heading to ${arrival.destinationName}` : '';
+  return `${arrival.visitorName}${party} checked in at ${formatDateTime(arrival.at)} (badge ${arrival.badgeNumber})${place}.`;
+}
 
 // ---------------------------------------------------------------------------
 // Pass lookup
@@ -276,7 +293,6 @@ export interface CheckInResult {
   visitId: string;
   badgeNumber: string;
   alreadyCheckedIn: boolean;
-  notificationIds: string[];
 }
 
 /**
@@ -293,7 +309,6 @@ export async function checkInVisit(options: {
   now?: Date;
 }): Promise<CheckInResult> {
   const now = options.now ?? new Date();
-  const settings = await getSettings();
 
   /*
    * The blocked branch must not throw from inside the transaction.
@@ -325,7 +340,6 @@ export async function checkInVisit(options: {
           visitId: visit.id,
           badgeNumber: visit.badgeNumber,
           alreadyCheckedIn: true,
-          notificationIds: [],
         },
       };
     }
@@ -417,28 +431,22 @@ export async function checkInVisit(options: {
     }
     await tx.visitEvent.createMany({ data: events });
 
-    const notificationIds: string[] = [];
-    if (visit.teacher.email) {
-      notificationIds.push(
-        await queueEmail(
-          {
-            type: 'host.arrival',
-            templateKey: 'host-arrival',
-            recipient: visit.teacher.email,
-            payload: {
-              reference: appointment?.referenceNumber ?? visit.badgeNumber,
-              visitorName: visit.visitor.fullName,
-              schoolName: settings.schoolName,
-              badgeNumber: visit.badgeNumber,
-              checkedInAt: formatDateTime(now),
-              destinationName: visit.destination?.nameEn,
-              partySize: appointment?.partySize ?? 1,
-            },
-          },
-          tx,
-        ),
-      );
-    }
+    await queueInAppNotification(
+      {
+        userId: visit.teacherId,
+        type: 'host.arrival',
+        title: 'Your visitor has arrived',
+        body: describeArrival({
+          visitorName: visit.visitor.fullName,
+          partySize: appointment?.partySize ?? 1,
+          badgeNumber: visit.badgeNumber,
+          destinationName: visit.destination?.nameEn,
+          at: now,
+        }),
+        link: '/teacher/visits',
+      },
+      tx,
+    );
 
     await recordAudit(
       {
@@ -461,7 +469,6 @@ export async function checkInVisit(options: {
         visitId: updated.id,
         badgeNumber: updated.badgeNumber,
         alreadyCheckedIn: false,
-        notificationIds,
       },
     };
   });
@@ -484,7 +491,6 @@ export interface CheckOutResult {
   visitId: string;
   badgeNumber: string;
   alreadyCheckedOut: boolean;
-  notificationIds: string[];
 }
 
 export async function checkOutVisit(options: {
@@ -508,7 +514,6 @@ export async function checkOutVisit(options: {
         visitId: visit.id,
         badgeNumber: visit.badgeNumber,
         alreadyCheckedOut: true,
-        notificationIds: [],
       };
     }
 
@@ -533,24 +538,16 @@ export async function checkOutVisit(options: {
       },
     });
 
-    const notificationIds: string[] = [];
-    if (settings.notifyHostOnCheckout && visit.teacher.email) {
-      notificationIds.push(
-        await queueEmail(
-          {
-            type: 'host.checkout',
-            templateKey: 'host-checkout',
-            recipient: visit.teacher.email,
-            payload: {
-              reference: visit.appointment?.referenceNumber ?? visit.badgeNumber,
-              visitorName: visit.visitor.fullName,
-              schoolName: settings.schoolName,
-              badgeNumber: visit.badgeNumber,
-              checkedOutAt: formatDateTime(now),
-            },
-          },
-          tx,
-        ),
+    if (settings.notifyHostOnCheckout) {
+      await queueInAppNotification(
+        {
+          userId: visit.teacherId,
+          type: 'host.checkout',
+          title: 'Your visitor has left',
+          body: `${visit.visitor.fullName} (badge ${visit.badgeNumber}) checked out at ${formatDateTime(now)}.`,
+          link: '/teacher/visits',
+        },
+        tx,
       );
     }
 
@@ -569,7 +566,6 @@ export async function checkOutVisit(options: {
       visitId: visit.id,
       badgeNumber: visit.badgeNumber,
       alreadyCheckedOut: false,
-      notificationIds,
     };
   });
 }
@@ -634,7 +630,6 @@ export interface WalkInResult {
   visitId: string;
   badgeNumber: string;
   referenceNumber: string;
-  notificationIds: string[];
 }
 
 /**
@@ -800,28 +795,22 @@ export async function registerWalkIn(options: {
       ],
     });
 
-    const notificationIds: string[] = [];
-    if (teacher.email) {
-      notificationIds.push(
-        await queueEmail(
-          {
-            type: 'host.arrival',
-            templateKey: 'host-arrival',
-            recipient: teacher.email,
-            payload: {
-              reference: referenceNumber,
-              visitorName: fullName,
-              schoolName: settings.schoolName,
-              badgeNumber,
-              checkedInAt: formatDateTime(now),
-              destinationName: destination?.nameEn,
-              partySize: input.partySize,
-            },
-          },
-          tx,
-        ),
-      );
-    }
+    await queueInAppNotification(
+      {
+        userId: teacher.id,
+        type: 'host.arrival',
+        title: 'A walk-in visitor is here to see you',
+        body: describeArrival({
+          visitorName: fullName,
+          partySize: input.partySize,
+          badgeNumber,
+          destinationName: destination?.nameEn,
+          at: now,
+        }),
+        link: '/teacher/visits',
+      },
+      tx,
+    );
 
     await recordAudit(
       {
@@ -839,7 +828,7 @@ export async function registerWalkIn(options: {
       tx,
     );
 
-    return { visitId: visit.id, badgeNumber, referenceNumber, notificationIds };
+    return { visitId: visit.id, badgeNumber, referenceNumber };
   });
 }
 

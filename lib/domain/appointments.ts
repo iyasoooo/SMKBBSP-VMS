@@ -16,7 +16,6 @@ import { generateReferenceNumber, generateToken, hashToken } from '@/lib/crypto/
 import { normalizeEmail, normalizeName, normalizePhone } from '@/lib/domain/contact';
 import { checkBlacklist } from '@/lib/domain/blacklist';
 import { getSettings, type SchoolSettings } from '@/lib/domain/settings';
-import { queueEmail } from '@/lib/email/outbox';
 import { queueInAppNotification } from '@/lib/domain/in-app-notifications';
 import { recordAudit } from '@/lib/audit';
 import { AUDIT_ACTIONS, PUBLIC_TOKEN_TRAILING_DAYS } from '@/lib/constants';
@@ -36,15 +35,18 @@ import type { AppointmentRequestInput } from '@/lib/validation/appointment';
  *
  * Everything that decides whether a request may exist happens here, on the
  * server, inside one transaction: schedule rules, host availability, blacklist
- * evaluation, visitor de-duplication, token issue, and the outbox writes.
+ * evaluation, visitor de-duplication, token issue, and in-app notifications.
  */
 
 export interface CreateAppointmentResult {
   referenceNumber: string;
-  /** Raw private token. Returned once so it can be emailed; never stored. */
+  /**
+   * Raw private token. Returned once so the caller can send the visitor to
+   * their private page, which is the only place it is ever shown. Never
+   * stored, logged, or put in a notification.
+   */
   rawToken: string;
   status: AppointmentStatus;
-  notificationIds: string[];
 }
 
 export type ScheduleErrorCode =
@@ -231,7 +233,6 @@ async function upsertVisitor(
  */
 export async function createAppointmentRequest(
   input: AppointmentRequestInput,
-  appUrl: string,
   now: Date = new Date(),
 ): Promise<CreateAppointmentResult> {
   const settings = await getSettings();
@@ -354,61 +355,24 @@ export async function createAppointmentRequest(
       },
     });
 
-    const notificationIds: string[] = [];
-    const statusUrl = `${appUrl}/v/${rawToken}`;
     const scheduledAt = formatDateTime(scheduledStart);
 
-    // The visitor always receives the same acknowledgement, review or not.
-    if (email) {
-      notificationIds.push(
-        await queueEmail(
-          {
-            type: 'visitor.request_received',
-            templateKey: 'visitor-request-received',
-            recipient: email,
-            payload: {
-              reference: referenceNumber,
-              visitorName: fullName,
-              teacherName: teacher.name,
-              schoolName: settings.schoolName,
-              destinationName: destination?.nameEn,
-              scheduledAt,
-              statusUrl,
-            },
-          },
-          tx,
-        ),
-      );
-    }
+    /*
+     * Nothing is sent to the visitor. They are redirected to their private
+     * page, which is the acknowledgement, and it reads the same whether or not
+     * the request was held for review.
+     */
 
     if (needsReview) {
       // Alert every administrator; the host teacher is deliberately not told,
       // because a review outcome may end with the request never reaching them.
       const admins = await tx.user.findMany({
         where: { role: Role.ADMIN, isActive: true },
-        select: { id: true, email: true },
+        select: { id: true },
       });
 
       for (const admin of admins) {
-        notificationIds.push(
-          await queueEmail(
-            {
-              type: 'admin.review_required',
-              templateKey: 'admin-review-required',
-              recipient: admin.email,
-              payload: {
-                reference: referenceNumber,
-                schoolName: settings.schoolName,
-                scheduledAt,
-                reviewUrl: `${appUrl}/admin/appointments/${appointment.id}`,
-              },
-            },
-            tx,
-          ),
-        );
-
-        // In-app copy, so an administrator already signed in sees it without
-        // checking their inbox. No reason or blacklist detail is included.
+        // No reason or blacklist detail is included.
         await queueInAppNotification(
           {
             userId: admin.id,
@@ -421,28 +385,6 @@ export async function createAppointmentRequest(
         );
       }
     } else {
-      notificationIds.push(
-        await queueEmail(
-          {
-            type: 'teacher.new_request',
-            templateKey: 'teacher-new-request',
-            recipient: teacher.email,
-            payload: {
-              reference: referenceNumber,
-              visitorName: fullName,
-              schoolName: settings.schoolName,
-              scheduledAt,
-              visitTypeName: visitType.nameEn,
-              destinationName: destination?.nameEn,
-              purpose: input.purpose,
-              partySize: input.partySize,
-              reviewUrl: `${appUrl}/teacher/requests/${appointment.id}`,
-            },
-          },
-          tx,
-        ),
-      );
-
       await queueInAppNotification(
         {
           userId: teacher.id,
@@ -471,14 +413,13 @@ export async function createAppointmentRequest(
       tx,
     );
 
-    return { appointment, notificationIds };
+    return { appointment };
   });
 
   return {
     referenceNumber,
     rawToken,
     status: result.appointment.status,
-    notificationIds: result.notificationIds,
   };
 }
 

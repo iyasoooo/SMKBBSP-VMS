@@ -57,7 +57,7 @@ export default async function NotificationsPage() {
         {notifications.length === 0 ? (
           <EmptyState
             title="No notifications yet"
-            description="You will be notified here when a visit request needs your attention. Email notifications are sent as well."
+            description="You will be notified here when a visit request needs your attention or your visitor arrives. This is the only place notifications appear - nothing is emailed."
           />
         ) : (
           <ul className="divide-y divide-[var(--line-soft)]">

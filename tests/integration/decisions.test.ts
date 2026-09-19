@@ -14,10 +14,9 @@ import {
   DecisionError,
   rejectAppointment,
 } from '@/lib/domain/decisions';
+import { lookupPassByToken } from '@/lib/domain/gate';
 import { deriveFallbackCode, hashFallbackCode, hashToken } from '@/lib/crypto/tokens';
 import type { AppointmentRequestInput } from '@/lib/validation/appointment';
-
-const APP_URL = 'http://localhost:3000';
 
 let fixtures: BaseFixtures;
 
@@ -50,7 +49,7 @@ async function createPendingRequest(overrides: Partial<AppointmentRequestInput> 
     ...overrides,
   } as AppointmentRequestInput;
 
-  const result = await createAppointmentRequest(input, APP_URL);
+  const result = await createAppointmentRequest(input);
   const appointment = await testDb.appointment.findUniqueOrThrow({
     where: { referenceNumber: result.referenceNumber },
   });
@@ -68,7 +67,6 @@ describe('AT-006: teacher approves a request', () => {
       actorUserId: fixtures.teacher.id,
       actorRole: Role.TEACHER,
       note: 'Please wait at the general office.',
-      appUrl: APP_URL,
     });
 
     expect(result.alreadyApproved).toBe(false);
@@ -96,30 +94,49 @@ describe('AT-006: teacher approves a request', () => {
     const audit = await testDb.auditLog.findMany({ where: { action: 'appointment.approved' } });
     expect(audit).toHaveLength(1);
 
-    const notifications = await testDb.notification.findMany();
-    expect(notifications.map((n) => n.type)).toEqual(['visitor.approved']);
+    // Nothing is sent to the visitor: approval writes no notification at all.
+    expect(await testDb.notification.count()).toBe(0);
   });
 
-  it('rotates the private token so the pre-approval link stops working', async () => {
+  /*
+   * The visitor is shown one link, once, at submission, and nothing is ever
+   * sent to them. If approval rotated the token that link would die and the
+   * approved visitor would be stranded, so this pins the binding end to end:
+   * the very same raw token must still open their page AND be accepted by the
+   * gate scanner.
+   */
+  it('binds the pass to the submission token, so the saved link becomes the pass', async () => {
     const { appointment, rawToken } = await createPendingRequest();
-    const originalHash = appointment.publicTokenHash;
 
     await approveAppointment({
       appointmentId: appointment.id,
       actorUserId: fixtures.teacher.id,
       actorRole: Role.TEACHER,
-      appUrl: APP_URL,
     });
 
-    const updated = await testDb.appointment.findUniqueOrThrow({ where: { id: appointment.id } });
+    const updated = await testDb.appointment.findUniqueOrThrow({
+      where: { id: appointment.id },
+      include: { credentials: { where: { revokedAt: null } } },
+    });
 
-    expect(updated.publicTokenHash).not.toBe(originalHash);
-    expect(updated.publicTokenHash).not.toBe(hashToken(rawToken));
+    // The link the visitor saved still opens their page...
+    expect(updated.publicTokenHash).toBe(appointment.publicTokenHash);
+    expect(updated.publicTokenHash).toBe(hashToken(rawToken));
 
-    // The old link now resolves to nothing.
-    expect(
-      await testDb.appointment.findUnique({ where: { publicTokenHash: originalHash } }),
-    ).toBeNull();
+    // ...and the pass it now shows is bound to that same token.
+    expect(updated.credentials).toHaveLength(1);
+    expect(updated.credentials[0]?.tokenHash).toBe(hashToken(rawToken));
+
+    // The gate resolves it. The window may not be open yet, so any state but
+    // NOT_FOUND proves the scanner recognises the saved link as this pass.
+    const lookup = await lookupPassByToken(rawToken);
+    expect(lookup.state).not.toBe('NOT_FOUND');
+    expect(lookup.appointment?.referenceNumber).toBe(appointment.referenceNumber);
+  });
+
+  it('gives a pending request no scannable pass, even with the right token', async () => {
+    const { rawToken } = await createPendingRequest();
+    expect((await lookupPassByToken(rawToken)).state).toBe('NOT_FOUND');
   });
 
   it('issues a fallback code that matches what the visitor page will derive', async () => {
@@ -129,7 +146,6 @@ describe('AT-006: teacher approves a request', () => {
       appointmentId: appointment.id,
       actorUserId: fixtures.teacher.id,
       actorRole: Role.TEACHER,
-      appUrl: APP_URL,
     });
 
     const updated = await testDb.appointment.findUniqueOrThrow({
@@ -153,26 +169,22 @@ describe('AT-006: teacher approves a request', () => {
       appointmentId: appointment.id,
       actorUserId: fixtures.teacher.id,
       actorRole: Role.TEACHER,
-      appUrl: APP_URL,
     });
 
     const second = await approveAppointment({
       appointmentId: appointment.id,
       actorUserId: fixtures.teacher.id,
       actorRole: Role.TEACHER,
-      appUrl: APP_URL,
     });
 
     expect(second.alreadyApproved).toBe(true);
     expect(second.visitId).toBe(first.visitId);
     expect(second.badgeNumber).toBe(first.badgeNumber);
-    expect(second.notificationIds).toHaveLength(0);
 
     expect(await testDb.visit.count({ where: { appointmentId: appointment.id } })).toBe(1);
     expect(
       await testDb.qrCredential.count({ where: { appointmentId: appointment.id, revokedAt: null } }),
     ).toBe(1);
-    expect(await testDb.notification.count()).toBe(1);
     expect(await testDb.auditLog.count({ where: { action: 'appointment.approved' } })).toBe(1);
   });
 });
@@ -186,7 +198,6 @@ describe('AT-002: cross-teacher authorization', () => {
         appointmentId: appointment.id,
         actorUserId: fixtures.otherTeacher.id,
         actorRole: Role.TEACHER,
-        appUrl: APP_URL,
       }),
     ).rejects.toBeInstanceOf(DecisionError);
 
@@ -225,7 +236,6 @@ describe('AT-002: cross-teacher authorization', () => {
         appointmentId: appointment.id,
         actorUserId: fixtures.teacher.id,
         actorRole: Role.TEACHER,
-        appUrl: APP_URL,
       }),
     ).rejects.toThrow(/reviewed by the school office/i);
 
@@ -233,7 +243,6 @@ describe('AT-002: cross-teacher authorization', () => {
       appointmentId: appointment.id,
       actorUserId: fixtures.admin.id,
       actorRole: Role.ADMIN,
-      appUrl: APP_URL,
     });
 
     expect(result.alreadyApproved).toBe(false);
@@ -261,11 +270,9 @@ describe('AT-007: teacher rejects a request', () => {
     expect(updated.visit).toBeNull();
     expect(updated.credentials.filter((c) => c.revokedAt === null)).toHaveLength(0);
 
-    const notifications = await testDb.notification.findMany();
-    expect(notifications.map((n) => n.type)).toEqual(['visitor.rejected']);
-    expect(JSON.stringify(notifications[0]?.payload)).toContain(
-      'That week is reserved for examinations.',
-    );
+    // The visitor reads the reason on their private page, from decisionNote
+    // (asserted above); nothing is sent to them.
+    expect(await testDb.notification.count()).toBe(0);
 
     expect(await testDb.auditLog.count({ where: { action: 'appointment.rejected' } })).toBe(1);
   });
@@ -288,7 +295,7 @@ describe('AT-007: teacher rejects a request', () => {
     });
 
     expect(second.alreadyRejected).toBe(true);
-    expect(await testDb.notification.count()).toBe(1);
+    expect(await testDb.auditLog.count({ where: { action: 'appointment.rejected' } })).toBe(1);
   });
 
   it('cannot reject an already approved request', async () => {
@@ -298,7 +305,6 @@ describe('AT-007: teacher rejects a request', () => {
       appointmentId: appointment.id,
       actorUserId: fixtures.teacher.id,
       actorRole: Role.TEACHER,
-      appUrl: APP_URL,
     });
 
     await expect(
@@ -313,20 +319,17 @@ describe('AT-007: teacher rejects a request', () => {
 });
 
 describe('visitor cancellation by token', () => {
-  it('cancels a pending request and revokes anything scannable', async () => {
+  it('cancels an approved request through the saved link and revokes anything scannable', async () => {
     const { appointment, rawToken } = await createPendingRequest();
 
     await approveAppointment({
       appointmentId: appointment.id,
       actorUserId: fixtures.teacher.id,
       actorRole: Role.TEACHER,
-      appUrl: APP_URL,
     });
 
-    // Approval rotated the token, so cancellation must use the current one.
-    const approved = await testDb.appointment.findUniqueOrThrow({ where: { id: appointment.id } });
-
-    const result = await cancelAppointmentByToken({ tokenHash: approved.publicTokenHash });
+    // Approval kept the token, so the link saved at submission still cancels.
+    const result = await cancelAppointmentByToken({ tokenHash: hashToken(rawToken) });
     expect(result.cancelled).toBe(true);
 
     const updated = await testDb.appointment.findUniqueOrThrow({
@@ -338,10 +341,25 @@ describe('visitor cancellation by token', () => {
     expect(updated.visit?.status).toBe(VisitStatus.CANCELLED);
     expect(updated.credentials.every((c) => c.revokedAt !== null)).toBe(true);
 
-    // The superseded token is inert.
-    expect(
-      (await cancelAppointmentByToken({ tokenHash: hashToken(rawToken) })).cancelled,
-    ).toBe(false);
+    // The host is told in-app, so they are not left expecting the visitor.
+    const notices = await testDb.notification.findMany({ where: { type: 'host.cancelled' } });
+    expect(notices).toHaveLength(1);
+    expect(notices[0]?.userId).toBe(fixtures.teacher.id);
+    expect(JSON.stringify(notices[0])).not.toContain(rawToken);
+  });
+
+  it('does not tell the host about a cancelled request that was held for review', async () => {
+    const { appointment, rawToken } = await createPendingRequest();
+    // The host never saw a request under review, so a cancellation notice
+    // would disclose that it existed.
+    await testDb.appointment.update({
+      where: { id: appointment.id },
+      data: { status: AppointmentStatus.REVIEW_REQUIRED },
+    });
+
+    const result = await cancelAppointmentByToken({ tokenHash: hashToken(rawToken) });
+    expect(result.cancelled).toBe(true);
+    expect(await testDb.notification.count({ where: { type: 'host.cancelled' } })).toBe(0);
   });
 
   it('reports no cancellation for an unknown token without disclosing anything', async () => {
@@ -357,7 +375,6 @@ describe('visitor cancellation by token', () => {
       appointmentId: appointment.id,
       actorUserId: fixtures.teacher.id,
       actorRole: Role.TEACHER,
-      appUrl: APP_URL,
     });
 
     const approved = await testDb.appointment.findUniqueOrThrow({ where: { id: appointment.id } });

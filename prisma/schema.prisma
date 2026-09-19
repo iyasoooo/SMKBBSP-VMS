@@ -354,8 +354,9 @@ model Appointment {
   decidedById  String?
   cancelledAt  DateTime?
 
-  /// SHA-256 of the raw private-link token. The raw value is emailed once and
-  /// lives only in the visitor's URL.
+  /// SHA-256 of the raw private-link token. The raw value is shown once, by
+  /// redirecting the visitor to it at submission, and lives only in their URL.
+  /// Approval binds the pass to it without rotating it.
   publicTokenHash      String   @unique
   publicTokenExpiresAt DateTime
 

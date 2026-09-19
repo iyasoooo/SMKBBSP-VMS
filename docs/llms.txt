@@ -1,8 +1,9 @@
 # SMKBBSP VisitorPass
 
 > A school visitor management system for SMK Bandar Baru Sri Petaling. A visitor requests an
-> appointment without an account, the host teacher approves it, and an approved visitor receives an
-> expiring QR pass by email. At the gate a guard scans the pass, records that physical
+> appointment without an account and is shown a private link on screen; when the host teacher
+> approves, that same link becomes an expiring QR pass. The system sends no email. At the gate a
+> guard scans the pass, records that physical
 > identification was sighted, checks the visitor in, and prints a badge. Next.js App Router,
 > TypeScript strict, PostgreSQL 16 via Prisma.
 
@@ -60,12 +61,19 @@ data, so a denied request cannot briefly stream it. Teacher-scoped queries filte
 the query itself, so a valid id belonging to another teacher matches nothing.
 
 **Transactions and idempotency.** Approval, check-in, check-out and walk-in each write their status
-change, visit, credential, outbox rows and audit entry in one transaction, or none of them. Repeating
-any of them returns the existing result rather than creating a second visit, badge, credential or
-email.
+change, visit, credential, in-app notifications and audit entry in one transaction, or none of them.
+Repeating any of them returns the existing result rather than creating a second visit, badge,
+credential or notification.
 
-**The outbox.** Notification rows are written inside the business transaction; delivery happens
-after commit. Never send mail inside a transaction — an SMTP outage must not roll back a check-in.
+**No email.** The system sends nothing to anyone; there is no mail library installed and
+`tests/unit/no-email.test.ts` fails if one is added. Staff are notified in-app
+(`lib/domain/in-app-notifications.ts`), inside the business transaction. Visitors have no account:
+submission redirects them to `/v/<token>`, the only place the raw token is ever shown.
+
+**Never rotate the visitor's token on approval.** Approval binds the credential to the token issued
+at submission. The visitor was shown that link once and nothing can be sent to them afterwards, so a
+rotated link would strand an approved visitor. Only an administrator's reissue rotates it, and it
+hands the new link back to that administrator. `decisions.test.ts` pins this end to end.
 
 **Time.** Instants are stored in UTC and displayed in `Asia/Kuala_Lumpur`. Every "today", date range
 and school-hours decision is evaluated against the Malaysian calendar day via `lib/time.ts`, never
@@ -95,7 +103,6 @@ lib/
   domain/           business services — the layer that owns transitions.
                     appointments, decisions, gate, credentials, blacklist, badges,
                     admin, analytics, settings, presenters, in-app-notifications
-  email/            outbox.ts (transactional), templates.ts
   reports/          query.ts shared by screen, pdf.ts and xlsx.ts
   redact.ts         one redactor, shared by audit and logger
   time.ts           UTC storage, Kuala Lumpur presentation

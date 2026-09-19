@@ -4,8 +4,8 @@
 #   docker compose logs -f app       follow the application log
 #   docker compose down              stop (data survives in the named volume)
 #
-# Services start in dependency order: PostgreSQL and Mailpit become healthy,
-# then `migrate` runs to completion, then `app` starts. That ordering means the
+# Services start in dependency order: PostgreSQL becomes healthy, then
+# `migrate` runs to completion, then `app` starts. That ordering means the
 # application never comes up against a schema that has not been applied yet.
 #
 # Secrets are read from `.env` and are never baked into the image. The named
@@ -34,24 +34,6 @@ services:
       timeout: 5s
       retries: 12
       start_period: 10s
-
-  mailpit:
-    image: axllent/mailpit:latest
-    container_name: smkbbsp_mailpit
-    restart: unless-stopped
-    environment:
-      MP_SMTP_AUTH_ACCEPT_ANY: 1
-      MP_SMTP_AUTH_ALLOW_INSECURE: 1
-      MP_MAX_MESSAGES: 5000
-    ports:
-      - '1025:1025' # SMTP
-      - '8025:8025' # web UI  ->  http://localhost:8025
-    healthcheck:
-      test: ['CMD', 'wget', '-qO-', 'http://localhost:8025/readyz']
-      interval: 5s
-      timeout: 5s
-      retries: 12
-      start_period: 5s
 
   # One-shot schema migration. Runs to completion and exits; `app` waits for it.
   # Kept separate from the app so that scaling the app to more than one replica
@@ -91,9 +73,6 @@ services:
       PORT: 3000
       # Container-internal hostnames replace localhost.
       DATABASE_URL: postgresql://${POSTGRES_USER:-visitorpass}:${POSTGRES_PASSWORD:-visitorpass_local_dev}@postgres:5432/${POSTGRES_DB:-visitorpass}?schema=public
-      SMTP_HOST: mailpit
-      SMTP_PORT: 1025
-      SMTP_SECURE: 'false'
       APP_URL: ${APP_URL:-http://localhost:3000}
       APP_TIMEZONE: ${APP_TIMEZONE:-Asia/Kuala_Lumpur}
       # No defaults for the secrets on purpose: compose fails fast with a clear
@@ -102,8 +81,6 @@ services:
       IDENTITY_ENCRYPTION_KEY: ${IDENTITY_ENCRYPTION_KEY:?set IDENTITY_ENCRYPTION_KEY in .env}
       IDENTITY_HMAC_KEY: ${IDENTITY_HMAC_KEY:?set IDENTITY_HMAC_KEY in .env}
       IDENTITY_KEY_VERSION: ${IDENTITY_KEY_VERSION:-1}
-      MAIL_FROM_NAME: ${MAIL_FROM_NAME:-SMKBBSP VisitorPass}
-      MAIL_FROM_ADDRESS: ${MAIL_FROM_ADDRESS:-visitorpass@smkbbsp.test}
       SEED_ADMIN_PASSWORD: ${SEED_ADMIN_PASSWORD:-Admin#Demo2025}
       SEED_GUARD_PASSWORD: ${SEED_GUARD_PASSWORD:-Guard#Demo2025}
       SEED_TEACHER_PASSWORD: ${SEED_TEACHER_PASSWORD:-Teacher#Demo2025}
@@ -116,7 +93,7 @@ services:
       # `npm run dev` on the host. Inside a container 127.0.0.1 is the container
       # itself, so inheriting it would point the app at nothing and the scan
       # panel would report itself unavailable - which is exactly what happened.
-      # The same reasoning already applies to DATABASE_URL and SMTP_HOST above.
+      # The same reasoning already applies to DATABASE_URL above.
       OCR_OLLAMA_URL: http://host.docker.internal:11434
       OCR_OLLAMA_MODEL: ${OCR_OLLAMA_MODEL:-qwen3.5:0.8b}
       # Longer than the host default: a model sharing a laptop with Docker is
@@ -133,8 +110,6 @@ services:
       - 'host.docker.internal:host-gateway'
     depends_on:
       postgres:
-        condition: service_healthy
-      mailpit:
         condition: service_healthy
       migrate:
         condition: service_completed_successfully

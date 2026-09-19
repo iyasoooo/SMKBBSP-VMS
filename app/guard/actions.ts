@@ -18,7 +18,6 @@ import {
 } from '@/lib/domain/gate';
 import { CheckpointError, recordCheckpoint } from '@/lib/domain/checkpoints';
 import { walkInSchema } from '@/lib/validation/appointment';
-import { flushNotificationsInBackground } from '@/lib/email/outbox';
 import { DENIAL_CODES } from '@/lib/constants';
 import { fail, ok, toFieldErrors, type ActionResult } from '@/lib/result';
 import { createLogger } from '@/lib/logger';
@@ -147,7 +146,6 @@ export async function checkInAction(
       idSighted: parsed.data.idSighted,
     });
 
-    flushNotificationsInBackground(result.notificationIds);
     revalidatePath('/guard');
     revalidatePath('/guard/active');
     revalidatePath('/guard/emergency');
@@ -178,7 +176,6 @@ export async function checkOutAction(
   try {
     const result = await checkOutVisit({ visitId, guardUserId: user.id });
 
-    flushNotificationsInBackground(result.notificationIds);
     revalidatePath('/guard');
     revalidatePath('/guard/active');
     revalidatePath('/guard/emergency');
@@ -270,7 +267,6 @@ export async function walkInAction(
   try {
     const result = await registerWalkIn({ input: parsed.data, guardUserId: user.id });
     visitId = result.visitId;
-    flushNotificationsInBackground(result.notificationIds);
   } catch (error) {
     if (error instanceof GateError) return fail(error.message, { code: error.code });
     log.error('walk-in failed', undefined, error);

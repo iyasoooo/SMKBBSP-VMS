@@ -98,6 +98,12 @@ export interface SubmittedRequest {
   reference: string;
   visitorName: string;
   nric: string;
+  /**
+   * The visitor's private page, `/v/<token>`, exactly as the submission
+   * redirect delivered it. With no email this is the visitor's only link, so
+   * tests reopen *this* path to see the decision and the pass.
+   */
+  privatePath: string;
 }
 
 /**
@@ -159,15 +165,21 @@ export async function submitVisitRequest(
   await step('Accept the privacy notice and submit', async () => {
     await page.getByLabel(/I have read the notice above/).check();
     await page.getByRole('button', { name: 'Submit request' }).click();
-    await page.waitForURL('**/visit/request/success**', { timeout: 20_000 });
+    // Submission lands straight on the visitor's private page.
+    await page.waitForURL(/\/v\/[A-Za-z0-9_-]+\?new=1$/, { timeout: 20_000 });
   });
 
-  return step('Read the reference from the confirmation page', async () => {
+  return step('Read the reference from the private page', async () => {
     const reference = (
       await page.locator('p.font-mono').filter({ hasText: /^VP-/ }).first().textContent()
     )?.trim();
 
     expect(reference).toBeTruthy();
-    return { reference: reference ?? '', visitorName: options.visitorName, nric };
+    return {
+      reference: reference ?? '',
+      visitorName: options.visitorName,
+      nric,
+      privatePath: new URL(page.url()).pathname,
+    };
   });
 }

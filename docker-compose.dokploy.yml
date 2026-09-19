@@ -3,7 +3,7 @@
 # This is the PRODUCTION compose file for a Dokploy deployment. It is NOT the
 # local dev file (docker-compose.yml) - the differences are deliberate:
 #
-#   - No published ports on postgres / ollama / mailpit. On a public VPS a
+#   - No published ports on postgres / ollama. On a public VPS a
 #     published port is reachable from the internet. These services must only
 #     be reachable on the internal Docker network, so they carry no `ports:`.
 #   - Only `app` is exposed, and only through Traefik on the external
@@ -119,27 +119,6 @@ services:
     networks:
       - internal
 
-  # Local mail capture. Kept internal-only: the app sends to mailpit:1025 and
-  # emails are captured, but the web UI is NOT published to the internet.
-  #
-  # Mailpit CAPTURES mail, it does not DELIVER it. For visitors to receive real
-  # emails, remove this service and point the SMTP_* vars at a real provider.
-  mailpit:
-    image: axllent/mailpit:latest
-    restart: unless-stopped
-    environment:
-      MP_SMTP_AUTH_ACCEPT_ANY: 1
-      MP_SMTP_AUTH_ALLOW_INSECURE: 1
-      MP_MAX_MESSAGES: 5000
-    networks:
-      - internal
-    healthcheck:
-      test: ['CMD', 'wget', '-qO-', 'http://localhost:8025/readyz']
-      interval: 5s
-      timeout: 5s
-      retries: 12
-      start_period: 5s
-
   # One-shot schema migration. Runs to completion and exits; `app` waits for it.
   migrate:
     build:
@@ -177,23 +156,12 @@ services:
       NODE_ENV: production
       PORT: 3000
       DATABASE_URL: postgresql://${POSTGRES_USER:-visitorpass}:${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in the Dokploy Environment tab}@postgres:5432/${POSTGRES_DB:-visitorpass}?schema=public
-      # Defaults capture mail in the internal Mailpit service. To deliver real
-      # email, set SMTP_HOST/PORT/SECURE/USER/PASSWORD in the Dokploy Environment
-      # tab (e.g. Gmail: host smtp.gmail.com, port 465, secure true, user the
-      # Gmail address, password a 16-char App Password) - no file edit needed.
-      SMTP_HOST: ${SMTP_HOST:-mailpit}
-      SMTP_PORT: ${SMTP_PORT:-1025}
-      SMTP_SECURE: ${SMTP_SECURE:-false}
-      SMTP_USER: ${SMTP_USER:-}
-      SMTP_PASSWORD: ${SMTP_PASSWORD:-}
       APP_URL: ${APP_URL:?set APP_URL to your public https origin}
       APP_TIMEZONE: ${APP_TIMEZONE:-Asia/Kuala_Lumpur}
       SESSION_SECRET: ${SESSION_SECRET:?set SESSION_SECRET in the Dokploy Environment tab}
       IDENTITY_ENCRYPTION_KEY: ${IDENTITY_ENCRYPTION_KEY:?set IDENTITY_ENCRYPTION_KEY in the Dokploy Environment tab}
       IDENTITY_HMAC_KEY: ${IDENTITY_HMAC_KEY:?set IDENTITY_HMAC_KEY in the Dokploy Environment tab}
       IDENTITY_KEY_VERSION: ${IDENTITY_KEY_VERSION:-1}
-      MAIL_FROM_NAME: ${MAIL_FROM_NAME:-SMKBBSP VisitorPass}
-      MAIL_FROM_ADDRESS: ${MAIL_FROM_ADDRESS:-visitorpass@smkbbsp.test}
       SEED_ADMIN_PASSWORD: ${SEED_ADMIN_PASSWORD:?set SEED_ADMIN_PASSWORD in the Dokploy Environment tab}
       SEED_GUARD_PASSWORD: ${SEED_GUARD_PASSWORD:?set SEED_GUARD_PASSWORD in the Dokploy Environment tab}
       SEED_TEACHER_PASSWORD: ${SEED_TEACHER_PASSWORD:?set SEED_TEACHER_PASSWORD in the Dokploy Environment tab}
@@ -216,8 +184,6 @@ services:
       - traefik.http.services.smkbbsp-app.loadbalancer.server.port=3000
     depends_on:
       postgres:
-        condition: service_healthy
-      mailpit:
         condition: service_healthy
       migrate:
         condition: service_completed_successfully

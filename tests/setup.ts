@@ -33,9 +33,6 @@ process.env.IDENTITY_ENCRYPTION_KEY = 'dGVzdC1lbmNyeXB0aW9uLWtleS0zMi1ieXRlcy0xM
 process.env.IDENTITY_HMAC_KEY = 'dGVzdC1obWFjLWtleS0zMi1ieXRlcy1sb25nLTEyMzQ=';
 process.env.IDENTITY_KEY_VERSION = '1';
 
-process.env.MAIL_FROM_ADDRESS ??= 'visitorpass@smkbbsp.test';
-process.env.MAIL_FROM_NAME ??= 'SMKBBSP VisitorPass';
-
 // Point integration tests at a dedicated database unless one is given.
 if (process.env.DATABASE_URL && !process.env.DATABASE_URL.includes('visitorpass_test')) {
   process.env.DATABASE_URL = process.env.DATABASE_URL.replace(

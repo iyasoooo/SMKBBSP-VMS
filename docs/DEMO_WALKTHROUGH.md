@@ -48,7 +48,8 @@ $env:NEXT_TELEMETRY_DISABLED=1; npm run dev
 | Tab | URL |
 |---|---|
 | Public site | <http://localhost:3000> |
-| Mailpit inbox | <http://localhost:8025> |
+
+There is no mail inbox to open: the system sends no email.
 
 ### 5. Print your cue card
 
@@ -93,34 +94,39 @@ Local demonstration credentials only.
    - Choose a date **1–3 days ahead**, time **10:00**.
    - Say out loud that the teacher list only shows staff currently accepting
      visits — one seeded teacher is on leave and is deliberately absent.
+   - Leave **email blank** and point out it is optional: the system never sends
+     anything, so it is kept only for records and blacklist matching.
 3. Tick the consent box and submit.
-4. The success page shows **a reference number only**. Say why: the private token
-   never appears in a URL, so it cannot leak through browser history or a
-   shared screen.
-5. Switch to **Mailpit**. Two emails arrived: the visitor acknowledgement and the
-   teacher notification. Open the visitor one and point out that the **subject
-   carries only the reference number** — no name, no purpose.
-6. Follow the private link in the email. The status reads **Awaiting approval**.
+4. You land straight on the visitor's **private page**, reading **Awaiting
+   approval**, with a prominent **Save this page now** card. Say why it is so
+   insistent: there is no email and no account, so this link is the visitor's
+   only way back. **Copy the address** into a note — you need it in Act 2.
+5. Point out the empty pass slot: "your QR pass will appear here, on this page".
+   Nothing is shown that could be mistaken for a pass before approval.
 
-**If asked "what if I lose the email?"** — go to `/visit/status`. It deliberately
+**If asked "what if they lose the link?"** — go to `/visit/status`. It deliberately
 offers no lookup form: a public search by name or reference would let anyone
-confirm whether a person had arranged to visit the school.
+confirm whether a person had arranged to visit the school. The visitor resubmits
+or is registered as a walk-in; once approved, an administrator can reissue the
+pass and hand over a new link.
 
 ### Act 2 — The teacher decides (2 min)
 
-1. Sign in as the **teacher**. The dashboard shows the pending count.
+1. Sign in as the **teacher**. The dashboard shows the pending count, and
+   **Notifications** holds an in-app notice of the new request.
 2. Open **Requests**. Only this teacher's queue is visible.
 3. Open the request you just created. Note the identity number is shown
    **masked** (`******-**-5523`) — teachers never see the full value.
 4. **Approve** it with a short note.
-5. Back to Mailpit: the approval email has arrived with the QR pass, the manual
-   fallback code, and the validity window.
-6. Open the visitor's private link again — it is now a **QR visitor pass**.
+5. Paste the address you saved in Act 1. The **same link** that said "Awaiting
+   approval" is now a **QR visitor pass**, with the manual fallback code, your
+   note, and the validity window.
 
 **Worth saying:** approving is one database transaction — status, exactly one
-expected visit, exactly one active credential, the emails and the audit entry all
-commit together, or none of them do. Pressing approve twice cannot create two
-badges.
+expected visit, exactly one active credential and the audit entry all commit
+together, or none of them do. Pressing approve twice cannot create two badges.
+And approval *binds* the pass to the link the visitor already holds rather than
+issuing a new one — with no email, a new link could never reach them.
 
 ### Act 3 — Arrival at the gate (4 min)
 
@@ -144,12 +150,13 @@ interface is designed for a 10-inch screen.
    carries name, badge number, host, destination and QR — **no identity number,
    no phone, no purpose**.
 7. Scan the same pass again. It returns the existing active visit and a check-out
-   option — **no duplicate visit, badge or email**.
+   option — **no duplicate visit, badge or notification**.
+8. Switch to the teacher: **Notifications** now says their visitor has arrived.
 
 ### Act 4 — Walk-in and the blocked path (2 min)
 
 1. Choose **Walk-in**. Register a visitor with no appointment. Note email is
-   optional — a walk-in may not have one.
+   optional — the printed badge is the walk-in's pass.
 2. Submit and check in. A badge is issued.
 3. Now the important one: start another walk-in, using the **blacklisted identity
    number from your cue card**.
@@ -225,11 +232,18 @@ available, and a local mock would only test the mock. Anomaly detection cannot b
 validated without representative historical data and a defensible ground truth.
 `docs/spec/FYP_SCOPE_REVISION.md` documents the reasoning.
 
-**"What happens if the email server is down?"**
-The business transaction still commits. Notifications are written to an outbox in
-the same transaction and delivered afterwards; a failure marks the row `FAILED`
-and an administrator can inspect and retry it. An SMTP outage cannot roll back a
-check-in.
+**"Why doesn't it send email?"**
+A deliberate scope decision. Email needs a mail server and a provider account,
+and it needs the visitor's address before a pass can be delivered. Instead the
+visitor is shown their private link on screen and saves it, and staff are
+notified in-app. One fewer external dependency, and one fewer piece of contact
+data the school must hold. The cost is honest: no reminders, and a link lost
+before approval cannot be recovered.
+
+**"What if a visitor loses their link?"**
+There is deliberately no lookup — that would reveal who has visited. They
+resubmit, or the guard registers them as a walk-in. Once approved, an
+administrator can reissue the pass and hand over the new link in person.
 
 **"Can it work offline?"**
 No, and that is deliberate. Offline check-in is out of scope. The app shows a
@@ -241,11 +255,12 @@ clear connection error rather than pretending a write succeeded.
 
 Being upfront about these reads far better than being caught by them.
 
-- Optional IC OCR (P1) is not implemented.
+- IC card reading (P1) needs the self-hosted model host online; when it is off,
+  the scan panel reports itself unavailable and the form is typed in. It assists
+  data entry only and never verifies identity.
 - Rate limiting is a fixed window in the database — correct for one instance,
   would need shared storage to scale out.
-- There is no manual pass revoke/reissue button; revocation happens
-  automatically on rejection, cancellation and re-approval.
-- No in-app notification centre; email only.
+- No email or SMS: visitors are never reminded or told of a decision, and must
+  reopen their link. A link lost before approval cannot be recovered.
 - Two dependency advisories remain in transitive packages inside Next.js's and
   exceljs's own trees, with no non-breaking upgrade available.

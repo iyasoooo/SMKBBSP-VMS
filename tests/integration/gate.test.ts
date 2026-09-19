@@ -1,5 +1,12 @@
 import { afterAll, beforeEach, describe, expect, it } from 'vitest';
-import { BlacklistStatus, IdentityType, MatchPolicy, Role, VisitStatus } from '@prisma/client';
+import {
+  BlacklistStatus,
+  IdentityType,
+  MatchPolicy,
+  NotificationChannel,
+  Role,
+  VisitStatus,
+} from '@prisma/client';
 import {
   nextSchoolSlot,
   resetDatabase,
@@ -21,8 +28,6 @@ import {
 import { computeIdentityHmac, normalizeIdentity } from '@/lib/crypto/identity';
 import { deriveFallbackCode } from '@/lib/crypto/tokens';
 import type { AppointmentRequestInput, WalkInInput } from '@/lib/validation/appointment';
-
-const APP_URL = 'http://localhost:3000';
 
 let fixtures: BaseFixtures;
 
@@ -58,7 +63,7 @@ async function createApprovedVisitNow() {
     consent: 'on',
   } as AppointmentRequestInput;
 
-  const created = await createAppointmentRequest(input, APP_URL);
+  const created = await createAppointmentRequest(input);
   const appointment = await testDb.appointment.findUniqueOrThrow({
     where: { referenceNumber: created.referenceNumber },
   });
@@ -67,7 +72,6 @@ async function createApprovedVisitNow() {
     appointmentId: appointment.id,
     actorUserId: fixtures.teacher.id,
     actorRole: Role.TEACHER,
-    appUrl: APP_URL,
   });
 
   // Move the window so "now" sits inside it.
@@ -198,8 +202,11 @@ describe('AT-010 / AT-012: check-in', () => {
     const events = await testDb.visitEvent.findMany({ where: { visitId } });
     expect(events.map((e) => e.type).sort()).toEqual(['CHECKED_IN', 'CREATED', 'ID_SIGHTED']);
 
+    // AT-010: the host is told in-app, and nothing is emailed.
     const notifications = await testDb.notification.findMany();
     expect(notifications.map((n) => n.type)).toEqual(['host.arrival']);
+    expect(notifications[0]?.channel).toBe(NotificationChannel.IN_APP);
+    expect(notifications[0]?.userId).toBe(fixtures.teacher.id);
 
     expect(await testDb.auditLog.count({ where: { action: 'visit.checked_in' } })).toBe(1);
   });
@@ -353,9 +360,12 @@ describe('AT-014 / AT-015: walk-in', () => {
     expect(visit.visitor.email).toBeNull();
     expect(result.badgeNumber).toMatch(/^V-\d{6}-\d{4}$/);
 
-    // The host still gets notified even though the visitor has no email.
+    // AT-014: the host is notified in-app; the visitor needs no email.
     const notifications = await testDb.notification.findMany();
-    expect(notifications.map((n) => n.recipient)).toEqual([fixtures.teacher.email]);
+    expect(notifications).toHaveLength(1);
+    expect(notifications[0]?.type).toBe('host.arrival');
+    expect(notifications[0]?.channel).toBe(NotificationChannel.IN_APP);
+    expect(notifications[0]?.userId).toBe(fixtures.teacher.id);
 
     expect(await testDb.auditLog.count({ where: { action: 'walk_in.created' } })).toBe(1);
   });

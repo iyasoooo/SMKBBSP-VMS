@@ -20,8 +20,6 @@ import { hashToken } from '@/lib/crypto/tokens';
 import { getSettings } from '@/lib/domain/settings';
 import type { AppointmentRequestInput } from '@/lib/validation/appointment';
 
-const APP_URL = 'http://localhost:3000';
-
 let fixtures: BaseFixtures;
 
 beforeEach(async () => {
@@ -56,8 +54,8 @@ function buildInput(overrides: Partial<AppointmentRequestInput> = {}): Appointme
 }
 
 describe('createAppointmentRequest', () => {
-  it('AT-003: stores a PENDING request, a visitor, and both notifications', async () => {
-    const result = await createAppointmentRequest(buildInput(), APP_URL);
+  it('AT-003: stores a PENDING request, a visitor, and one in-app notice for the host', async () => {
+    const result = await createAppointmentRequest(buildInput());
 
     expect(result.status).toBe(AppointmentStatus.PENDING);
     expect(result.referenceNumber).toMatch(/^VP-[A-Z0-9]{4}-[A-Z0-9]{4}$/);
@@ -76,28 +74,36 @@ describe('createAppointmentRequest', () => {
     expect(appointment?.visitor.phone).toBe('+60123456789');
     expect(appointment?.visitor.email).toBe('nurul.huda@contoh.test');
 
-    // Two emails: the visitor acknowledgement and the teacher's notification.
-    const emails = await testDb.notification.findMany({
-      where: { channel: NotificationChannel.EMAIL },
-      orderBy: { type: 'asc' },
-    });
-    expect(emails.map((n) => n.type)).toEqual([
-      'teacher.new_request',
-      'visitor.request_received',
-    ]);
+    // AT-025: nothing is emailed. The only notification is the host's in-app
+    // notice, which belongs to them and starts unread.
+    const notifications = await testDb.notification.findMany();
+    expect(notifications).toHaveLength(1);
+    expect(notifications[0]?.channel).toBe(NotificationChannel.IN_APP);
+    expect(notifications[0]?.type).toBe('teacher.new_request');
+    expect(notifications[0]?.userId).toBe(fixtures.teacher.id);
+    expect(notifications[0]?.readAt).toBeNull();
+  });
 
-    // Plus an in-app copy for the teacher, so a signed-in host sees it without
-    // checking their inbox. It belongs to the host and starts unread.
-    const inApp = await testDb.notification.findMany({
-      where: { channel: NotificationChannel.IN_APP },
+  it('AT-025: writes no email notification of any kind', async () => {
+    await createAppointmentRequest(buildInput());
+    expect(
+      await testDb.notification.count({ where: { channel: NotificationChannel.EMAIL } }),
+    ).toBe(0);
+  });
+
+  it('accepts a request with no email address at all', async () => {
+    const result = await createAppointmentRequest(buildInput({ email: undefined }));
+
+    const appointment = await testDb.appointment.findUnique({
+      where: { referenceNumber: result.referenceNumber },
+      include: { visitor: true },
     });
-    expect(inApp).toHaveLength(1);
-    expect(inApp[0]?.userId).toBe(fixtures.teacher.id);
-    expect(inApp[0]?.readAt).toBeNull();
+    expect(appointment?.status).toBe(AppointmentStatus.PENDING);
+    expect(appointment?.visitor.email).toBeNull();
   });
 
   it('AT-009 / AT-027: persists no plaintext identity and only a token hash', async () => {
-    const result = await createAppointmentRequest(buildInput(), APP_URL);
+    const result = await createAppointmentRequest(buildInput());
 
     const appointment = await testDb.appointment.findUnique({
       where: { referenceNumber: result.referenceNumber },
@@ -114,26 +120,24 @@ describe('createAppointmentRequest', () => {
     expect(appointment?.visitor.identityLast4).toBe('5523');
   });
 
-  it('keeps the outbox payload free of identity values and raw tokens', async () => {
-    const result = await createAppointmentRequest(buildInput(), APP_URL);
+  it('keeps every notification free of identity values and the raw token', async () => {
+    const result = await createAppointmentRequest(buildInput());
 
+    // With no email, the redirect is the token's only delivery. It must not
+    // leak into any notification row - including the link field.
     const notifications = await testDb.notification.findMany();
+    expect(notifications.length).toBeGreaterThan(0);
     for (const notification of notifications) {
-      const payload = JSON.stringify(notification.payload);
-      expect(payload).not.toContain('880101145523');
+      const serialized = JSON.stringify(notification);
+      expect(serialized).not.toContain('880101145523');
+      expect(serialized).not.toContain(result.rawToken);
     }
-
-    // The visitor's own link legitimately carries the token; the teacher's
-    // notification must not.
-    const teacherNotification = notifications.find((n) => n.type === 'teacher.new_request');
-    expect(JSON.stringify(teacherNotification?.payload)).not.toContain(result.rawToken);
   });
 
   it('reuses one visitor record for a repeat visitor with the same identity', async () => {
-    await createAppointmentRequest(buildInput(), APP_URL);
+    await createAppointmentRequest(buildInput());
     await createAppointmentRequest(
       buildInput({ fullName: 'Nurul Huda Ismail', phone: '013-999 8888' }),
-      APP_URL,
     );
 
     const visitors = await testDb.visitor.findMany();
@@ -146,15 +150,15 @@ describe('createAppointmentRequest', () => {
   });
 
   it('does not merge two different people who share a name and email', async () => {
-    await createAppointmentRequest(buildInput({ identityNumber: '880101-14-5523' }), APP_URL);
-    await createAppointmentRequest(buildInput({ identityNumber: '900202-10-1234' }), APP_URL);
+    await createAppointmentRequest(buildInput({ identityNumber: '880101-14-5523' }));
+    await createAppointmentRequest(buildInput({ identityNumber: '900202-10-1234' }));
 
     expect(await testDb.visitor.count()).toBe(2);
   });
 
   it('records consent with the current notice version', async () => {
     const settings = await getSettings();
-    await createAppointmentRequest(buildInput(), APP_URL);
+    await createAppointmentRequest(buildInput());
 
     const visitor = await testDb.visitor.findFirst();
     expect(visitor?.consentVersion).toBe(settings.consentVersion);
@@ -167,7 +171,7 @@ describe('createAppointmentRequest', () => {
       data: { isAcceptingVisits: false },
     });
 
-    await expect(createAppointmentRequest(buildInput(), APP_URL)).rejects.toThrow(
+    await expect(createAppointmentRequest(buildInput())).rejects.toThrow(
       /not accepting visits/i,
     );
 
@@ -177,7 +181,7 @@ describe('createAppointmentRequest', () => {
 
   it('AT-004: rejects a past date without creating a partial appointment', async () => {
     await expect(
-      createAppointmentRequest(buildInput({ visitDate: '2020-01-06' }), APP_URL),
+      createAppointmentRequest(buildInput({ visitDate: '2020-01-06' })),
     ).rejects.toBeInstanceOf(ScheduleError);
 
     expect(await testDb.appointment.count()).toBe(0);
@@ -205,27 +209,26 @@ describe('AT-005: blacklist handling on public submission', () => {
       },
     });
 
-    const result = await createAppointmentRequest(buildInput(), APP_URL);
+    const result = await createAppointmentRequest(buildInput());
 
     expect(result.status).toBe(AppointmentStatus.REVIEW_REQUIRED);
 
     const notifications = await testDb.notification.findMany();
     const types = notifications.map((n) => n.type).sort();
 
-    // The visitor still gets a neutral acknowledgement; the teacher is not
-    // asked to approve; administrators are alerted.
-    expect(types).toContain('visitor.request_received');
+    // The teacher is not asked to approve; administrators are alerted in-app.
+    // (The visitor's neutral acknowledgement is their private page, which
+    // reads identically for PENDING and REVIEW_REQUIRED.)
     expect(types).toContain('admin.review_required');
     expect(types).not.toContain('teacher.new_request');
+    expect(notifications.every((n) => n.userId === fixtures.admin.id)).toBe(true);
 
     // No pass may exist for a request under review.
     expect(await testDb.qrCredential.count()).toBe(0);
 
-    // Nothing in the visitor's own email hints at the block.
-    const visitorEmail = notifications.find((n) => n.type === 'visitor.request_received');
-    const payload = JSON.stringify(visitorEmail?.payload).toLowerCase();
+    // The admin alert names no reason or blacklist detail.
+    const payload = JSON.stringify(notifications[0]?.payload).toLowerCase();
     expect(payload).not.toContain('blacklist');
-    expect(payload).not.toContain('blocked');
     expect(payload).not.toContain('restricted internal reason');
   });
 
@@ -242,7 +245,7 @@ describe('AT-005: blacklist handling on public submission', () => {
       },
     });
 
-    const result = await createAppointmentRequest(buildInput(), APP_URL);
+    const result = await createAppointmentRequest(buildInput());
     expect(result.status).toBe(AppointmentStatus.REVIEW_REQUIRED);
   });
 
@@ -260,7 +263,7 @@ describe('AT-005: blacklist handling on public submission', () => {
       },
     });
 
-    const result = await createAppointmentRequest(buildInput(), APP_URL);
+    const result = await createAppointmentRequest(buildInput());
     expect(result.status).toBe(AppointmentStatus.PENDING);
   });
 
@@ -276,7 +279,7 @@ describe('AT-005: blacklist handling on public submission', () => {
       },
     });
 
-    const result = await createAppointmentRequest(buildInput(), APP_URL);
+    const result = await createAppointmentRequest(buildInput());
     expect(result.status).toBe(AppointmentStatus.PENDING);
   });
 });
@@ -314,7 +317,7 @@ describe('rollback safety', () => {
   it('leaves no visitor behind when the appointment write fails', async () => {
     const input = buildInput({ visitTypeId: 'does-not-exist' });
 
-    await expect(createAppointmentRequest(input, APP_URL)).rejects.toThrow();
+    await expect(createAppointmentRequest(input)).rejects.toThrow();
 
     expect(await testDb.visitor.count()).toBe(0);
     expect(await testDb.appointment.count()).toBe(0);
@@ -324,7 +327,7 @@ describe('rollback safety', () => {
 
 describe('audit', () => {
   it('AT-024: records creation with safe metadata only', async () => {
-    const result = await createAppointmentRequest(buildInput(), APP_URL);
+    const result = await createAppointmentRequest(buildInput());
 
     const entries = await testDb.auditLog.findMany();
     expect(entries).toHaveLength(1);
