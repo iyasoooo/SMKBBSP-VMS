@@ -355,23 +355,37 @@ Keep it a local tag.
 ## Real email (production, not demo)
 
 Mailpit only catches mail locally. To actually deliver approval/visitor emails,
-add a real SMTP provider by overriding the app's SMTP env in
-`docker-compose.override.yml`. Example with Brevo (free tier ~300 emails/day):
+set the app's `SMTP_*` variables in the **Dokploy Environment tab** — the
+production compose reads them as overrides, so no file edit is needed. Any
+unset variable falls back to the internal Mailpit service.
 
-```yaml
-services:
-  app:
-    environment:
-      SMTP_HOST: smtp-relay.brevo.com
-      SMTP_PORT: 587
-      SMTP_SECURE: 'false'
-      SMTP_USER: your-brevo-login
-      SMTP_PASS: your-brevo-smtp-key
+The mailer reads `SMTP_HOST`, `SMTP_PORT`, `SMTP_SECURE`, `SMTP_USER`, and
+`SMTP_PASSWORD` (see `lib/env.ts`). Example values:
+
+```
+# Gmail (free, ~500 emails/day; SMTP_USER must be the sending Gmail address)
+SMTP_HOST=smtp.gmail.com
+SMTP_PORT=465
+SMTP_SECURE=true
+SMTP_USER=youraccount@gmail.com
+SMTP_PASSWORD=your-16-char-app-password
+MAIL_FROM_ADDRESS=youraccount@gmail.com
+
+# Brevo (free tier ~300 emails/day; can send from your own domain)
+# SMTP_HOST=smtp-relay.brevo.com
+# SMTP_PORT=587
+# SMTP_SECURE=false
+# SMTP_USER=your-brevo-login
+# SMTP_PASSWORD=your-brevo-smtp-key
 ```
 
-Then run `docker compose up -d`. You can drop the `mailpit` service once real
-mail works. (Confirm the exact SMTP env var names your `lib` mailer reads before
-relying on this.)
+Gmail requires 2-Step Verification enabled and an **App Password** (Google
+Account → Security → App passwords) — your normal password will not authenticate
+over SMTP. On a free Gmail account the `From` is forced to your Gmail address.
+
+Redeploy, then verify with `npm run mail:test you@example.com` — it connects,
+authenticates, and sends one message, reporting the exact reason on failure. You
+can drop the `mailpit` service once real mail works.
 
 ## Backups (the Postgres volume is NOT a backup)
 

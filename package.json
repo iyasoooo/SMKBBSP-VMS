@@ -27,7 +27,8 @@
     "postinstall": "prisma generate",
     "pwa:icons": "tsx scripts/generate-pwa-icons.ts",
     "map:sync": "tsx scripts/sync-map.ts",
-    "mail:drain": "tsx scripts/drain-notifications.ts"
+    "mail:drain": "tsx scripts/drain-notifications.ts",
+    "mail:test": "tsx scripts/mail-test.ts"
   },
   "prisma": {
     "seed": "tsx prisma/seed.ts"

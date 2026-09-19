@@ -177,9 +177,15 @@ services:
       NODE_ENV: production
       PORT: 3000
       DATABASE_URL: postgresql://${POSTGRES_USER:-visitorpass}:${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in the Dokploy Environment tab}@postgres:5432/${POSTGRES_DB:-visitorpass}?schema=public
-      SMTP_HOST: mailpit
-      SMTP_PORT: 1025
-      SMTP_SECURE: 'false'
+      # Defaults capture mail in the internal Mailpit service. To deliver real
+      # email, set SMTP_HOST/PORT/SECURE/USER/PASSWORD in the Dokploy Environment
+      # tab (e.g. Gmail: host smtp.gmail.com, port 465, secure true, user the
+      # Gmail address, password a 16-char App Password) - no file edit needed.
+      SMTP_HOST: ${SMTP_HOST:-mailpit}
+      SMTP_PORT: ${SMTP_PORT:-1025}
+      SMTP_SECURE: ${SMTP_SECURE:-false}
+      SMTP_USER: ${SMTP_USER:-}
+      SMTP_PASSWORD: ${SMTP_PASSWORD:-}
       APP_URL: ${APP_URL:?set APP_URL to your public https origin}
       APP_TIMEZONE: ${APP_TIMEZONE:-Asia/Kuala_Lumpur}
       SESSION_SECRET: ${SESSION_SECRET:?set SESSION_SECRET in the Dokploy Environment tab}
