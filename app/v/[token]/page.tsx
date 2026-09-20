@@ -52,7 +52,6 @@ export default async function VisitorStatusPage({
       <Unavailable
         title="Too many requests"
         body="Please wait a moment and refresh the page."
-        schoolName={settings.schoolName}
       />
     );
   }
@@ -73,7 +72,7 @@ export default async function VisitorStatusPage({
   });
 
   if (!appointment || appointment.publicTokenExpiresAt.getTime() < now.getTime()) {
-    return <Unavailable schoolName={settings.schoolName} />;
+    return <Unavailable />;
   }
 
   const credential = appointment.credentials[0] ?? null;
@@ -381,11 +380,10 @@ export default async function VisitorStatusPage({
 
       {canCancel ? <CancelRequestForm token={token} /> : null}
 
+      {/* The school name and the way home both live in the shell now, so this
+          keeps only the warning, which is the part that matters. */}
       <p className="text-center text-xs text-muted">
-        Keep this page private. Anyone with this link can see and cancel your request.{' '}
-        <Link href="/" className="underline underline-offset-2">
-          {settings.schoolName}
-        </Link>
+        Keep this page private. Anyone with this link can see and cancel your request.
       </p>
     </div>
   );
@@ -396,11 +394,9 @@ export default async function VisitorStatusPage({
  * It deliberately does not say whether the request existed.
  */
 function Unavailable({
-  schoolName,
   title = 'This link is not available',
   body = 'The link may have expired, been cancelled, or been typed incorrectly. If you have lost your link, please submit a new request, or ask at the guard house when you arrive.',
 }: {
-  schoolName: string;
   title?: string;
   body?: string;
 }) {
@@ -418,7 +414,6 @@ function Unavailable({
           </Link>
         </div>
       </div>
-      <p className="mt-6 text-xs text-muted">{schoolName}</p>
     </div>
   );
 }
