@@ -146,9 +146,8 @@ interface is designed for a 10-inch screen.
 5. Tick **physical ID sighted** and check the visitor in.
    - Say precisely what this means: the system records *the guard's declaration*
      that identification was sighted. It makes no claim the card is genuine.
-6. **Print the badge**. Show that navigation disappears and it fits A4. The badge
-   carries name, badge number, host, destination and QR — **no identity number,
-   no phone, no purpose**.
+6. Nothing is printed. The visitor already holds their pass on their phone, and
+   the guard hands over no paper at all.
 7. Scan the same pass again. It returns the existing active visit and a check-out
    option — **no duplicate visit, badge or notification**.
 8. Switch to the teacher: **Notifications** now says their visitor has arrived.
@@ -156,8 +155,10 @@ interface is designed for a 10-inch screen.
 ### Act 4 — Walk-in and the blocked path (2 min)
 
 1. Choose **Walk-in**. Register a visitor with no appointment. Note email is
-   optional — the printed badge is the walk-in's pass.
-2. Submit and check in. A badge is issued.
+   optional — the walk-in is shown their own digital pass to scan.
+2. Submit. The screen shows the visitor's own pass QR — have someone scan it
+   with a phone to show it opens their pass. This is the only time that link is
+   ever shown, which is why the guard is told to make them save it.
 3. Now the important one: start another walk-in, using the **blacklisted identity
    number from your cue card**.
 4. Check-in is refused with a neutral **"contact an administrator"** message.

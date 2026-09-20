@@ -6,7 +6,7 @@ Academic title: **Smart Visitor Management System with QR Code and Appointment-B
 
 ## 1. Product summary
 
-SMKBBSP VisitorPass is a responsive web application that replaces the paper visitor logbook at SMK Bandar Baru Sri Petaling. A visitor can request an appointment with a teacher without creating an account. The teacher approves or rejects the request. On submission the visitor is given a private link on screen; once the teacher approves, that same link becomes an expiring QR pass. The system sends no email to anyone: visitors follow their request through the private link, and staff are notified inside the application. At the gate, a guard scans the pass, visually checks the visitor's physical identification where required, checks the visitor in, and prints a badge. The guard checks the visitor out when the visit ends. Walk-ins use a shorter guard-assisted workflow.
+SMKBBSP VisitorPass is a responsive web application that replaces the paper visitor logbook at SMK Bandar Baru Sri Petaling. A visitor can request an appointment with a teacher without creating an account. The teacher approves or rejects the request. On submission the visitor is given a private link on screen; once the teacher approves, that same link becomes an expiring QR pass. The system sends no email to anyone: visitors follow their request through the private link, and staff are notified inside the application. At the gate, a guard scans the pass, visually checks the visitor's physical identification where required, and checks the visitor in. Nothing is printed for the visitor: the pass is digital. The guard checks the visitor out when the visit ends. Walk-ins use a shorter guard-assisted workflow.
 
 Administrators manage staff, destinations, visitor records, blacklist entries, reports, and audit logs. During an emergency, authorized users can instantly see and print the current on-site visitor list.
 
@@ -20,7 +20,7 @@ The current paper process is slow, exposes previous visitors' personal details, 
 
 1. Digitize visitor pre-registration, gate registration, check-in, check-out, and record search in a secure database-backed system.
 2. Introduce appointment-based access control through teacher approval and expiring QR visitor passes.
-3. Improve daily gate operations with fast tablet workflows, printable badges, blacklist checks, in-app staff notifications, emergency lists, analytics, exports, and audit trails.
+3. Improve daily gate operations with fast tablet workflows, digital passes, blacklist checks, in-app staff notifications, emergency lists, analytics, exports, and audit trails.
 
 ## 4. Success measures
 
@@ -60,7 +60,7 @@ The current paper process is slow, exposes previous visitors' personal details, 
 - Confirm physical ID was sighted, where policy requires it.
 - Check in, deny, or check out a visitor.
 - Register and check in a walk-in.
-- Print or reprint a visitor badge.
+- Show a walk-in visitor their pass on screen for them to scan.
 - View and print the current emergency visitor list.
 - Cannot manage users, change blacklist records, or browse arbitrary sensitive exports.
 
@@ -86,7 +86,7 @@ The current paper process is slow, exposes previous visitors' personal details, 
 5. Guard today screen and QR/manual lookup.
 6. Check-in/check-out state machine.
 7. Guard-assisted walk-in registration.
-8. Printable visitor badge issued by the guard at check-in.
+8. Digital pass for walk-ins, shown on the guard's screen for the visitor to scan.
 9. In-app notifications for staff. Visitors follow their request through the private link. No email is sent.
 10. Visitor/visit history and search.
 11. Blacklist management and blocking checks.
@@ -158,7 +158,7 @@ Transitions are server-enforced and audited. Repeating the same action must not 
 2. Server performs blacklist checks before check-in.
 3. If blocked, check-in is denied and the guard receives a neutral instruction to contact an administrator. Details remain admin-only.
 4. If allowed, the transaction creates an appointment/source record marked `WALK_IN`, creates a `CHECKED_IN` visit, badge, notifications, and audit records.
-5. Walk-in never requires a visitor email. The badge the guard prints is the walk-in's pass.
+5. Walk-in never requires a visitor email. The guard's screen is the delivery channel: it shows a QR of the visitor's pass link, which the visitor scans with their own phone. The raw token is returned once and never redirected to, logged or stored.
 
 ### 7.5 Check-out
 
@@ -203,7 +203,7 @@ Visit status transitions:
 | FR-008 | P0 | Check in a valid expected visitor once, recording guard, time, and ID-sighting declaration. |
 | FR-009 | P0 | Register and check in a walk-in after validation and blacklist checks. |
 | FR-010 | P0 | Check out an active visitor once, recording guard and time. |
-| FR-011 | P0 | Generate a printable badge with name, badge number, host, destination, date, and QR. |
+| FR-011 | P0 | Issue a walk-in a digital pass on registration and display it for the visitor to scan. |
 | FR-012 | P0 | Search/filter visitor and visit history with masked sensitive data. |
 | FR-013 | P0 | Manage blacklist entries and enforce block/review rules. |
 | FR-014 | P0 | Display and print the live emergency on-site list. |

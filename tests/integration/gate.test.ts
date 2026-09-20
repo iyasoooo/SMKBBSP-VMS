@@ -411,6 +411,67 @@ describe('AT-014 / AT-015: walk-in', () => {
     expect(await testDb.visit.count()).toBe(0);
   });
 
+  /*
+   * The walk-in's pass used to be a token hashed into the appointment and then
+   * discarded: nobody could be given it, and scanning anything for a walk-in
+   * answered "pass not recognised". These pin the credential that fixes it.
+   */
+  it('issues a pass the walk-in visitor can actually be given', async () => {
+    const result = await registerWalkIn({
+      input: walkInInput(),
+      guardUserId: fixtures.guard.id,
+    });
+
+    expect(result.passToken).toMatch(/^[A-Za-z0-9_-]{16,}$/);
+    expect(result.fallbackCode).toMatch(/^[A-Z0-9]{4}-[A-Z0-9]{4}$/);
+
+    const credential = await testDb.qrCredential.findFirstOrThrow({
+      where: { appointment: { visit: { id: result.visitId } } },
+    });
+    expect(credential.revokedAt).toBeNull();
+    expect(credential.validFrom.getTime()).toBeLessThanOrEqual(Date.now());
+  });
+
+  it('resolves that pass at the gate as someone already inside, not as unknown', async () => {
+    const result = await registerWalkIn({
+      input: walkInInput(),
+      guardUserId: fixtures.guard.id,
+    });
+
+    // The whole point: a guard scanning a walk-in on the way out gets the
+    // check-out path rather than NOT_FOUND.
+    const byToken = await lookupPassByToken(result.passToken);
+    expect(byToken.state).toBe('ALREADY_CHECKED_IN');
+    expect(byToken.visit?.id).toBe(result.visitId);
+
+    const byCode = await lookupPassByCode(result.fallbackCode);
+    expect(byCode.state).toBe('ALREADY_CHECKED_IN');
+    expect(byCode.visit?.id).toBe(result.visitId);
+  });
+
+  it('does not issue a pass for a blocked walk-in', async () => {
+    await testDb.blacklistEntry.create({
+      data: {
+        status: BlacklistStatus.ACTIVE,
+        identityHmac: computeIdentityHmac(
+          IdentityType.NRIC,
+          normalizeIdentity(IdentityType.NRIC, '760101-99-5505'),
+        ),
+        displayName: 'Blocked contractor',
+        matchPolicy: MatchPolicy.BLOCK,
+        reason: 'Restricted internal reason.',
+        validFrom: new Date(Date.now() - 60_000),
+        createdById: fixtures.admin.id,
+      },
+    });
+
+    await expect(
+      registerWalkIn({ input: walkInInput(), guardUserId: fixtures.guard.id }),
+    ).rejects.toThrow(/contact an administrator/i);
+
+    expect(await testDb.qrCredential.count()).toBe(0);
+  });
+
   it('allows a visit type that does not require ID sighting', async () => {
     const result = await registerWalkIn({
       input: walkInInput({ visitTypeId: fixtures.visitTypeNoId.id, idSighted: false }),

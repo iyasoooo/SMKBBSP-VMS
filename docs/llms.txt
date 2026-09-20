@@ -4,7 +4,7 @@
 > appointment without an account and is shown a private link on screen; when the host teacher
 > approves, that same link becomes an expiring QR pass. The system sends no email. At the gate a
 > guard scans the pass, records that physical
-> identification was sighted, checks the visitor in, and prints a badge. Next.js App Router,
+> identification was sighted, and checks the visitor in. Visitor passes are digital only. Next.js App Router,
 > TypeScript strict, PostgreSQL 16 via Prisma.
 
 This file orients a language model working in this repository. Read it before making changes.

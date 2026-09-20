@@ -22,13 +22,13 @@ The revised scope preserves the actual school problems found in the report: slow
 
 ## Replacement project concept
 
-Visitors pre-register online and choose a teacher, time, destination, and purpose. The teacher approves or rejects the request. Approval creates an expiring QR visitor pass. At the gate, the guard scans the QR, visually checks the visitor's physical identification when required, checks the visitor in, and prints a badge. Walk-ins are registered by the guard. Check-out closes the visit. Administrators manage records, blacklist entries, users, destinations, analytics, audit logs, emergency lists, and PDF/XLSX reports.
+Visitors pre-register online and choose a teacher, time, destination, and purpose. The teacher approves or rejects the request. Approval creates an expiring QR visitor pass. At the gate, the guard scans the QR, visually checks the visitor's physical identification when required, and checks the visitor in. Walk-ins are registered by the guard and shown their own digital pass. Check-out closes the visit. Administrators manage records, blacklist entries, users, destinations, analytics, audit logs, emergency lists, and PDF/XLSX reports.
 
 The system does not claim to prove that a physical identification card is genuine. It records the guard's declaration that identification was sighted. Optional OCR can reduce typing, but the extracted data must be reviewed and corrected by a human.
 
 ## Revised abstract draft
 
-SMKBBSP currently records visitors using a paper logbook at the school gate. This process is slow during busy periods, exposes previously written personal information, is difficult to search, and does not provide a structured method for host approval or emergency visitor accounting. This project proposes a web-based Smart Visitor Management System with QR Code and Appointment-Based Access Control for SMK Bandar Baru Sri Petaling. Visitors submit an appointment request by selecting a host teacher, visit time, destination, and purpose. On submission the visitor receives a private link on screen; when the teacher approves the request, that link becomes an expiring QR pass. The system sends no email, so it needs no external mail service. At the gate, a security guard scans the pass, records physical identification sighting where required, checks the visitor in, and issues a printable badge. The system also supports guard-assisted walk-in registration, check-out, blacklist checks, host notifications, searchable visitor history, an emergency on-site list, dashboard analytics, audit logs, and PDF/Excel reports. Role-based access control separates visitor, teacher, guard, and administrator functions, while sensitive identity values are masked and protected. Optional optical character recognition may assist data entry from a Malaysian identity card, but the visitor or guard must confirm the extracted details and the feature does not claim to authenticate identity. The system is developed and evaluated through functional, usability, security, and performance testing using realistic school gate workflows.
+SMKBBSP currently records visitors using a paper logbook at the school gate. This process is slow during busy periods, exposes previously written personal information, is difficult to search, and does not provide a structured method for host approval or emergency visitor accounting. This project proposes a web-based Smart Visitor Management System with QR Code and Appointment-Based Access Control for SMK Bandar Baru Sri Petaling. Visitors submit an appointment request by selecting a host teacher, visit time, destination, and purpose. On submission the visitor receives a private link on screen; when the teacher approves the request, that link becomes an expiring QR pass. The system sends no email, so it needs no external mail service. At the gate, a security guard scans the pass, records physical identification sighting where required, and checks the visitor in. Walk-in visitors are issued the same kind of digital pass, shown on the guard's screen for them to scan; nothing is printed for a visitor. The system also supports guard-assisted walk-in registration, check-out, blacklist checks, host notifications, searchable visitor history, an emergency on-site list, dashboard analytics, audit logs, and PDF/Excel reports. Role-based access control separates visitor, teacher, guard, and administrator functions, while sensitive identity values are masked and protected. Optional optical character recognition may assist data entry from a Malaysian identity card, but the visitor or guard must confirm the extracted details and the feature does not claim to authenticate identity. The system is developed and evaluated through functional, usability, security, and performance testing using realistic school gate workflows.
 
 ## Revised problem statements
 
@@ -56,7 +56,7 @@ To implement appointment-based access control in which a host teacher approves o
 
 ### Objective 3
 
-To evaluate whether the system improves school gate operations through badge printing, in-app staff notifications, blacklist checks, emergency on-site reporting, analytics, exports, and role-based audit logs.
+To evaluate whether the system improves school gate operations through digital visitor passes, in-app staff notifications, blacklist checks, emergency on-site reporting, analytics, exports, and role-based audit logs.
 
 The evaluation should measure task completion, correctness, usability, response time, and access-control behavior. Do not claim that a QR code authenticates a person's identity; it authorizes an approved appointment and is combined with the guard's physical-ID sighting process.
 
@@ -77,7 +77,7 @@ The evaluation should measure task completion, correctness, usability, response 
 4. Guard QR/manual-code lookup
 5. Walk-in registration
 6. Check-in and check-out
-7. Visitor badge printing
+7. Digital visitor pass for walk-ins
 8. In-app staff notifications
 9. Visitor history and search
 10. Blacklist management
@@ -140,7 +140,7 @@ The correct claim is therefore narrow: card reading reduces typing, under human 
 | Mock MyDigitalID mode | Removed | A mock cannot demonstrate real identity verification. |
 | Three ML anomaly models | Deterministic overdue, expired, repeat-state, and blacklist rules | Explainable and testable with limited FYP data. |
 | Geofencing | Guard-operated QR check-in at the physical gate | Guard action already establishes operational gate presence. |
-| Campus live routing | Destination and host printed on badge | Lower complexity and easier to maintain. |
+| Campus live routing | Destination and host shown on the digital pass | Lower complexity and easier to maintain. |
 | Twilio SMS | No outbound messages at all: in-app notifications for staff, and a private link shown on screen for visitors | No paid account, no mail server, and no visitor contact detail needed to deliver a pass. |
 | Web Speech anomaly alert | High-contrast operational alert and overdue list | Accessible, predictable, and testable. |
 | Plain SHA-256 of NRIC | Keyed HMAC for matching plus AES-GCM encryption where retrieval is required | Plain hashes of predictable identifiers are vulnerable to guessing. |

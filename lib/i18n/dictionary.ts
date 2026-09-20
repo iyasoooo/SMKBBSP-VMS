@@ -96,8 +96,12 @@ export interface GuardDictionary {
   checkIn: string;
   checkOut: string;
   deny: string;
-  printBadge: string;
-  reprintBadge: string;
+  walkInDone: string;
+  showPassHeading: string;
+  showPassInstruction: string;
+  passSaveWarning: string;
+  registerAnother: string;
+  openVisit: string;
   cancel: string;
   back: string;
   confirm: string;
@@ -250,8 +254,14 @@ const en: GuardDictionary = {
   checkIn: 'Check in',
   checkOut: 'Check out',
   deny: 'Deny entry',
-  printBadge: 'Print badge',
-  reprintBadge: 'Reprint badge',
+  walkInDone: 'Registered and checked in.',
+  showPassHeading: 'Show this to the visitor',
+  showPassInstruction:
+    'Ask them to scan it with their phone camera. It opens their visitor pass.',
+  passSaveWarning:
+    'Tell them to save that page. It is the only copy, and it cannot be sent or looked up again.',
+  registerAnother: 'Register another visitor',
+  openVisit: 'Open this visit',
   cancel: 'Cancel',
   back: 'Back',
   confirm: 'Confirm',
@@ -402,8 +412,14 @@ const ms: GuardDictionary = {
   checkIn: 'Daftar masuk',
   checkOut: 'Daftar keluar',
   deny: 'Tolak masuk',
-  printBadge: 'Cetak lencana',
-  reprintBadge: 'Cetak semula lencana',
+  walkInDone: 'Telah didaftar dan daftar masuk.',
+  showPassHeading: 'Tunjukkan ini kepada pelawat',
+  showPassInstruction:
+    'Minta pelawat mengimbasnya dengan kamera telefon. Ia membuka pas pelawat mereka.',
+  passSaveWarning:
+    'Beritahu pelawat supaya menyimpan halaman itu. Itu satu-satunya salinan dan ia tidak boleh dihantar atau dicari semula.',
+  registerAnother: 'Daftar pelawat lain',
+  openVisit: 'Buka lawatan ini',
   cancel: 'Batal',
   back: 'Kembali',
   confirm: 'Sahkan',

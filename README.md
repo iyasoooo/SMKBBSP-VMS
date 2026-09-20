@@ -6,7 +6,7 @@ A web application that replaces the paper visitor logbook at SMK Bandar Baru Sri
 requests an appointment without creating an account and is given a private link on screen; the host
 teacher approves or rejects it, and on approval that same link becomes an expiring QR pass. At the
 gate a guard scans the pass, records that physical identification was sighted, checks the visitor in,
-and prints a badge.
+and checks them in. The visitor's pass is digital; nothing is printed for them.
 
 > **No email.** The system sends nothing to anyone and needs no mail server. Visitors follow their
 > request through the private link they are shown when they submit; staff are notified in-app.
@@ -202,7 +202,7 @@ A ten-minute walkthrough that exercises every P0 feature.
    visitors on site, and overdue visitors. Use **Scan pass** — the camera scanner is there, and the
    manual code box works without it. Try language **MS** and dark mode; both persist across reloads.
 6. **Walk-in.** Choose **Walk-in**, register a visitor, tick the ID declaration, and submit. The
-   badge print view opens immediately; print preview shows an A4 badge with no navigation.
+   the guard is shown the visitor's pass QR to hand over on screen.
 7. **Blocked walk-in.** Repeat with name `Rizal bin Sulaiman`, phone `+60121119999`, identity
    `779912319001`. Check-in is refused with a neutral "contact an administrator" message. The guard
    is told nothing about why; the attempt is recorded in the audit log.
@@ -228,7 +228,7 @@ app/            routes; server components read, server actions mutate
   visit/        public request form, status help
   v/[token]/    private visitor status and QR pass
   teacher/      own queue and own visit history only
-  guard/        today, scan, walk-in, active, emergency, badge print
+  guard/        today, scan, walk-in, active, emergency
   admin/        dashboard, history, blacklist, users, reports, audit, settings
 components/     presentational UI, no business logic
 lib/

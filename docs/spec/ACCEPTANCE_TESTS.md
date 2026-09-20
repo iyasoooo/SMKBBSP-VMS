@@ -74,9 +74,9 @@ Given a hard-block identity match, when the Guard submits a walk-in, then check-
 
 Given a `CHECKED_IN` visit, when the Guard checks it out from scan or the active list, then it becomes `CHECKED_OUT`, time and Guard are recorded, it disappears from the emergency list, and audit/event records exist. Repeating checkout changes nothing.
 
-## AT-017 - Badge privacy and print [P0]
+## AT-017 - Walk-in pass handover [P0]
 
-Given an active visit, when the badge is viewed and printed, then it contains the required visit fields and QR but no identity number, email, phone, detailed purpose, or blacklist state; navigation is hidden and content fits the intended A4 print layout.
+Given a clear walk-in, when the guard registers them, then a QR credential is issued for that visit, the guard's screen shows the visitor's pass QR and fallback code to scan, and scanning that pass at the gate resolves the visit as already checked in rather than as an unknown pass. Nothing is printed for the visitor.
 
 ## AT-018 - Emergency list accuracy [P0]
 
