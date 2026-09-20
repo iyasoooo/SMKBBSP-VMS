@@ -12,6 +12,7 @@ import { getEnv } from '@/lib/env';
 import { formatDate, formatDateTime, formatTimeRange } from '@/lib/time';
 import { Alert, Card, DetailRow, Pill } from '@/components/ui/surface';
 import { Crest } from '@/components/ui/crest';
+import { buttonClasses } from '@/components/ui/button';
 import { CancelRequestForm } from './cancel-form';
 import { CopyLinkButton } from './copy-link';
 
@@ -244,6 +245,27 @@ export default async function VisitorStatusPage({
             ) : null}
           </div>
         </section>
+      ) : null}
+
+      {/*
+        Saving the pass is about signal, not paper. This page needs the network
+        and the gate is exactly where a phone tends not to have it, so the
+        visitor is offered a copy that opens without one. A plain link, because
+        the browser's own download needs no JavaScript to work.
+      */}
+      {hasPass ? (
+        <div className="-mt-2 flex flex-col items-center gap-1">
+          <a
+            href={`/v/${token}/pass`}
+            download
+            className={buttonClasses('secondary', 'lg')}
+          >
+            Save my pass
+          </a>
+          <p className="text-xs text-muted">
+            Keeps working at the gate even with no signal.
+          </p>
+        </div>
       ) : null}
 
       {/*
