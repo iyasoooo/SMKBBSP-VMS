@@ -111,6 +111,23 @@ export default async function VisitorStatusPage({
     (isAwaitingDecision || appointment.status === AppointmentStatus.APPROVED) &&
     (!visit || visit.status === VisitStatus.EXPECTED);
 
+  /*
+   * With a pass on screen, the pass is the page: it goes directly under the
+   * heading, and the things that would otherwise sit above it either move
+   * below or stop being shown at all. A visitor at the gate should not have
+   * to scroll past three notices to find the QR a guard is waiting to scan.
+   */
+  const hasPass = Boolean(qrDataUrl && credential);
+
+  /*
+   * True only while the pass is the whole story: approved, not yet arrived.
+   * Once the visit moves - checked in, checked out, denied, missed - the
+   * status sentence carries something the pass cannot ("you are checked in,
+   * return your badge when you leave"), so it must still be shown even though
+   * a pass is on screen.
+   */
+  const passSaysItAll = hasPass && (!visit || visit.status === VisitStatus.EXPECTED);
+
   const canCancel =
     (appointment.status === AppointmentStatus.PENDING ||
       appointment.status === AppointmentStatus.REVIEW_REQUIRED ||
@@ -127,38 +144,6 @@ export default async function VisitorStatusPage({
         </div>
         <p className="mt-2 font-mono text-sm text-muted">{appointment.referenceNumber}</p>
       </header>
-
-      {justSubmitted ? (
-        <Alert tone="success" title="Request submitted">
-          Your request has been sent to your host teacher. This page is your request.
-        </Alert>
-      ) : null}
-
-      {/*
-        There is no email and no account, so this page is the visitor's only
-        way back. Saying so plainly, and early, is the whole defence against a
-        lost link - there is no recovery once it is gone.
-      */}
-      {stillNeedsLink ? (
-        <Card className="border-2 border-[var(--accent)] p-5">
-          <h2 className="text-base font-semibold">Save this page now</h2>
-          <p className="mt-1 text-sm leading-relaxed text-muted">
-            This link is the only way back to your request.{' '}
-            <strong className="font-semibold text-[var(--text-strong)]">
-              Nothing will be emailed or texted to you
-            </strong>
-            , and the school cannot look it up for you. Bookmark it, copy it somewhere safe, or take
-            a screenshot.
-          </p>
-          <div className="mt-4 max-w-xs">
-            <CopyLinkButton />
-          </div>
-        </Card>
-      ) : null}
-
-      <Alert tone={statusPresentation.tone === 'success' ? 'success' : statusPresentation.alertTone}>
-        {statusPresentation.description}
-      </Alert>
 
       {/* ---------------- Pass ---------------- */}
       {qrDataUrl && credential ? (
@@ -259,7 +244,59 @@ export default async function VisitorStatusPage({
             ) : null}
           </div>
         </section>
-      ) : isAwaitingDecision ? (
+      ) : null}
+
+      {/*
+        Only while the request is still just that. `?new=1` survives in a
+        bookmark, so without the second condition a visitor who saved the
+        address bar would be told "your request has been sent" on every visit
+        for the rest of the appointment - beside an Approved pill saying
+        otherwise.
+      */}
+      {justSubmitted && isAwaitingDecision ? (
+        <Alert tone="success" title="Request submitted">
+          Your request has been sent to your host teacher. This page is your request.
+        </Alert>
+      ) : null}
+
+      {/*
+        There is no email and no account, so this page is the visitor's only
+        way back. Saying so plainly, and early, is the whole defence against a
+        lost link - there is no recovery once it is gone.
+      */}
+      {stillNeedsLink && !hasPass ? (
+        <Card className="border-2 border-[var(--accent)] p-5">
+          <h2 className="text-base font-semibold">Save this page now</h2>
+          <p className="mt-1 text-sm leading-relaxed text-muted">
+            This link is the only way back to your request.{' '}
+            <strong className="font-semibold text-[var(--text-strong)]">
+              Nothing will be emailed or texted to you
+            </strong>
+            , and the school cannot look it up for you. Bookmark it, copy it somewhere safe, or take
+            a screenshot.
+          </p>
+          <div className="mt-4 max-w-xs">
+            <CopyLinkButton />
+          </div>
+        </Card>
+      ) : stillNeedsLink ? (
+        /*
+         * Quieter once the pass exists, but never removed. There is no email
+         * and no account: a visitor who loses this address has lost the pass
+         * with it, and the school cannot look it up for them. That is worth
+         * one line under the pass for as long as they still need to come back.
+         */
+        <Card className="flex flex-wrap items-center justify-between gap-3 p-4">
+          <p className="text-sm text-muted">
+            Keep this link - it is the only way back to your pass.
+          </p>
+          <div className="w-full sm:w-auto">
+            <CopyLinkButton />
+          </div>
+        </Card>
+      ) : null}
+
+      {isAwaitingDecision ? (
         /*
          * The pass and this page share one token, so the visitor is already
          * holding the link their QR will appear in. Saying so is the whole
@@ -299,6 +336,23 @@ export default async function VisitorStatusPage({
           </div>
         </Card>
       ) : null}
+
+      {/*
+        Suppressed only for an approved visit that has not started, where it
+        said nothing new: the Pill beside the heading already reports the
+        status, and the pass itself already carries the instruction to show it
+        at the guard house. In every other state - pending, on site, denied,
+        missed, completed - this sentence is the only place the visitor learns
+        what happened.
+      */}
+      {!passSaysItAll ? (
+        <Alert
+          tone={statusPresentation.tone === 'success' ? 'success' : statusPresentation.alertTone}
+        >
+          {statusPresentation.description}
+        </Alert>
+      ) : null}
+
 
       {/* ---------------- Details ---------------- */}
       <Card>
