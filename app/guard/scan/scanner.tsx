@@ -5,7 +5,7 @@ import { useFormStatus } from 'react-dom';
 import Link from 'next/link';
 import { BrowserQRCodeReader, type IScannerControls } from '@zxing/browser';
 import { clsx } from 'clsx';
-import { lookupPassAction, type PassLookupPayload } from '@/app/guard/actions';
+import { checkOutAction, lookupPassAction, type PassLookupPayload } from '@/app/guard/actions';
 import { Button } from '@/components/ui/button';
 import { Field, Input, fieldAria } from '@/components/ui/field';
 import { Alert, Card, DetailRow, Pill } from '@/components/ui/surface';
@@ -226,6 +226,49 @@ export function Scanner({ t }: { t: GuardDictionary }) {
   );
 }
 
+/**
+ * Check-out, straight from a scan.
+ *
+ * Deliberately not gated on the blacklist. A blacklist entry stops someone
+ * being let *in*; a visitor already on site has to be able to leave, and
+ * refusing to record their departure would only lose the fact that they had
+ * gone. The server enforces the same rule either way.
+ *
+ * Repeating a scan is safe: `checkOutAction` is idempotent, so a guard who
+ * scans the same person twice gets the same answer rather than an error.
+ */
+function ScanCheckOut({ visitId, t }: { visitId: string; t: GuardDictionary }) {
+  const [state, formAction] = useActionState<ActionResult<{ badgeNumber: string }> | null, FormData>(
+    checkOutAction,
+    null,
+  );
+
+  if (state?.ok) {
+    return (
+      <Alert tone="success" title={t.checkedOutSuccess}>
+        {t.badgeNumber}: <strong className="font-mono">{state.data.badgeNumber}</strong>
+      </Alert>
+    );
+  }
+
+  return (
+    <form action={formAction} className="flex flex-col gap-3">
+      <input type="hidden" name="visitId" value={visitId} />
+      {state && !state.ok ? <Alert tone="danger">{state.message}</Alert> : null}
+      <CheckOutButton label={t.checkOut} busyLabel={t.loading} />
+    </form>
+  );
+}
+
+function CheckOutButton({ label, busyLabel }: { label: string; busyLabel: string }) {
+  const { pending } = useFormStatus();
+  return (
+    <Button type="submit" variant="success" size="lg" disabled={pending} className="w-full">
+      {pending ? busyLabel : label}
+    </Button>
+  );
+}
+
 function PassResult({ payload, t }: { payload: PassLookupPayload; t: GuardDictionary }) {
   const presentation = describeState(payload.state, t);
 
@@ -292,10 +335,25 @@ function PassResult({ payload, t }: { payload: PassLookupPayload; t: GuardDictio
           </dl>
 
           {payload.visitId ? (
-            <div className="border-t border-[var(--line-soft)] p-4">
+            <div className="flex flex-col gap-3 border-t border-[var(--line-soft)] p-4">
+              {/*
+                A scan of someone already inside is a departure, so the action
+                they came for is here rather than a page away. At going-home
+                time the queue is the whole problem, and the scan has already
+                established exactly which visit this is.
+              */}
+              {payload.state === 'ALREADY_CHECKED_IN' ? (
+                <ScanCheckOut visitId={payload.visitId} t={t} />
+              ) : null}
+
               <Link
                 href={`/guard/visits/${payload.visitId}`}
-                className="flex min-h-12 w-full items-center justify-center rounded-lg bg-[var(--accent)] px-6 text-base font-medium text-[var(--accent-text)]"
+                className={clsx(
+                  'flex min-h-12 w-full items-center justify-center rounded-lg px-6 text-base font-medium',
+                  payload.state === 'ALREADY_CHECKED_IN'
+                    ? 'border border-[var(--line-strong)] text-[var(--text-body)] hover:bg-[var(--surface-muted)]'
+                    : 'bg-[var(--accent)] text-[var(--accent-text)]',
+                )}
               >
                 Open visit
               </Link>
