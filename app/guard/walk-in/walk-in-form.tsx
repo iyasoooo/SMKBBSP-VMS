@@ -306,17 +306,32 @@ export function WalkInForm({ options, t }: { options: WalkInOptions; t: GuardDic
         </Field>
 
         <div className="grid gap-4 sm:grid-cols-3">
+          {/*
+            A picker, matching the public form.
+
+            This one was never broken - it is uncontrolled, so it could be
+            cleared and retyped - but a number box has no spinner arrows on a
+            touch screen, and this is the tablet screen a guard works on one
+            handed with a visitor waiting. Tapping a number beats summoning a
+            keyboard to type one, and the range is 1 to 20 either way.
+
+            No translated labels needed: the options are numerals.
+          */}
           <Field id="partySize" label={t.partySize} required error={errors.partySize}>
-            <Input
+            <Select
               {...fieldAria('partySize', { error: errors.partySize })}
               name="partySize"
-              type="number"
-              min={1}
-              max={MAX_PARTY_SIZE}
               defaultValue={1}
               required
               className="h-12 text-base"
-            />
+              hasError={Boolean(errors.partySize)}
+            >
+              {Array.from({ length: MAX_PARTY_SIZE }, (_, index) => index + 1).map((count) => (
+                <option key={count} value={count}>
+                  {count}
+                </option>
+              ))}
+            </Select>
           </Field>
 
           <Field
