@@ -5,7 +5,12 @@ import { DEFAULT_ORIGIN_CODE } from '@/lib/map/campus-plan';
 import { getMapDictionary, renderRouteStep } from '@/lib/i18n/map-dictionary';
 import { getLocale } from '@/lib/theme';
 import { Alert, PageHeading } from '@/components/ui/surface';
-import { CampusMapView, type PickTarget, type RouteView } from './campus-map-view';
+import {
+  CampusMapView,
+  type DirectionsView,
+  type PickTarget,
+  type RouteView,
+} from './campus-map-view';
 
 export const metadata: Metadata = {
   title: 'School map',
@@ -43,6 +48,8 @@ const searchSchema = z.object({
   from: nodeCode.optional(),
   to: nodeCode.optional(),
   pick: z.enum(['from', 'to']).optional(),
+  /** Screen-filling mode: the plan and the directions, nothing else. */
+  view: z.enum(['full']).optional(),
 });
 
 const first = (value: string | string[] | undefined): string | undefined =>
@@ -63,6 +70,7 @@ export default async function CampusMapPage({
     from: first(raw.from),
     to: first(raw.to),
     pick: first(raw.pick),
+    view: first(raw.view),
   });
   const params = parsed.success ? parsed.data : {};
 
@@ -82,6 +90,33 @@ export default async function CampusMapPage({
     if (!level) return code;
     return locale === 'ms' ? level.nameMs : level.nameEn;
   };
+
+  const maximised = params.view === 'full';
+
+  /*
+   * The directions are rendered here, as sentences, and handed to the view as
+   * strings. The view decides where to put them - beneath the plan normally, in
+   * a strip along the bottom when the map fills the screen - but it never has to
+   * know how a step becomes a sentence.
+   */
+  const directions: DirectionsView = described
+    ? {
+        summary:
+          `${t.distance}: ${described.displayMetres} m · ~${described.walkingMinutes} ${t.walkMinutes}` +
+          (new Set(described.segments.map((segment) => segment.levelCode)).size > 1
+            ? ` · ${t.levelsOnRoute}`
+            : ''),
+        steps: described.steps.map((step) =>
+          renderRouteStep(locale, step, levelNameOf(step.toLevelCode ?? step.levelCode)),
+        ),
+      }
+    : {
+        summary: null,
+        steps: [],
+        // Both ends chosen but nothing connects them. Without this the panel
+        // would ask for a destination the visitor has already given.
+        notice: fromCode && toCode ? t.unreachable : undefined,
+      };
 
   const routeView: RouteView | null = described
     ? {
@@ -109,9 +144,11 @@ export default async function CampusMapPage({
 
   return (
     <>
-      <PageHeading title={t.title} description={t.subtitle} />
+      {/* Both are covered by the screen-filling view, so they are not rendered
+          underneath it; the warning travels with the directions instead. */}
+      {maximised ? null : <PageHeading title={t.title} description={t.subtitle} />}
 
-      {fromCode && toCode && !described ? (
+      {!maximised && fromCode && toCode && !described ? (
         <div className="mb-4">
           <Alert tone="warning">{t.unreachable}</Alert>
         </div>
@@ -122,42 +159,17 @@ export default async function CampusMapPage({
         rooms={map.rooms}
         walkways={map.walkways}
         route={routeView}
+        directions={directions}
         fromCode={fromCode}
         toCode={toCode}
         pick={pick}
+        maximised={maximised}
         locale={locale}
         dictionary={t}
         width={map.width}
         height={map.height}
       />
 
-      {/* The written route. Not a fallback for the drawing - the drawing is the
-          fallback for this. A line on a plan is unreadable with a screen reader
-          and hard to follow on a bright kiosk outdoors. */}
-      <section className="mt-6 rounded-xl border border-[var(--line-soft)] bg-[var(--surface-card)] p-4">
-        <h2 className="text-sm font-semibold uppercase tracking-wide text-[var(--text-muted)]">
-          {t.directions}
-        </h2>
-
-        {described ? (
-          <>
-            <p className="mt-1 text-sm text-[var(--text-muted)]">
-              {t.distance}: {described.displayMetres} m &middot; ~{described.walkingMinutes}{' '}
-              {t.walkMinutes}
-              {routeView && new Set(routeView.levelCodes).size > 1 ? ` · ${t.levelsOnRoute}` : ''}
-            </p>
-            <ol className="mt-3 list-decimal space-y-2 pl-5 text-sm text-[var(--text-body)]">
-              {described.steps.map((step, index) => (
-                <li key={`${step.kind}-${index}`}>
-                  {renderRouteStep(locale, step, levelNameOf(step.toLevelCode ?? step.levelCode))}
-                </li>
-              ))}
-            </ol>
-          </>
-        ) : (
-          <p className="mt-2 text-sm text-[var(--text-muted)]">{t.needBothEnds}</p>
-        )}
-      </section>
     </>
   );
 }
