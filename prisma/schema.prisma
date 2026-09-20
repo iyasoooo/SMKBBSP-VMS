@@ -112,6 +112,37 @@ enum VisitEventType {
   ID_SIGHTED
   BADGE_PRINTED
   NOTE_ADDED
+  CHECKPOINT_RECORDED
+}
+
+/// Where a visitor was confirmed, relative to their journey through the school.
+enum CheckpointKind {
+  ARRIVAL
+  PRESENCE
+  DEPARTURE
+}
+
+/**
+ * How a sighting was captured, recorded so the two are never conflated.
+ * HOST_CONFIRM is a host asserting their own visitor arrived; SCAN resolved the
+ * visitor's actual pass credential. Scanning is the stronger claim, but the
+ * button is the one staff will realistically use, so both are first class and
+ * reports state the mix rather than implying a single level of assurance.
+ */
+enum CheckpointMethod {
+  HOST_CONFIRM
+  SCAN
+  GUARD_SIGHTING
+}
+
+/**
+ * Whether a destination is somewhere a visitor should be with their host.
+ * COMMON covers the canteen, surau and waiting areas: places a visitor may
+ * legitimately be alone, which must therefore never raise an alert.
+ */
+enum DestinationZone {
+  HOST_ONLY
+  COMMON
 }
 
 enum SettingType {
@@ -145,36 +176,37 @@ model User {
   teacherProfile TeacherProfile?
   sessions       Session[]
 
-  appointmentsHosted   Appointment[] @relation("AppointmentTeacher")
-  appointmentsDecided  Appointment[] @relation("AppointmentDecidedBy")
-  visitsHosted         Visit[]       @relation("VisitTeacher")
-  visitsCheckedIn      Visit[]       @relation("VisitCheckedInBy")
-  visitsCheckedOut     Visit[]       @relation("VisitCheckedOutBy")
-  visitsIdSighted      Visit[]       @relation("VisitIdSightedBy")
-  visitEvents          VisitEvent[]
-  auditLogs            AuditLog[]
-  blacklistCreated     BlacklistEntry[] @relation("BlacklistCreatedBy")
-  blacklistReviewed    BlacklistEntry[] @relation("BlacklistReviewedBy")
-  credentialsRevoked   QrCredential[]   @relation("CredentialRevokedBy")
-  notifications        Notification[]
+  appointmentsHosted  Appointment[]     @relation("AppointmentTeacher")
+  appointmentsDecided Appointment[]     @relation("AppointmentDecidedBy")
+  visitsHosted        Visit[]           @relation("VisitTeacher")
+  visitsCheckedIn     Visit[]           @relation("VisitCheckedInBy")
+  visitsCheckedOut    Visit[]           @relation("VisitCheckedOutBy")
+  visitsIdSighted     Visit[]           @relation("VisitIdSightedBy")
+  visitEvents         VisitEvent[]
+  checkpointsRecorded VisitCheckpoint[]
+  auditLogs           AuditLog[]
+  blacklistCreated    BlacklistEntry[]  @relation("BlacklistCreatedBy")
+  blacklistReviewed   BlacklistEntry[]  @relation("BlacklistReviewedBy")
+  credentialsRevoked  QrCredential[]    @relation("CredentialRevokedBy")
+  notifications       Notification[]
 
   @@index([role, isActive])
   @@map("users")
 }
 
 model Session {
-  id        String    @id @default(cuid())
-  userId    String
+  id             String    @id @default(cuid())
+  userId         String
   /// SHA-256 of (raw token + SESSION_SECRET). The raw token exists only in
   /// the user's cookie.
-  tokenHash String    @unique
-  expiresAt DateTime
-  revokedAt DateTime?
+  tokenHash      String    @unique
+  expiresAt      DateTime
+  revokedAt      DateTime?
   /// Coarse, non-tracking context to help an admin recognise a stray session.
   userAgentLabel String?
   ipPrefix       String?
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
@@ -205,20 +237,30 @@ model TeacherProfile {
 // ---------------------------------------------------------------------------
 
 model Destination {
-  id             String   @id @default(cuid())
-  code           String   @unique
+  id             String          @id @default(cuid())
+  code           String          @unique
   nameEn         String
   nameMs         String
   instructionsEn String?
   instructionsMs String?
-  isActive       Boolean  @default(true)
-  createdAt      DateTime @default(now())
-  updatedAt      DateTime @updatedAt
+  isActive       Boolean         @default(true)
+  /// HOST_ONLY places expect a host confirmation; COMMON places never do.
+  zone           DestinationZone @default(HOST_ONLY)
+  createdAt      DateTime        @default(now())
+  updatedAt      DateTime        @updatedAt
+
+  /// Where this destination sits on the campus map. Optional: a destination
+  /// can be routed to only once somebody has bound it to a room, and the rest
+  /// of the system works whether or not that has happened.
+  mapNodeId String?
 
   appointments Appointment[]
   visits       Visit[]
+  checkpoints  VisitCheckpoint[]
+  mapNode      MapNode?          @relation(fields: [mapNodeId], references: [id], onDelete: SetNull)
 
   @@index([isActive])
+  @@index([mapNodeId])
   @@map("destinations")
 }
 
@@ -312,9 +354,10 @@ model Appointment {
   decidedById  String?
   cancelledAt  DateTime?
 
-  /// SHA-256 of the raw private-link token. The raw value is emailed once and
-  /// lives only in the visitor's URL.
-  publicTokenHash      String    @unique
+  /// SHA-256 of the raw private-link token. The raw value is shown once, by
+  /// redirecting the visitor to it at submission, and lives only in their URL.
+  /// Approval binds the pass to it without rotating it.
+  publicTokenHash      String   @unique
   publicTokenExpiresAt DateTime
 
   createdAt DateTime @default(now())
@@ -376,7 +419,8 @@ model Visit {
   checkedOutBy User?        @relation("VisitCheckedOutBy", fields: [checkedOutById], references: [id])
   idSightedBy  User?        @relation("VisitIdSightedBy", fields: [idSightedById], references: [id])
 
-  events VisitEvent[]
+  events      VisitEvent[]
+  checkpoints VisitCheckpoint[]
 
   @@index([status, expectedStart])
   @@index([status, checkedInAt])
@@ -553,6 +597,36 @@ model VisitEvent {
   @@map("visit_events")
 }
 
+/**
+ * A named staff member confirming a visitor was in front of them.
+ * This is deliberately not device telemetry. The location comes from the
+ * confirming staff member's known post, not from the visitor's phone, so a
+ * row here is a human vouching rather than a coordinate that stops arriving
+ * the moment somebody pockets their handset.
+ * `scannedById` is non-nullable because that vouching *is* the security
+ * property: an anonymous sighting would carry no more weight than a ping.
+ */
+model VisitCheckpoint {
+  id            String           @id @default(cuid())
+  visitId       String
+  /// Null for a roving guard sighting with no matching destination row.
+  destinationId String?
+  scannedById   String
+  kind          CheckpointKind   @default(ARRIVAL)
+  method        CheckpointMethod @default(HOST_CONFIRM)
+  /// Operational note, e.g. "escorted back to the office".
+  note          String?
+  createdAt     DateTime         @default(now())
+
+  visit       Visit        @relation(fields: [visitId], references: [id], onDelete: Cascade)
+  destination Destination? @relation(fields: [destinationId], references: [id])
+  scannedBy   User         @relation(fields: [scannedById], references: [id])
+
+  @@index([visitId, createdAt])
+  @@index([createdAt])
+  @@map("visit_checkpoints")
+}
+
 model AuditLog {
   id          String   @id @default(cuid())
   actorUserId String?
@@ -597,4 +671,107 @@ model RateLimitCounter {
   @@unique([bucket, windowStart])
   @@index([expiresAt])
   @@map("rate_limit_counters")
+}
+
+// ---------------------------------------------------------------------------
+// Campus map and wayfinding
+// ---------------------------------------------------------------------------
+
+/// What a node is for. The distinction that matters to routing is STAIR,
+/// because a stair is the only edge that changes level and the only one a
+/// visitor experiences as effort rather than distance.
+enum MapNodeKind {
+  /// A named place with a footprint. Drawn as a rectangle, may be a destination.
+  ROOM
+  /// An unnamed point on a walkway. Exists so the path bends where the building does.
+  JUNCTION
+  /// A stair tower. Present at the same x/y on every level it serves.
+  STAIR
+  /// A gate or door in the perimeter. Where a visitor's route begins.
+  GATE
+}
+
+/// Mirrors the legend on the school's own floor plan, so the rendered map is
+/// recognisably the same drawing the office already prints.
+enum MapNodeCategory {
+  CLASSROOM
+  SPECIAL_ROOM
+  ADMIN
+  STAIR_BLOCK
+  SERVICE
+  CIRCULATION
+  OPEN_AREA
+  LANDSCAPE
+}
+
+enum MapEdgeKind {
+  WALK
+  STAIR
+}
+
+/// One floor of the school. `ordinal` is the storey number and orders the
+/// level switcher; `code` is what the school calls it.
+model MapLevel {
+  id      String @id @default(cuid())
+  code    String @unique
+  ordinal Int    @unique
+  nameEn  String
+  nameMs  String
+
+  nodes MapNode[]
+
+  @@map("map_levels")
+}
+
+/// A vertex in the walkable graph. Rooms are nodes that additionally carry a
+/// rectangle, which keeps drawing and routing in one table: every drawn room
+/// is reachable by construction, and a room cannot be drawn without also
+/// saying where its door is.
+model MapNode {
+  id       String          @id @default(cuid())
+  levelId  String
+  code     String          @unique
+  kind     MapNodeKind
+  category MapNodeCategory @default(CIRCULATION)
+  /// Null for junctions, which are never labelled on screen.
+  nameEn   String?
+  nameMs   String?
+  /// Plan coordinates, not latitude/longitude. The unit is arbitrary and
+  /// shared by every level; `MAP_METRES_PER_UNIT` converts it to distance.
+  x        Float
+  y        Float
+  /// Footprint. Both null for a node that is only a point on a walkway.
+  width    Float?
+  height   Float?
+  /// Which block the room belongs to, for grouping the search list.
+  block    String?
+
+  level        MapLevel      @relation(fields: [levelId], references: [id], onDelete: Cascade)
+  edgesFrom    MapEdge[]     @relation("edgeFrom")
+  edgesTo      MapEdge[]     @relation("edgeTo")
+  destinations Destination[]
+
+  @@index([levelId])
+  @@index([kind])
+  @@map("map_nodes")
+}
+
+/// A walkable connection. Stored once per direction pair and treated as
+/// undirected by the router; storing both directions would let the two rows
+/// drift apart and make a corridor one-way by accident.
+model MapEdge {
+  id     String      @id @default(cuid())
+  fromId String
+  toId   String
+  kind   MapEdgeKind @default(WALK)
+  /// Metres. Derived from the coordinates for walks, fixed for stairs.
+  weight Float
+
+  from MapNode @relation("edgeFrom", fields: [fromId], references: [id], onDelete: Cascade)
+  to   MapNode @relation("edgeTo", fields: [toId], references: [id], onDelete: Cascade)
+
+  @@unique([fromId, toId])
+  @@index([fromId])
+  @@index([toId])
+  @@map("map_edges")
 }

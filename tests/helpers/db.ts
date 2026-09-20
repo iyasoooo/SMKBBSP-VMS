@@ -35,6 +35,7 @@ export const testDb = new PrismaClient();
 
 /** Delete every row, in foreign-key-safe order. Call in `beforeEach`. */
 export async function resetDatabase(): Promise<void> {
+  await testDb.visitCheckpoint.deleteMany();
   await testDb.visitEvent.deleteMany();
   await testDb.visit.deleteMany();
   await testDb.qrCredential.deleteMany();

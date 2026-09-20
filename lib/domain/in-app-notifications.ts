@@ -4,18 +4,17 @@ import { prisma, type Db } from '@/lib/db/prisma';
 /**
  * In-app notifications.
  *
- * These sit alongside email rather than replacing it. Email remains the
- * system of record for every event the specification requires; this exists so
- * a teacher who is already signed in sees a pending request without switching
- * to their inbox.
+ * The only way the system tells anyone anything. There is no email: staff see
+ * these when signed in, and visitors - who have no account - read their
+ * private page instead.
  *
- * They reuse the `Notification` table deliberately. An in-app row is simply
- * one whose channel is IN_APP and which is owned by a `userId`; it needs no
- * delivery attempt, so it is written already SENT. That keeps a single place
- * to look when asking "what was this person told, and when".
+ * They use the `Notification` table. An in-app row is one whose channel is
+ * IN_APP and which is owned by a `userId`; it needs no delivery attempt, so it
+ * is written already SENT. EMAIL rows in the same table are history from
+ * before email was removed, and are never listed here.
  *
- * The same content rules apply as for email: the title and body are rendered
- * from safe values only, never a raw identity number or token.
+ * Title and body are rendered from safe values only, never a raw identity
+ * number or token.
  */
 
 export interface InAppNotificationInput {
@@ -28,8 +27,8 @@ export interface InAppNotificationInput {
 }
 
 /**
- * Queue an in-app notification. Call inside the business transaction, exactly
- * like `queueEmail`, so it cannot survive a rolled-back change.
+ * Queue an in-app notification. Call inside the business transaction, so it
+ * cannot survive a rolled-back change.
  */
 export async function queueInAppNotification(
   input: InAppNotificationInput,

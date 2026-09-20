@@ -1,5 +1,5 @@
 ﻿import { expect, test } from '@playwright/test';
-import { HOST_TEACHER_OPTION, login, logout, submitVisitRequest, uniqueNric } from './helpers';
+import { login, logout, selectHostTeacher, submitVisitRequest, uniqueNric } from './helpers';
 
 /** AT-014 / AT-015: the two walk-in branches. */
 test.describe('walk-in registration', () => {
@@ -12,7 +12,7 @@ test.describe('walk-in registration', () => {
     await page.getByLabel('Full name').fill(visitorName);
     await page.getByLabel('Phone number').fill('013-222 3333');
     await page.getByLabel('Identification number').fill(uniqueNric());
-    await page.getByLabel('Host teacher').selectOption({ label: HOST_TEACHER_OPTION });
+    await selectHostTeacher(page);
     await page.getByLabel('Purpose').fill('Air-conditioning maintenance visit');
     await page.getByLabel(/I have seen the visitor/).check();
 
@@ -35,7 +35,7 @@ test.describe('walk-in registration', () => {
     await page.getByLabel('Full name').fill('Rizal bin Sulaiman');
     await page.getByLabel('Phone number').fill('+60121119999');
     await page.getByLabel('Identification number').fill('779912319001');
-    await page.getByLabel('Host teacher').selectOption({ label: HOST_TEACHER_OPTION });
+    await selectHostTeacher(page);
     await page.getByLabel('Purpose').fill('Attempting entry for the blocked-path test');
     await page.getByLabel(/I have seen the visitor/).check();
 
@@ -60,7 +60,7 @@ test.describe('walk-in registration', () => {
 /** AT-007: rejection produces no usable pass. */
 test('AT-007 a rejected request tells the visitor and issues no pass', async ({ page }) => {
   const visitorName = `Reject Path ${Date.now().toString().slice(-6)}`;
-  await submitVisitRequest(page, { visitorName });
+  const submitted = await submitVisitRequest(page, { visitorName });
 
   await login(page, 'teacher');
   await page.goto('/teacher/requests?filter=pending');
@@ -75,8 +75,8 @@ test('AT-007 a rejected request tells the visitor and issues no pass', async ({ 
   await page.getByLabel('Reason for rejection').fill('That week is reserved for examinations.');
   await page.getByRole('button', { name: 'Confirm rejection' }).click();
 
-  // The page revalidates into its decided state; the reason is now shown as
-  // the note that was sent to the visitor.
+  // The page revalidates into its decided state, showing the reason the
+  // visitor will read on their private page.
   await expect(page.getByRole('heading', { name: 'Decision' })).toBeVisible();
   await expect(page.getByText('That week is reserved for examinations.')).toBeVisible();
   // No gate status card exists, because rejection creates no visit.
@@ -88,6 +88,15 @@ test('AT-007 a rejected request tells the visitor and issues no pass', async ({ 
 
   await page.goto('/teacher/requests?filter=rejected');
   await expect(page.getByRole('cell', { name: visitorName }).first()).toBeVisible();
+  await logout(page);
+
+  // Nothing is sent to the visitor, so their saved link is how they learn of
+  // it: the decision and reason are there, and no pass is.
+  await page.goto(submitted.privatePath);
+  await expect(page.getByText('Not approved', { exact: true })).toBeVisible();
+  await expect(page.getByText('That week is reserved for examinations.')).toBeVisible();
+  await expect(page.getByRole('img', { name: /QR visitor pass/ })).toHaveCount(0);
+  await expect(page.getByRole('heading', { name: 'Save this page now' })).toBeHidden();
 });
 
 /** AT-019 / AT-021 / AT-024: admin filters, exports, and the audit trail. */

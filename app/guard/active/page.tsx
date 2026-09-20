@@ -5,8 +5,10 @@ import { listOnSiteVisits } from '@/lib/domain/gate';
 import { getSettings } from '@/lib/domain/settings';
 import { getLocale } from '@/lib/theme';
 import { getDictionary } from '@/lib/i18n/dictionary';
-import { isOverdue, toSafeVisitor } from '@/lib/domain/presenters';
+import { isAwaitingArrival, isOverdue, toSafeVisitor, type LastSeen } from '@/lib/domain/presenters';
+import { latestCheckpointsFor } from '@/lib/domain/checkpoints';
 import { formatTime, diffMinutes, formatDuration } from '@/lib/time';
+import { Pill } from '@/components/ui/surface';
 import { Card, EmptyState, PageHeading, TableScroll } from '@/components/ui/surface';
 import { ButtonLink } from '@/components/ui/button';
 import { VisitStatusPill } from '@/components/status-pill';
@@ -25,6 +27,10 @@ export default async function ActiveVisitorsPage() {
 
   const now = new Date();
   const totalPeople = visits.reduce((sum, visit) => sum + (visit.appointment?.partySize ?? 1), 0);
+
+  const lastSeenByVisit: Map<string, LastSeen> = settings.checkpointEnabled
+    ? await latestCheckpointsFor(visits.map((visit) => visit.id))
+    : new Map();
 
   return (
     <>
@@ -52,6 +58,9 @@ export default async function ActiveVisitorsPage() {
                   <th scope="col" className="px-5 py-3 font-medium">{t.host}</th>
                   <th scope="col" className="px-5 py-3 font-medium">{t.checkInTime}</th>
                   <th scope="col" className="px-5 py-3 font-medium">{t.expectedEnd}</th>
+                  {settings.checkpointEnabled ? (
+                    <th scope="col" className="px-5 py-3 font-medium">{t.lastSeen}</th>
+                  ) : null}
                   <th scope="col" className="px-5 py-3 font-medium">
                     <span className="sr-only">Action</span>
                   </th>
@@ -60,6 +69,11 @@ export default async function ActiveVisitorsPage() {
               <tbody className="divide-y divide-[var(--line-soft)]">
                 {visits.map((visit) => {
                   const overdue = isOverdue(visit, settings.overdueGraceMinutes, now);
+                  const lastSeen = lastSeenByVisit.get(visit.id) ?? null;
+                  const awaiting =
+                    settings.checkpointEnabled &&
+                    settings.checkpointAlertsEnabled &&
+                    isAwaitingArrival(visit, lastSeen, settings.checkpointArrivalGraceMinutes, now);
                   return (
                     <tr key={visit.id} className="hover:bg-[var(--surface-muted)]">
                       <td className="px-5 py-3">
@@ -91,6 +105,28 @@ export default async function ActiveVisitorsPage() {
                         <span className="block">{formatTime(visit.expectedEnd)}</span>
                         <VisitStatusPill status={visit.status} overdue={overdue} />
                       </td>
+                      {settings.checkpointEnabled ? (
+                        <td className="px-5 py-3">
+                          {lastSeen ? (
+                            <>
+                              <span className="block">{lastSeen.destinationName ?? '-'}</span>
+                              <span className="block text-xs text-muted">
+                                {formatTime(lastSeen.at)} · {t.confirmedBy.toLowerCase()}{' '}
+                                {lastSeen.confirmedBy}
+                              </span>
+                            </>
+                          ) : (
+                            <>
+                              <span className="block text-xs text-muted">{t.lastSeenNever}</span>
+                              {awaiting ? (
+                                <Pill tone="danger" className="mt-1">
+                                  {t.awaitingArrival}
+                                </Pill>
+                              ) : null}
+                            </>
+                          )}
+                        </td>
+                      ) : null}
                       <td className="px-5 py-3 text-right">
                         <Link
                           href={`/guard/visits/${visit.id}`}

@@ -8,8 +8,8 @@ export default function NotFound() {
         <p className="text-sm font-semibold text-[var(--accent)]">404</p>
         <h1 className="mt-2 text-2xl font-semibold">We could not find that page</h1>
         <p className="mt-3 text-sm text-muted">
-          The link may be out of date, or the page may have moved. If you followed a link from an
-          email, please check that you copied the whole address.
+          The link may be out of date, or the page may have moved. If you saved a link to your
+          visit request, please check that you copied the whole address.
         </p>
         <div className="mt-6 flex justify-center gap-3">
           <ButtonLink href="/">Back to home</ButtonLink>

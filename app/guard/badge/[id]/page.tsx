@@ -11,6 +11,7 @@ import { formatDate, formatTime } from '@/lib/time';
 import { recordAuditSafely } from '@/lib/audit';
 import { AUDIT_ACTIONS } from '@/lib/constants';
 import { PrintButton } from '@/components/print-button';
+import { Crest } from '@/components/ui/crest';
 
 export const metadata: Metadata = { title: 'Visitor badge', robots: { index: false } };
 export const dynamic = 'force-dynamic';
@@ -94,11 +95,16 @@ export default async function BadgePage({
         style={{ width: '148mm', minHeight: '105mm' }}
       >
         <div className="flex items-start justify-between gap-4 border-b-2 border-black pb-3">
-          <div>
-            <p className="text-[10px] font-semibold tracking-[0.2em] uppercase">
-              {settings.schoolName}
-            </p>
-            <p className="mt-1 text-3xl font-black tracking-tight">VISITOR</p>
+          <div className="flex items-start gap-3">
+            {/* The crest is what makes the printed badge read as school issue
+                rather than as an anonymous slip of paper. */}
+            <Crest size={52} className="mt-0.5" />
+            <div>
+              <p className="text-[10px] font-semibold tracking-[0.2em] uppercase">
+                {settings.schoolName}
+              </p>
+              <p className="mt-1 text-3xl font-black tracking-tight">VISITOR</p>
+            </div>
           </div>
           <div className="text-right">
             <p className="text-[10px] tracking-wide uppercase">Badge</p>

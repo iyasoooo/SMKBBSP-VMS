@@ -13,12 +13,7 @@ import { step } from './steps';
  */
 
 /** Screens that exist solely to change configuration. */
-const CONFIGURATION_ROUTES = [
-  '/admin/users',
-  '/admin/settings',
-  '/admin/destinations',
-  '/admin/notifications',
-];
+const CONFIGURATION_ROUTES = ['/admin/users', '/admin/settings', '/admin/destinations'];
 
 /** Screens the principal is meant to read. */
 const OVERSIGHT_ROUTES = [

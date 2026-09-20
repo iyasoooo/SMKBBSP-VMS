@@ -32,12 +32,43 @@ export async function logout(page: Page): Promise<void> {
 }
 
 /**
- * The exact <option> label for the demo teacher account, as rendered by both
- * the public request form and the walk-in form (`name - department`).
+ * The demo teacher account's name, as the public request form renders it.
+ *
+ * Not the walk-in form's label. That one renders `name - department`, because a
+ * guard picking between six teachers under time pressure needs the department
+ * to tell them apart, while a parent choosing their own child's teacher does
+ * not. `selectOption({ label })` matches an option's full text, so this value
+ * is exact on one form and a prefix on the other - use `selectHostTeacher`
+ * rather than matching the label directly.
+ *
  * This teacher is `teacher@smkbbsp.test`, so tests can approve their own
  * submissions after logging in.
  */
 export const HOST_TEACHER_OPTION = 'Puan Aminah binti Zulkifli';
+
+/**
+ * Choose the host teacher on whichever form is on screen.
+ *
+ * Resolves the option's `value` by partial text instead of matching its label,
+ * which is what makes it work against both renderings. The same approach is
+ * used for the visit type below, and for the same reason: the option text
+ * carries more than the thing being matched on.
+ */
+export async function selectHostTeacher(
+  page: Page,
+  labelText: string | RegExp = 'Host teacher',
+  teacherName: string = HOST_TEACHER_OPTION,
+): Promise<void> {
+  const select = page.getByLabel(labelText);
+  const value = await select
+    .locator('option')
+    .filter({ hasText: teacherName })
+    .first()
+    .getAttribute('value');
+
+  expect(value, `no <option> matching "${teacherName}"`).toBeTruthy();
+  await select.selectOption(value ?? '');
+}
 
 /** A weekday, inside school hours, comfortably in the future (Malaysian time). */
 export function futureSchoolSlot(daysAhead = 3): { date: string; time: string } {
@@ -67,6 +98,12 @@ export interface SubmittedRequest {
   reference: string;
   visitorName: string;
   nric: string;
+  /**
+   * The visitor's private page, `/v/<token>`, exactly as the submission
+   * redirect delivered it. With no email this is the visitor's only link, so
+   * tests reopen *this* path to see the decision and the pass.
+   */
+  privatePath: string;
 }
 
 /**
@@ -103,7 +140,7 @@ export async function submitVisitRequest(
   });
 
   await step('Choose the host teacher and visit type', async () => {
-    await page.getByLabel('Teacher you wish to meet').selectOption({ label: HOST_TEACHER_OPTION });
+    await selectHostTeacher(page, 'Staff you wish to meet');
 
     // The option text carries the duration too ("Parent meeting (30 min)"), so
     // resolve the value by partial text rather than matching a full label.
@@ -128,15 +165,21 @@ export async function submitVisitRequest(
   await step('Accept the privacy notice and submit', async () => {
     await page.getByLabel(/I have read the notice above/).check();
     await page.getByRole('button', { name: 'Submit request' }).click();
-    await page.waitForURL('**/visit/request/success**', { timeout: 20_000 });
+    // Submission lands straight on the visitor's private page.
+    await page.waitForURL(/\/v\/[A-Za-z0-9_-]+\?new=1$/, { timeout: 20_000 });
   });
 
-  return step('Read the reference from the confirmation page', async () => {
+  return step('Read the reference from the private page', async () => {
     const reference = (
       await page.locator('p.font-mono').filter({ hasText: /^VP-/ }).first().textContent()
     )?.trim();
 
     expect(reference).toBeTruthy();
-    return { reference: reference ?? '', visitorName: options.visitorName, nric };
+    return {
+      reference: reference ?? '',
+      visitorName: options.visitorName,
+      nric,
+      privatePath: new URL(page.url()).pathname,
+    };
   });
 }

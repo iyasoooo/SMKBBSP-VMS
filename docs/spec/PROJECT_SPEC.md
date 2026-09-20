@@ -6,7 +6,7 @@ Academic title: **Smart Visitor Management System with QR Code and Appointment-B
 
 ## 1. Product summary
 
-SMKBBSP VisitorPass is a responsive web application that replaces the paper visitor logbook at SMK Bandar Baru Sri Petaling. A visitor can request an appointment with a teacher without creating an account. The teacher approves or rejects the request. An approved visitor receives an expiring QR pass by email. At the gate, a guard scans the pass, visually checks the visitor's physical identification where required, checks the visitor in, and prints a badge. The guard checks the visitor out when the visit ends. Walk-ins use a shorter guard-assisted workflow.
+SMKBBSP VisitorPass is a responsive web application that replaces the paper visitor logbook at SMK Bandar Baru Sri Petaling. A visitor can request an appointment with a teacher without creating an account. The teacher approves or rejects the request. On submission the visitor is given a private link on screen; once the teacher approves, that same link becomes an expiring QR pass. The system sends no email to anyone: visitors follow their request through the private link, and staff are notified inside the application. At the gate, a guard scans the pass, visually checks the visitor's physical identification where required, checks the visitor in, and prints a badge. The guard checks the visitor out when the visit ends. Walk-ins use a shorter guard-assisted workflow.
 
 Administrators manage staff, destinations, visitor records, blacklist entries, reports, and audit logs. During an emergency, authorized users can instantly see and print the current on-site visitor list.
 
@@ -20,7 +20,7 @@ The current paper process is slow, exposes previous visitors' personal details, 
 
 1. Digitize visitor pre-registration, gate registration, check-in, check-out, and record search in a secure database-backed system.
 2. Introduce appointment-based access control through teacher approval and expiring QR visitor passes.
-3. Improve daily gate operations with fast tablet workflows, printable badges, blacklist checks, email notifications, emergency lists, analytics, exports, and audit trails.
+3. Improve daily gate operations with fast tablet workflows, printable badges, blacklist checks, in-app staff notifications, emergency lists, analytics, exports, and audit trails.
 
 ## 4. Success measures
 
@@ -29,7 +29,7 @@ The current paper process is slow, exposes previous visitors' personal details, 
 - Every checked-in visitor appears on the emergency list within one page refresh.
 - Search and dashboard requests complete within 3 seconds for 10,000 seeded visit records on the reference local environment.
 - No QR payload contains personal information.
-- No sensitive identity value appears unmasked in ordinary lists, exports, logs, URLs, or email subjects.
+- No sensitive identity value appears unmasked in ordinary lists, exports, logs, URLs, or notifications.
 - All P0 acceptance scenarios pass.
 
 ## 5. Users and permissions
@@ -38,7 +38,8 @@ The current paper process is slow, exposes previous visitors' personal details, 
 
 - Submit an appointment request.
 - Provide consent to stated data use.
-- Open a private status/pass link sent by email.
+- Receive a private status/pass link on screen at submission, and keep it (bookmark, copy, or screenshot). Nothing is sent to the visitor afterwards.
+- Learn the teacher's decision by reopening that link.
 - View only their own request status and approved QR pass.
 - Cancel a pending or approved future request through the private link.
 - Correct a pending request only before teacher action, if implemented safely.
@@ -48,7 +49,7 @@ The current paper process is slow, exposes previous visitors' personal details, 
 - View only requests assigned to them.
 - Approve or reject a pending request with an optional note.
 - View upcoming, active, and historical visits for which they are the host.
-- See an email/in-app notification when a new request arrives and when their visitor checks in.
+- See an in-app notification when a new request arrives and when their visitor checks in.
 - Cannot view full identity numbers or other teachers' queues.
 
 ### 5.3 Security guard - authenticated
@@ -71,7 +72,7 @@ The current paper process is slow, exposes previous visitors' personal details, 
 - Create, update, deactivate, and review blacklist entries.
 - View dashboard analytics and operational alerts.
 - Export filtered reports to PDF and XLSX.
-- View audit logs and notification delivery states.
+- View audit logs.
 - Reveal a full identity number only through an explicit, audited action when authorized by school policy.
 
 ## 6. Scope priorities
@@ -85,8 +86,8 @@ The current paper process is slow, exposes previous visitors' personal details, 
 5. Guard today screen and QR/manual lookup.
 6. Check-in/check-out state machine.
 7. Guard-assisted walk-in registration.
-8. Printable visitor badge/pass.
-9. Email notifications through SMTP and local Mailpit.
+8. Printable visitor badge issued by the guard at check-in.
+9. In-app notifications for staff. Visitors follow their request through the private link. No email is sent.
 10. Visitor/visit history and search.
 11. Blacklist management and blocking checks.
 12. Emergency on-site visitor list.
@@ -97,15 +98,14 @@ The current paper process is slow, exposes previous visitors' personal details, 
 
 ### P1 - implement after every P0 test passes
 
-1. Browser-side OCR assistance for Malaysian IC fields with mandatory user correction/confirmation and immediate image disposal.
-2. Resend/revoke QR pass.
+1. OCR assistance for Malaysian IC fields with mandatory user correction/confirmation and immediate image disposal. Reading runs on a self-hosted vision model the application server calls; the photograph is held for one request and never stored, and the feature is absent where no model host is configured. The model host is a separate machine from the application server, reached over a private network (Tailscale) rather than the public internet, and its unavailability is a supported state in which the form is typed in.
+2. Revoke/reissue QR pass. A reissued link is shown once to the administrator, who hands it to the visitor.
 3. Configurable visit windows, badge prefix, data-retention interval, and overdue threshold.
-4. In-app notification center.
-5. No-show batch action for past approved visits.
+4. No-show batch action for past approved visits.
 
 ### Out of scope
 
-MyDigitalID, government data access, identity authenticity claims, biometrics, face recognition, fingerprint/iris scanning, ML anomaly detection, chatbot, plate recognition, geofencing, location tracking, native mobile apps, access-control turnstiles, payment, SMS/WhatsApp, and production deployment.
+MyDigitalID, government data access, identity authenticity claims, biometrics, face recognition, fingerprint/iris scanning, ML anomaly detection, chatbot, plate recognition, geofencing, location tracking, native mobile apps, access-control turnstiles, payment, email/SMTP delivery, SMS/WhatsApp, and production deployment.
 
 ## 7. Core workflows and rules
 
@@ -113,12 +113,13 @@ MyDigitalID, government data access, identity authenticity claims, biometrics, f
 
 1. Visitor opens `/visit/request`.
 2. Visitor selects host teacher, visit date/time, visit type, destination if allowed, and purpose.
-3. Visitor enters name, email, phone, identity type, identity number, party size, and optional vehicle number.
+3. Visitor enters name, phone, identity type, identity number, party size, optional email, and optional vehicle number. Email is kept for records and blacklist matching only; nothing is ever sent to it.
 4. System validates the visit is in the future, within configured school hours, and the teacher/destination is active.
 5. System normalizes identity and contact values, checks active blacklist match rules, records consent, and creates `PENDING` request.
 6. If there is a definite identity blacklist match, create the request as `REVIEW_REQUIRED`, do not notify it as a normal approval, and alert administrators. Do not reveal blacklist details publicly.
-7. Otherwise notify the teacher and email the visitor a private status link.
-8. The public success page shows a reference number only, never the raw private token.
+7. Otherwise notify the teacher in-app.
+8. After submission the visitor is sent straight to their private request page at `/v/[token]`. That page shows the reference number and tells the visitor to save the link. It is the only place the raw token appears: no other URL, log, notification, or audit record contains it.
+9. A lost link cannot be recovered, because there is no email to resend and no public lookup (a lookup would reveal who has visited). The visitor submits a new request or is registered as a walk-in.
 
 Appointment status transitions:
 
@@ -130,16 +131,16 @@ Appointment status transitions:
 - `REVIEW_REQUIRED -> PENDING | REJECTED` by an administrator
 - `APPROVED -> CANCELLED | EXPIRED`
 
-Transitions are server-enforced and audited. Repeating the same action must not create duplicate QR credentials or emails.
+Transitions are server-enforced and audited. Repeating the same action must not create duplicate QR credentials or notifications.
 
 ### 7.2 Teacher decision
 
 1. Teacher opens their pending queue.
 2. Detail shows visitor name, masked identity, date/time, purpose, type, party size, and destination. It does not show a full identity number.
 3. Teacher approves or rejects. Rejection requires a visitor-safe reason; approval may include instructions.
-4. Approval transaction changes status, creates one `EXPECTED` visit, binds an expiring QR credential to the appointment's current private status/pass token hash, adds notification outbox records, and writes an audit log.
+4. Approval transaction changes status, creates one `EXPECTED` visit, binds an expiring QR credential to the appointment's current private status/pass token hash, and writes an audit log. The private token is not rotated on approval: the link the visitor saved at submission becomes their pass.
 5. QR validity begins 30 minutes before scheduled start and ends at the configured visit end plus 30 minutes. An admin can revoke and reissue it.
-6. The visitor email and private status page show appointment details, school instructions, QR, fallback code, and expiry.
+6. The private status page shows appointment details, school instructions, QR, fallback code, and expiry. The visitor learns of approval or rejection by reopening it.
 
 ### 7.3 Approved visitor at gate
 
@@ -148,7 +149,7 @@ Transitions are server-enforced and audited. Repeating the same action must not 
 3. Result handles: valid and expected, too early, expired, revoked, rejected/cancelled, already checked in, already checked out, or not found.
 4. A valid result shows a masked visitor summary, host, purpose, destination, party size, appointment window, and blacklist status.
 5. Guard confirms physical ID sighting when visit policy requires it. This is a human confirmation, not a claim that the system authenticated the ID.
-6. Check-in transaction rechecks status/blacklist/validity, changes visit to `CHECKED_IN`, records time and guard, marks credential use, creates a badge number, queues host email, and writes audit/event records.
+6. Check-in transaction rechecks status/blacklist/validity, changes visit to `CHECKED_IN`, records time and guard, marks credential use, creates a badge number, notifies the host in-app, and writes audit/event records.
 7. Repeat scans return the active visit state and check-out option without duplicating the visit.
 
 ### 7.4 Walk-in
@@ -157,13 +158,13 @@ Transitions are server-enforced and audited. Repeating the same action must not 
 2. Server performs blacklist checks before check-in.
 3. If blocked, check-in is denied and the guard receives a neutral instruction to contact an administrator. Details remain admin-only.
 4. If allowed, the transaction creates an appointment/source record marked `WALK_IN`, creates a `CHECKED_IN` visit, badge, notifications, and audit records.
-5. Walk-in must work without a visitor email; email is required only if a receipt/pass is requested.
+5. Walk-in never requires a visitor email. The badge the guard prints is the walk-in's pass.
 
 ### 7.5 Check-out
 
 1. Guard can scan the badge QR, use the active visitor list, or search by badge/reference/name.
 2. Only `CHECKED_IN` visits can be checked out.
-3. Transaction records checkout time and guard, changes status to `CHECKED_OUT`, closes the on-site presence, queues host email if enabled, and writes audit/event records.
+3. Transaction records checkout time and guard, changes status to `CHECKED_OUT`, closes the on-site presence, notifies the host in-app if enabled, and writes audit/event records.
 4. Repeat checkout is idempotent and displays the original checkout state.
 
 Visit status transitions:
@@ -194,10 +195,10 @@ Visit status transitions:
 |---|---:|---|
 | FR-001 | P0 | Authenticate staff and enforce Admin, Guard, and Teacher permissions server-side. |
 | FR-002 | P0 | Let a visitor submit an appointment request without an account. |
-| FR-003 | P0 | Give each visitor a private, expiring status link containing no PII in its URL. |
+| FR-003 | P0 | Give each visitor a private, expiring status link, shown on screen at submission, containing no PII in its URL. |
 | FR-004 | P0 | Let the assigned teacher approve or reject a pending request. |
 | FR-005 | P0 | Generate an opaque expiring QR pass and short manual fallback code on approval. |
-| FR-006 | P0 | Email request, decision, pass, arrival, and cancellation events through an outbox. |
+| FR-006 | P0 | Notify staff in-app of new requests, requests needing review, arrivals, cancellations, and (optionally) check-outs. No email is sent to anyone. |
 | FR-007 | P0 | Let guards scan or enter a pass and receive a clear validity result. |
 | FR-008 | P0 | Check in a valid expected visitor once, recording guard, time, and ID-sighting declaration. |
 | FR-009 | P0 | Register and check in a walk-in after validation and blacklist checks. |
@@ -212,7 +213,8 @@ Visit status transitions:
 | FR-018 | P0 | Record append-oriented audit logs for privileged and lifecycle actions. |
 | FR-019 | P0 | Support English and Bahasa Melayu on main guard pages and support dark mode. |
 | FR-020 | P0 | Derive overdue visitors and upcoming/expired/no-show operational alerts using explicit rules. |
-| FR-021 | P1 | Assist form entry with browser-side OCR and delete the source image immediately. |
+| FR-021 | P1 | Assist form entry with OCR on a self-hosted vision model and discard the source image immediately. The image is never written to disk and no extracted value is persisted before the visitor submits the form. |
+| FR-022 | P1 | Show a public school map that routes a visitor on foot from a chosen starting point to any room across the four levels, drawing the path and stating it as written turn-by-turn directions in English and Bahasa Melayu. Routing is computed server-side from map data held in the database; no map data or personal data reaches a third party. |
 
 ## 9. Information architecture
 
@@ -220,8 +222,7 @@ Visit status transitions:
 
 - `/` - concise product/home page with visitor request and staff login actions.
 - `/visit/request` - appointment request form.
-- `/visit/request/success` - safe confirmation with reference number.
-- `/v/[token]` - private visitor status, cancellation, and QR pass page.
+- `/v/[token]` - private visitor status, cancellation, and QR pass page. The request form redirects here on success.
 - `/login` - staff login.
 
 ### Teacher
@@ -250,6 +251,7 @@ Visit status transitions:
 - `/admin/users` - staff accounts and roles.
 - `/admin/destinations` - destinations and visit types.
 - `/admin/audit` - audit log.
+- `/notifications` - in-app notifications for the signed-in staff member.
 - `/admin/settings` - school name, hours, QR windows, overdue and retention values.
 
 Unauthorized route access returns a safe forbidden page or redirects to the user's correct home. It must never briefly render protected content.
@@ -282,7 +284,7 @@ Use UUID/CUID-style non-sequential public identifiers. Internal database IDs mus
 
 ### Visitor
 
-- `id`, `fullName`, normalized `email`, normalized `phone`, `visitorCategory`
+- `id`, `fullName`, optional normalized `email` (records and matching only), normalized `phone`, `visitorCategory`
 - `identityType`: `NRIC | PASSPORT | DRIVING_LICENCE | OTHER`
 - `identityCiphertext`, `identityIv`, `identityTag`, `identityKeyVersion`, `identityHmac`, `identityLast4`
 - `consentVersion`, `consentedAt`, timestamps
@@ -308,7 +310,7 @@ Use UUID/CUID-style non-sequential public identifiers. Internal database IDs mus
 - `id`, `appointmentId`, `tokenHash` unique, `fallbackCodeHash` unique
 - `validFrom`, `expiresAt`, `firstUsedAt`, `revokedAt`, `revokedById`, timestamps
 - only one active credential per approved appointment
-- `tokenHash` may match the appointment private-link token hash. The visitor page receives the raw token from its own URL and renders that opaque pass URL as the QR; the database never needs the raw token. Reissuing a pass rotates both the private link and credential hash.
+- `tokenHash` may match the appointment private-link token hash. The visitor page receives the raw token from its own URL and renders that opaque pass URL as the QR; the database never needs the raw token. Approval binds to the existing token and does not rotate it. Reissuing a pass rotates both the private link and credential hash; because nothing can be sent, the new link is shown once to the administrator who performs the reissue.
 
 ### BlacklistEntry
 
@@ -320,9 +322,10 @@ Use UUID/CUID-style non-sequential public identifiers. Internal database IDs mus
 
 ### Notification
 
-- `id`, `type`, `channel`: `EMAIL | IN_APP`, `recipient`, `templateKey`
-- safe JSON `payload`, `status`: `PENDING | SENT | FAILED`, `attempts`, `lastErrorCode`, `sentAt`, timestamps
-- payload must exclude raw identity values and raw QR tokens after rendering/delivery where practical
+- `id`, `type`, `channel`, `userId` (the staff member it belongs to), `link`, `readAt`
+- safe JSON `payload` (title and body), `status`, `sentAt`, timestamps
+- every new notification is `IN_APP`, written already `SENT` because there is no delivery step. The `EMAIL` channel and delivery-attempt columns remain only so rows written before email was removed stay readable.
+- payload must exclude raw identity values and raw QR tokens
 
 ### VisitEvent
 
@@ -339,6 +342,23 @@ Use UUID/CUID-style non-sequential public identifiers. Internal database IDs mus
 
 Add indexes for appointment status/date/teacher, visit status/check-in/date/teacher, visitor identity HMAC/phone/email, QR hashes, blacklist active match fields, audit time/action/actor, and notification status.
 
+
+### School map
+
+`MapLevel` is one storey of the school. `MapNode` is a point in the walkable
+graph; a node that also carries a width and height is a drawn room, and a node
+of kind `STAIR` exists at the same coordinates on every level it serves.
+`MapEdge` joins two nodes with a weight in metres - derived from the
+coordinates for a walk, fixed for a stair.
+
+`Destination.mapNodeId` binds a bookable destination to the room it means. The
+binding is optional and is cleared rather than cascaded if a room is removed:
+an unbound destination stops being routable and keeps working everywhere else.
+
+Plan coordinates are not survey data. They are transcribed from the school's
+own floor plans, room widths are proportional rather than measured, and every
+distance the interface shows is rounded to five metres to avoid implying a
+precision the source does not have.
 ## 11. Security and privacy design
 
 ### Identity data
@@ -373,25 +393,27 @@ Add indexes for appointment status/date/teacher, visit status/check-in/date/teac
 
 - Show a concise purpose/consent notice before submission.
 - Collect no address and no stored IC photo in the baseline.
-- Mask identifiers in tables, badges, emergency lists, emails, and routine exports.
+- Mask identifiers in tables, badges, emergency lists, notifications, and routine exports.
 - Include a documented retention job/command and admin preview; destructive purge execution may be a P1 administrative task.
 - Use fictional data only in seeds, tests, screenshots, and reports.
 
-## 12. Email events
+## 12. Notifications
 
-Use an outbox record in the same transaction as the triggering business change, then process it synchronously after commit or through a retryable command. Local delivery uses Mailpit.
+The system sends no email. Staff are notified in-app; visitors have no account and learn everything from their private link.
 
-Required templates:
+Write each in-app notification in the same transaction as the business change that causes it, so a rolled-back change cannot leave a notification behind. There is no delivery step, so nothing can fail or need retrying after commit.
 
-1. Visitor request received with reference and private status link.
-2. Teacher new request with safe detail link.
-3. Visitor approved with QR/pass link and instructions.
-4. Visitor rejected with visitor-safe reason.
-5. Host arrival notification.
-6. Visitor/host cancellation.
-7. Optional host checkout notification.
+Required in-app notifications:
 
-Email subjects contain a reference number, not identity data or detailed purpose.
+1. Teacher: new request awaiting their decision, linking to the request.
+2. Administrators: a request needs review, with no blacklist reason in the text.
+3. Host teacher: their visitor has arrived (approved visit or walk-in).
+4. Host teacher: a visitor cancelled an approved or pending request.
+5. Host teacher, if enabled in settings: their visitor has checked out.
+
+What visitors see on their private page instead of emails: that the request was received, the decision (with the visitor-safe rejection reason or approval instructions), the QR pass once approved, and cancellation.
+
+Notification text contains a reference number, never identity data or a raw token.
 
 ## 13. Reports and analytics
 
@@ -445,14 +467,12 @@ Badge excludes identity number, phone, email, detailed purpose, and blacklist st
 Docker Compose services:
 
 - PostgreSQL 16 with healthcheck and named volume.
-- Mailpit with SMTP and web UI ports.
 
 Application `.env.example` includes:
 
 - `DATABASE_URL`
 - `APP_URL`
 - session/identity encryption/HMAC secrets
-- SMTP host/port/from address
 - timezone and demo seed password values where safe
 
 Seed users:

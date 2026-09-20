@@ -102,12 +102,6 @@ jobs:
           --health-cmd "pg_isready -U visitorpass -d visitorpass"
           --health-interval 5s --health-timeout 5s --health-retries 12
 
-      mailpit:
-        # Present so the notification outbox delivers rather than recording a
-        # connection failure; the suite asserts on database state, not on mail.
-        image: axllent/mailpit:latest
-        ports: ['1025:1025', '8025:8025']
-
     steps:
       - name: Mask the throwaway database password
         # Defence in depth. The value is a disposable local credential that is
@@ -132,8 +126,6 @@ jobs:
             echo "IDENTITY_ENCRYPTION_KEY=$(openssl rand -base64 32)"
             echo "IDENTITY_HMAC_KEY=$(openssl rand -base64 32)"
             echo "APP_URL=http://127.0.0.1:3100"
-            echo "SMTP_HOST=127.0.0.1"
-            echo "SMTP_PORT=1025"
             echo "E2E_DATABASE_URL=postgresql://visitorpass:visitorpass_local_dev@localhost:5432/visitorpass_e2e?schema=public"
             echo "DATABASE_URL=postgresql://visitorpass:visitorpass_local_dev@localhost:5432/visitorpass_e2e?schema=public"
           } >> "$GITHUB_ENV"
@@ -144,11 +136,6 @@ jobs:
         # Only chromium: both Playwright projects use it, and downloading the
         # others would add minutes for nothing.
         run: npx playwright install --with-deps chromium
-
-      - name: Fetch the OCR runtime
-        # The request form imports it; without this the production build would
-        # serve a panel whose assets 404.
-        run: npm run ocr:assets
 
       - name: Run Playwright
         # `npm run test:e2e` prepares and seeds visitorpass_e2e first, then

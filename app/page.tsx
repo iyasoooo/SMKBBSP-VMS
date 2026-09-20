@@ -4,6 +4,7 @@ import { getCurrentUser } from '@/lib/auth/session';
 import { homeForRole } from '@/lib/auth/authorize';
 import { getTheme } from '@/lib/theme';
 import { ButtonLink } from '@/components/ui/button';
+import { Crest } from '@/components/ui/crest';
 import { ThemeToggle } from '@/components/theme-toggle';
 /**
  * Rendered per request. These read school settings and the session from the
@@ -24,14 +25,11 @@ export default async function HomePage() {
       >
         <div className="mx-auto flex max-w-5xl items-center justify-between gap-4 px-5 py-4">
           <div className="flex items-center gap-3">
-            <span
-              aria-hidden="true"
-              className="flex size-9 items-center justify-center rounded-lg bg-[var(--brand)] text-sm font-bold text-[var(--brand-text)]"
-            >
-              VP
-            </span>
-            <div className="leading-tight">
-              <p className="text-sm font-semibold text-[var(--text-strong)]">VisitorPass</p>
+            <Crest size={56} className="h-11 w-auto sm:h-14" />
+            <div className="min-w-0 leading-tight">
+              <p className="text-[13px] leading-snug font-semibold text-[var(--text-strong)] sm:text-sm">
+                Visitor Management System
+              </p>
               <p className="text-xs text-muted">{settings.schoolShortName}</p>
             </div>
           </div>
@@ -57,17 +55,21 @@ export default async function HomePage() {
             {settings.schoolName}
           </p>
           <h1 className="mt-3 text-3xl font-semibold tracking-tight sm:text-4xl">
-            Request a school visit, and collect your pass at the gate.
+            Request a school visit, and carry your pass on your phone.
           </h1>
           <p className="mt-4 text-base leading-relaxed text-muted">
-            Choose the teacher you want to meet and a time that suits you. The teacher reviews your
-            request, and once it is approved you will receive a QR visitor pass by email. Show it at
-            the guard house on the day of your visit.
+            Choose the teacher you want to meet and a time that suits you. When you submit, you get
+            a private link to your request - save it. Once the teacher approves, that same link
+            becomes your QR visitor pass, so just show it on your phone at the guard house on the
+            day of your visit.
           </p>
 
           <div className="mt-8 flex flex-wrap gap-3">
             <ButtonLink href="/visit/request" size="lg">
               Request a visit
+            </ButtonLink>
+            <ButtonLink href="/map" variant="secondary" size="lg">
+              School map
             </ButtonLink>
             <ButtonLink href="/visit/status" variant="secondary" size="lg">
               Check my request
@@ -80,17 +82,17 @@ export default async function HomePage() {
             {
               step: '1',
               title: 'Submit a request',
-              body: 'Tell us who you are visiting, when, and why. No account is needed.',
+              body: 'Tell us who you are visiting, when, and why. No account is needed. Save the private link you are given.',
             },
             {
               step: '2',
               title: 'Teacher approves',
-              body: 'Your host teacher reviews the request and you are notified by email either way.',
+              body: 'Your host teacher reviews the request. Open your link to see the decision.',
             },
             {
               step: '3',
               title: 'Scan in at the gate',
-              body: 'The guard scans your pass, checks your physical ID, and prints your badge.',
+              body: 'The guard scans the pass on your phone, checks your physical ID, and gives you a badge.',
             },
           ].map((item) => (
             <li key={item.step} className="surface-card rounded-xl p-5">
@@ -123,7 +125,7 @@ export default async function HomePage() {
         className="border-t border-[var(--line-soft)] px-5 py-6 text-center text-xs text-muted"
       >
         <p>
-          {settings.schoolName} &middot; VisitorPass{' '}
+          {settings.schoolName} &middot; Visitor Management System{' '}
           <Link href="/login" className="underline underline-offset-2">
             Staff login
           </Link>

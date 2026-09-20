@@ -1,0 +1,390 @@
+<!doctype html>
+<html lang="ms">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>SMKBBSP Wayfinding Prototype</title>
+<style>
+  :root {
+    --bg: #f4f5f7; --panel: #ffffff; --ink: #16202c; --muted: #64748b;
+    --line: #d8dee7; --corridor: #e2e8f0; --bldg: #cfd8e3; --bldg-ink: #33414f;
+    --accent: #b3122b; --accent-soft: #fde7ea; --base-route: #cbd5e1;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #0f1620; --panel: #17212e; --ink: #e6edf5; --muted: #94a3b8;
+      --line: #2b3a4d; --corridor: #26364a; --bldg: #2f4257; --bldg-ink: #dbe6f1;
+      --accent: #ff5468; --accent-soft: #3a1620; --base-route: #3d4f66;
+    }
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--bg); color: var(--ink);
+    font: 15px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif;
+  }
+  .wrap { display: grid; grid-template-columns: 300px 1fr; gap: 16px; padding: 16px; min-height: 100vh; }
+  @media (max-width: 820px) { .wrap { grid-template-columns: 1fr; } }
+
+  .panel { background: var(--panel); border: 1px solid var(--line); border-radius: 14px; padding: 16px; }
+  h1 { font-size: 17px; margin: 0 0 2px; letter-spacing: .2px; }
+  .sub { color: var(--muted); font-size: 12.5px; margin-bottom: 14px; }
+  label { display: block; font-size: 12px; text-transform: uppercase; letter-spacing: .8px; color: var(--muted); margin: 12px 0 6px; }
+  select, button {
+    font: inherit; color: var(--ink); background: var(--panel);
+    border: 1px solid var(--line); border-radius: 10px; padding: 11px 12px; width: 100%;
+  }
+  select:focus-visible, button:focus-visible, [role="button"]:focus-visible {
+    outline: 3px solid var(--accent); outline-offset: 2px;
+  }
+  .dests { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 8px; }
+  .dests button { min-height: 46px; text-align: left; font-size: 13.5px; padding: 8px 10px; cursor: pointer; }
+  .dests button[aria-pressed="true"] { background: var(--accent-soft); border-color: var(--accent); font-weight: 600; }
+
+  .steps { margin: 14px 0 0; padding-left: 20px; font-size: 14px; }
+  .steps li { margin-bottom: 7px; }
+  .total { font-size: 13px; color: var(--muted); margin-top: 10px; }
+  .lang { display: flex; gap: 6px; margin-top: 14px; }
+  .lang button { width: auto; flex: 1; padding: 7px; font-size: 13px; cursor: pointer; }
+  .lang button[aria-pressed="true"] { background: var(--accent-soft); border-color: var(--accent); font-weight: 600; }
+
+  .stagewrap { background: var(--panel); border: 1px solid var(--line); border-radius: 14px; overflow: hidden; }
+  svg#stage { display: block; width: 100%; height: auto; background: var(--panel); }
+
+  .bldg rect { fill: var(--bldg); stroke: none; rx: 6; }
+  .bldg text { fill: var(--bldg-ink); font-size: 13px; text-anchor: middle; font-weight: 600; pointer-events: none; }
+  .bldg { cursor: pointer; }
+  .bldg:hover rect, .bldg:focus-visible rect { fill: var(--accent); }
+  .bldg:hover text, .bldg:focus-visible text { fill: #fff; }
+  .bldg.is-target rect { fill: var(--accent); }
+  .bldg.is-target text { fill: #fff; }
+
+  .corridor { stroke: var(--corridor); stroke-width: 16; stroke-linecap: round; fill: none; }
+
+  #route-base { fill: none; stroke: var(--base-route); stroke-width: 7; stroke-linecap: round; stroke-linejoin: round; }
+  #route { fill: none; stroke: var(--accent); stroke-width: 4.5; stroke-linecap: round; stroke-linejoin: round;
+           stroke-dasharray: 14 12; animation: draw 1.1s linear infinite; }
+  @keyframes draw { to { stroke-dashoffset: -26; } }
+  @media (prefers-reduced-motion: reduce) { #route { animation: none; stroke-dasharray: none; } }
+
+  .pin { fill: var(--accent); stroke: var(--panel); stroke-width: 3; }
+  .pin-label { font-size: 11px; font-weight: 700; fill: var(--panel); text-anchor: middle; }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <div class="panel">
+    <h1>SMKBBSP VisitorPass</h1>
+    <div class="sub" id="tagline">Peta sekolah &middot; cari arah</div>
+
+    <label for="from" id="lbl-from">Anda berada di</label>
+    <select id="from"></select>
+
+    <label id="lbl-to">Anda hendak ke</label>
+    <div class="dests" id="dests"></div>
+
+    <ol class="steps" id="steps"></ol>
+    <div class="total" id="total"></div>
+
+    <div class="lang">
+      <button type="button" data-lang="ms" aria-pressed="true">BM</button>
+      <button type="button" data-lang="en" aria-pressed="false">EN</button>
+    </div>
+  </div>
+
+  <div class="stagewrap">
+    <svg id="stage" viewBox="0 0 780 600" role="img" aria-labelledby="maptitle">
+      <title id="maptitle">Peta kampus SMKBBSP</title>
+      <g id="corridors"></g>
+      <g class="routes">
+        <path id="route-base"></path>
+        <path id="route"></path>
+      </g>
+      <g id="buildings"></g>
+      <g id="pins"></g>
+    </svg>
+  </div>
+
+</div>
+
+<script>
+// ---------------------------------------------------------------------------
+// 1. THE MAP DATA  (in the real app this comes from Postgres, not a literal)
+// ---------------------------------------------------------------------------
+
+const BUILDINGS = [
+  { code: 'GUARD',   x:  60, y: 500, w:  90, h:  60, ms: 'Pondok Pengawal', en: 'Guard House' },
+  { code: 'PENTAD',  x: 250, y: 430, w: 140, h:  80, ms: 'Pentadbiran',     en: 'Admin Office' },
+  { code: 'KANTIN',  x: 430, y: 430, w: 160, h:  80, ms: 'Kantin',          en: 'Canteen' },
+  { code: 'DEWAN',   x: 610, y: 430, w: 100, h:  80, ms: 'Dewan',           en: 'Hall' },
+  { code: 'BLOK_A',  x: 250, y: 305, w: 140, h:  80, ms: 'Blok A',          en: 'Block A' },
+  { code: 'BLOK_B',  x: 430, y: 305, w: 160, h:  80, ms: 'Blok B',          en: 'Block B' },
+  { code: 'PERPUS',  x: 600, y: 305, w: 110, h:  80, ms: 'Perpustakaan',    en: 'Library' },
+  { code: 'SURAU',   x: 250, y: 170, w: 140, h:  80, ms: 'Surau',           en: 'Prayer Room' },
+  { code: 'MAKMAL',  x: 430, y: 170, w: 160, h:  80, ms: 'Makmal Sains',    en: 'Science Lab' },
+  { code: 'PADANG',  x: 250, y:  40, w: 300, h:  80, ms: 'Padang',          en: 'Field' },
+  { code: 'TANDAS',  x: 600, y:  55, w:  90, h:  80, ms: 'Tandas',          en: 'Toilets' },
+];
+
+// Every node is a point the visitor can stand on. Named nodes are destinations,
+// c* nodes are plain walkway junctions.
+const NODES = {
+  GUARD:  [105, 530],
+  c1:     [200, 520], c2: [200, 420], c3: [200, 280], c4: [200, 140],
+  b320:   [320, 420], b510: [510, 420], b660: [660, 420],
+  c320:   [320, 280], c510: [510, 280], c655: [655, 280],
+  d400:   [400, 140], d645: [645, 140],
+  PENTAD: [320, 470], KANTIN: [510, 470], DEWAN:  [660, 470],
+  BLOK_A: [320, 345], BLOK_B: [510, 345], PERPUS: [655, 345],
+  SURAU:  [320, 210], MAKMAL: [510, 210],
+  PADANG: [400,  80], TANDAS: [645,  95],
+};
+
+// Walkable connections. Undirected; weight is computed from the coordinates.
+const EDGES = [
+  ['GUARD','c1'],
+  ['c1','c2'], ['c2','c3'], ['c3','c4'],                       // main spine
+  ['c2','b320'], ['b320','b510'], ['b510','b660'],             // lower corridor
+  ['c3','c320'], ['c320','c510'], ['c510','c655'],             // middle corridor
+  ['c4','d400'], ['d400','d645'],                              // upper corridor
+  ['b320','PENTAD'], ['b510','KANTIN'], ['b660','DEWAN'],
+  ['c320','BLOK_A'], ['c510','BLOK_B'], ['c655','PERPUS'],
+  ['c320','SURAU'],  ['c510','MAKMAL'],
+  ['d400','PADANG'], ['d645','TANDAS'],
+];
+
+const METRES_PER_UNIT = 0.22;   // rough scale of the drawing
+
+// ---------------------------------------------------------------------------
+// 2. PATHFINDING  (Dijkstra - this is the whole "routing engine")
+// ---------------------------------------------------------------------------
+
+const dist = (a, b) => Math.hypot(NODES[a][0] - NODES[b][0], NODES[a][1] - NODES[b][1]);
+
+const GRAPH = (() => {
+  const g = {};
+  for (const id of Object.keys(NODES)) g[id] = [];
+  for (const [a, b] of EDGES) { g[a].push(b); g[b].push(a); }
+  return g;
+})();
+
+function findRoute(from, to) {
+  const best = {}, prev = {}, seen = new Set();
+  for (const id of Object.keys(NODES)) best[id] = Infinity;
+  best[from] = 0;
+
+  while (true) {
+    let cur = null;
+    for (const id of Object.keys(NODES)) {
+      if (!seen.has(id) && best[id] < (cur === null ? Infinity : best[cur])) cur = id;
+    }
+    if (cur === null || cur === to) break;
+    seen.add(cur);
+    for (const nb of GRAPH[cur]) {
+      const alt = best[cur] + dist(cur, nb);
+      if (alt < best[nb]) { best[nb] = alt; prev[nb] = cur; }
+    }
+  }
+
+  if (best[to] === Infinity) return null;
+  const path = [to];
+  while (path[0] !== from) path.unshift(prev[path[0]]);
+  return { path, metres: Math.round(best[to] * METRES_PER_UNIT) };
+}
+
+// ---------------------------------------------------------------------------
+// 3. TURN-BY-TURN TEXT  (a route must be readable, not only drawable)
+// ---------------------------------------------------------------------------
+
+const T = {
+  ms: { tagline:'Peta sekolah · cari arah', from:'Anda berada di', to:'Anda hendak ke',
+        start:'Mula dari', straight:'Jalan lurus', left:'Belok kiri', right:'Belok kanan',
+        arrive:'Anda telah sampai di', total:'Jumlah jarak', mins:'min berjalan',
+        pickHint:'Tap satu destinasi pada peta atau senarai di atas.' },
+  en: { tagline:'School map · find your way', from:'You are at', to:'You want to go to',
+        start:'Start at', straight:'Walk straight', left:'Turn left', right:'Turn right',
+        arrive:'You have arrived at', total:'Total distance', mins:'min walk',
+        pickHint:'Tap a destination on the map or in the list above.' },
+};
+
+let lang = 'ms';
+const nameOf = (code) => {
+  const b = BUILDINGS.find(b => b.code === code);
+  return b ? b[lang] : code;
+};
+
+function toSteps(path) {
+  const t = T[lang];
+  const pts = path.map(id => NODES[id]);
+  const steps = [`${t.start} ${nameOf(path[0])}.`];
+  let run = 0;
+
+  for (let i = 1; i < pts.length; i++) {
+    run += Math.hypot(pts[i][0] - pts[i-1][0], pts[i][1] - pts[i-1][1]);
+    if (i === pts.length - 1) break;
+
+    const v1 = [pts[i][0] - pts[i-1][0], pts[i][1] - pts[i-1][1]];
+    const v2 = [pts[i+1][0] - pts[i][0], pts[i+1][1] - pts[i][1]];
+    const cross = v1[0] * v2[1] - v1[1] * v2[0];
+    const dot   = v1[0] * v2[0] + v1[1] * v2[1];
+    const angle = Math.abs(Math.atan2(cross, dot) * 180 / Math.PI);
+
+    if (angle < 25) continue;                       // still going straight, keep accumulating
+    const metres = Math.round(run * METRES_PER_UNIT);
+    steps.push(`${t.straight} ${metres}m, ${cross > 0 ? t.right : t.left}.`);
+    run = 0;
+  }
+
+  const last = Math.round(run * METRES_PER_UNIT);
+  steps.push(`${t.straight} ${last}m. ${t.arrive} ${nameOf(path[path.length-1])}.`);
+  return steps;
+}
+
+// ---------------------------------------------------------------------------
+// 4. RENDERING
+// ---------------------------------------------------------------------------
+
+const SVGNS = 'http://www.w3.org/2000/svg';
+const el = (tag, attrs) => {
+  const n = document.createElementNS(SVGNS, tag);
+  for (const k in attrs) n.setAttribute(k, attrs[k]);
+  return n;
+};
+
+let from = 'GUARD';
+let to = null;
+
+function drawCorridors() {
+  const g = document.getElementById('corridors');
+  g.textContent = '';
+  for (const [a, b] of EDGES) {
+    g.appendChild(el('line', {
+      class: 'corridor',
+      x1: NODES[a][0], y1: NODES[a][1], x2: NODES[b][0], y2: NODES[b][1],
+    }));
+  }
+}
+
+function drawBuildings() {
+  const g = document.getElementById('buildings');
+  g.textContent = '';
+  for (const b of BUILDINGS) {
+    const grp = el('g', { class: 'bldg', 'data-code': b.code, tabindex: '0', role: 'button' });
+    grp.appendChild(el('rect', { x: b.x, y: b.y, width: b.w, height: b.h }));
+    const txt = el('text', { x: b.x + b.w / 2, y: b.y + b.h / 2 + 5 });
+    txt.textContent = b[lang];
+    grp.appendChild(txt);
+    grp.setAttribute('aria-label', b[lang]);
+    grp.addEventListener('click', () => select(b.code));
+    grp.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); select(b.code); }
+    });
+    g.appendChild(grp);
+  }
+}
+
+function drawPins() {
+  const g = document.getElementById('pins');
+  g.textContent = '';
+  const mark = (code, label) => {
+    if (!code) return;
+    const [x, y] = NODES[code];
+    g.appendChild(el('circle', { class: 'pin', cx: x, cy: y - 20, r: 12 }));
+    const t = el('text', { class: 'pin-label', x, y: y - 16 });
+    t.textContent = label;
+    g.appendChild(t);
+  };
+  mark(from, 'A');
+  if (to && to !== from) mark(to, 'B');
+}
+
+function render() {
+  drawCorridors();
+  drawBuildings();
+
+  const stepsEl = document.getElementById('steps');
+  const totalEl = document.getElementById('total');
+  const base = document.getElementById('route-base');
+  const line = document.getElementById('route');
+
+  document.querySelectorAll('.bldg').forEach(n =>
+    n.classList.toggle('is-target', n.dataset.code === to));
+  document.querySelectorAll('.dests button').forEach(b =>
+    b.setAttribute('aria-pressed', String(b.dataset.code === to)));
+
+  stepsEl.textContent = '';
+  if (!to || to === from) {
+    base.removeAttribute('d'); line.removeAttribute('d');
+    totalEl.textContent = T[lang].pickHint;
+    drawPins();
+    return;
+  }
+
+  const result = findRoute(from, to);
+  const d = result.path.map((id, i) =>
+    (i ? 'L' : 'M') + NODES[id][0] + ',' + NODES[id][1]).join('');
+
+  // The Pavilion trick: one flat base line, one dashed line animated on top.
+  base.setAttribute('d', d);
+  line.setAttribute('d', d);
+
+  for (const s of toSteps(result.path)) {
+    const li = document.createElement('li');
+    li.textContent = s;
+    stepsEl.appendChild(li);
+  }
+  const mins = Math.max(1, Math.round(result.metres / 75));
+  totalEl.textContent = `${T[lang].total}: ${result.metres}m · ~${mins} ${T[lang].mins}`;
+  drawPins();
+}
+
+function select(code) {
+  if (code === from) return;
+  to = (to === code) ? null : code;
+  render();
+}
+
+function buildControls() {
+  const sel = document.getElementById('from');
+  sel.textContent = '';
+  for (const b of BUILDINGS) {
+    const o = document.createElement('option');
+    o.value = b.code; o.textContent = b[lang];
+    if (b.code === from) o.selected = true;
+    sel.appendChild(o);
+  }
+  sel.onchange = () => { from = sel.value; if (to === from) to = null; render(); };
+
+  const box = document.getElementById('dests');
+  box.textContent = '';
+  for (const b of BUILDINGS) {
+    if (b.code === 'GUARD') continue;
+    const btn = document.createElement('button');
+    btn.type = 'button'; btn.dataset.code = b.code; btn.textContent = b[lang];
+    btn.setAttribute('aria-pressed', 'false');
+    btn.onclick = () => select(b.code);
+    box.appendChild(btn);
+  }
+
+  document.getElementById('tagline').textContent = T[lang].tagline;
+  document.getElementById('lbl-from').textContent = T[lang].from;
+  document.getElementById('lbl-to').textContent = T[lang].to;
+}
+
+document.querySelectorAll('.lang button').forEach(b => {
+  b.onclick = () => {
+    lang = b.dataset.lang;
+    document.querySelectorAll('.lang button').forEach(x =>
+      x.setAttribute('aria-pressed', String(x.dataset.lang === lang)));
+    document.documentElement.lang = lang;
+    buildControls();
+    render();
+  };
+});
+
+buildControls();
+render();
+select('KANTIN');   // the exact scenario: guard house -> canteen
+</script>
+</body>
+</html>

@@ -1,5 +1,5 @@
 import { expect, test } from '@playwright/test';
-import { HOST_TEACHER_OPTION, login, logout, submitVisitRequest, uniqueNric } from './helpers';
+import { login, logout, selectHostTeacher, submitVisitRequest, uniqueNric } from './helpers';
 import { mark } from './steps';
 
 
@@ -27,11 +27,16 @@ test('AT-003/006/010/016/017/018 full appointment to check-out journey', async (
   await mark('1. Visitor submits');
   const submitted = await submitVisitRequest(page, { visitorName });
   expect(submitted.reference).toMatch(/^VP-[A-Z0-9]{4}-[A-Z0-9]{4}$/);
-  await expect(page.getByRole('heading', { name: 'Request submitted' })).toBeVisible();
 
-  // The private token must never appear in the success URL.
-  expect(page.url()).not.toContain('token');
-  expect(new URL(page.url()).searchParams.get('ref')).toBe(submitted.reference);
+  // AT-003: with no email, the visitor lands on their private page and is
+  // told plainly to save it. The token lives in the path, never a query string.
+  await expect(page.getByText('Request submitted')).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Save this page now' })).toBeVisible();
+  await expect(page.getByText('Awaiting approval')).toBeVisible();
+  expect([...new URL(page.url()).searchParams.keys()]).toEqual(['new']);
+
+  // No pass is shown before a decision.
+  await expect(page.getByRole('img', { name: /QR visitor pass/ })).toHaveCount(0);
 
   // --- 2. Teacher approves ------------------------------------------------
 
@@ -61,6 +66,16 @@ test('AT-003/006/010/016/017/018 full appointment to check-out journey', async (
   await expect(page.getByRole('heading', { name: 'Decision' })).toBeVisible();
   await expect(page.getByText('Please wait at the general office.')).toBeVisible();
   await logout(page);
+
+  // --- 2b. The link saved at submission now shows the pass ---------------
+
+  // AT-006: nothing was sent to the visitor. The only thing they have is the
+  // link from step 1, so reopen exactly that and expect the pass on it.
+  await mark('2b. The saved link now shows the pass');
+  await page.goto(submitted.privatePath);
+  await expect(page.getByText('Approved', { exact: true })).toBeVisible();
+  await expect(page.getByRole('img', { name: /QR visitor pass/ })).toBeVisible();
+  await expect(page.getByText('Please wait at the general office.')).toBeVisible();
 
   // --- 3. The guard can find them, but the pass is not valid yet ----------
 
@@ -106,7 +121,7 @@ test('AT-003/006/010/016/017/018 full appointment to check-out journey', async (
   await page.getByLabel('Full name').fill(gateVisitor);
   await page.getByLabel('Phone number').fill('014-555 6666');
   await page.getByLabel('Identification number').fill(uniqueNric());
-  await page.getByLabel('Host teacher').selectOption({ label: HOST_TEACHER_OPTION });
+  await selectHostTeacher(page);
   await page.getByLabel('Purpose').fill('Gate lifecycle end to end check');
   await page.getByLabel(/I have seen the visitor/).check();
   await page.getByRole('button', { name: 'Register and check in' }).click();

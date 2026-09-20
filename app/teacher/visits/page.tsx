@@ -5,10 +5,14 @@ import { requireTeacher } from '@/lib/auth/authorize';
 import { getSettings } from '@/lib/domain/settings';
 import { formatDate, formatDateTime, formatDuration, formatTimeRange, diffMinutes } from '@/lib/time';
 import { SAFE_VISITOR_SELECT, isOverdue, toSafeVisitor } from '@/lib/domain/presenters';
+import { hostConfirmationsFor, type HostConfirmationState } from '@/lib/domain/checkpoints';
+import { getLocale } from '@/lib/theme';
+import { getDictionary } from '@/lib/i18n/dictionary';
 import { DEFAULT_PAGE_SIZE } from '@/lib/constants';
 import { Card, EmptyState, PageHeading, TableScroll } from '@/components/ui/surface';
 import { VisitStatusPill } from '@/components/status-pill';
 import { Pagination } from '@/components/pagination';
+import { ConfirmArrival } from './confirm-arrival';
 import Link from 'next/link';
 
 export const metadata: Metadata = { title: 'My visits' };
@@ -41,7 +45,8 @@ export default async function TeacherVisitsPage({
   searchParams: Promise<{ filter?: string; page?: string }>;
 }) {
   const user = await requireTeacher();
-  const [params, settings] = await Promise.all([searchParams, getSettings()]);
+  const [params, settings, locale] = await Promise.all([searchParams, getSettings(), getLocale()]);
+  const t = getDictionary(locale);
 
   const filter = FILTERS.find((f) => f.key === params.filter) ?? FILTERS[0];
   const page = Math.max(1, Number.parseInt(params.page ?? '1', 10) || 1);
@@ -67,6 +72,17 @@ export default async function TeacherVisitsPage({
   ]);
 
   const now = new Date();
+
+  /*
+   * Confirmation state is only fetched for visitors currently on site. It is
+   * the only case where the button is offered, and a history page has no use
+   * for it.
+   */
+  const showConfirm = settings.checkpointEnabled && filter.key === 'active';
+
+  const confirmations: Map<string, HostConfirmationState> = showConfirm
+    ? await hostConfirmationsFor(visits.map((visit) => visit.id))
+    : new Map();
 
   return (
     <>
@@ -115,6 +131,11 @@ export default async function TeacherVisitsPage({
                   <th scope="col" className="px-5 py-3 font-medium">Destination</th>
                   <th scope="col" className="px-5 py-3 font-medium">Actual</th>
                   <th scope="col" className="px-5 py-3 font-medium">Status</th>
+                  {showConfirm ? (
+                    <th scope="col" className="px-5 py-3 font-medium">
+                      {t.confirmedBy}
+                    </th>
+                  ) : null}
                 </tr>
               </thead>
               <tbody className="divide-y divide-[var(--line-soft)]">
@@ -161,6 +182,27 @@ export default async function TeacherVisitsPage({
                       <td className="px-5 py-3">
                         <VisitStatusPill status={visit.status} overdue={overdue} />
                       </td>
+                      {showConfirm ? (
+                        <td className="px-5 py-3">
+                          <ConfirmArrival
+                            visitId={visit.id}
+                            confirmedAt={
+                              confirmations.get(visit.id)?.arrivedAt?.toISOString() ?? null
+                            }
+                            departedAt={
+                              confirmations.get(visit.id)?.departedAt?.toISOString() ?? null
+                            }
+                            labels={{
+                              confirmArrival: t.confirmArrival,
+                              confirmDeparture: t.confirmDeparture,
+                              arrivalConfirmed: t.arrivalConfirmed,
+                              departureConfirmed: t.departureConfirmed,
+                              alreadyConfirmed: t.alreadyConfirmed,
+                              loading: t.loading,
+                            }}
+                          />
+                        </td>
+                      ) : null}
                     </tr>
                   );
                 })}

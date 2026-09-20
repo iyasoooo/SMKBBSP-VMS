@@ -1,30 +1,23 @@
 import { AppointmentStatus, Role, VisitEventType, VisitStatus } from '@prisma/client';
 import { prisma } from '@/lib/db/prisma';
-import {
-  deriveFallbackCode,
-  formatFallbackCode,
-  generateToken,
-  hashFallbackCode,
-  hashToken,
-} from '@/lib/crypto/tokens';
+import { deriveFallbackCode, hashFallbackCode } from '@/lib/crypto/tokens';
 import { allocateBadgeNumber } from '@/lib/domain/badges';
-import { buildPassUrl } from '@/lib/qr';
 import { getSettings } from '@/lib/domain/settings';
-import { queueEmail } from '@/lib/email/outbox';
+import { queueInAppNotification } from '@/lib/domain/in-app-notifications';
 import { recordAudit } from '@/lib/audit';
-import { AUDIT_ACTIONS, PUBLIC_TOKEN_TRAILING_DAYS } from '@/lib/constants';
-import { addDays, formatDateTime, formatTimeRange, toIsoDayString } from '@/lib/time';
+import { AUDIT_ACTIONS } from '@/lib/constants';
+import { formatDateTime, toIsoDayString } from '@/lib/time';
 
 /**
  * Teacher approval and rejection.
  *
  * Both operations are:
  *   - Transactional. Approval writes the appointment status, exactly one
- *     visit, exactly one credential, the outbox rows and the audit entry, or
- *     it writes none of them.
+ *     visit, exactly one credential and the audit entry, or it writes none of
+ *     them.
  *   - Idempotent. Re-submitting an approval (double click, retried request,
  *     back button) returns the existing result instead of creating a second
- *     visit, badge, credential or email.
+ *     visit, badge or credential.
  *   - Authorized at the data layer. The appointment is loaded with a
  *     `teacherId` filter, so one teacher cannot act on another's request even
  *     with a valid appointment id.
@@ -55,7 +48,6 @@ export interface ApprovalResult {
   badgeNumber: string;
   /** True when the appointment was already approved before this call. */
   alreadyApproved: boolean;
-  notificationIds: string[];
 }
 
 /**
@@ -69,7 +61,6 @@ export async function approveAppointment(options: {
   actorUserId: string;
   actorRole: Role;
   note?: string;
-  appUrl: string;
   now?: Date;
 }): Promise<ApprovalResult> {
   const now = options.now ?? new Date();
@@ -106,7 +97,6 @@ export async function approveAppointment(options: {
           visitId: existingVisit.id,
           badgeNumber: existingVisit.badgeNumber,
           alreadyApproved: true,
-          notificationIds: [],
         };
       }
     }
@@ -148,22 +138,25 @@ export async function approveAppointment(options: {
     );
 
     /*
-     * The private token is rotated here rather than reused.
+     * The pass is bound to the private token issued at submission. It is not
+     * rotated.
      *
-     * The spec permits either binding to the current token or rotating during
-     * approval, and rotation is what makes the approval email work: the server
-     * stores only `publicTokenHash`, so without a fresh raw token it could not
-     * build a pass link to send. Rotating also retires the pre-approval link
-     * that has been sitting in the visitor's inbox, so only one live URL
-     * exists per appointment at any time.
+     * The visitor was shown that link once, on screen, and nothing can be sent
+     * to them afterwards - the system has no email. A rotated link would
+     * therefore be unreachable, and the approval would strand the visitor it
+     * was meant to admit. Binding is also the option the specification names
+     * first.
      *
-     * The same raw token backs both the status page and the QR credential, so
-     * the visitor still has a single link to keep.
+     * It costs nothing in safety. The token alone never admitted anyone: before
+     * approval it resolves only to a status page, and afterwards the gate
+     * accepts it only through the credential written below, inside its
+     * validity window.
+     *
+     * Only an administrator's reissue rotates the token (see credentials.ts),
+     * and that path hands the new link back to the administrator to pass on.
      */
-    const rawToken = generateToken();
-    const tokenHash = hashToken(rawToken);
+    const tokenHash = appointment.publicTokenHash;
     const fallbackCode = deriveFallbackCode(tokenHash);
-    const statusUrl = buildPassUrl(options.appUrl, rawToken);
 
     await tx.appointment.update({
       where: { id: appointment.id },
@@ -172,8 +165,6 @@ export async function approveAppointment(options: {
         decisionNote: options.note ?? null,
         decidedAt: now,
         decidedById: options.actorUserId,
-        publicTokenHash: tokenHash,
-        publicTokenExpiresAt: addDays(appointment.scheduledEnd, PUBLIC_TOKEN_TRAILING_DAYS),
       },
     });
 
@@ -222,33 +213,8 @@ export async function approveAppointment(options: {
       },
     });
 
-    const notificationIds: string[] = [];
-
-    if (appointment.visitor.email) {
-      notificationIds.push(
-        await queueEmail(
-          {
-            type: 'visitor.approved',
-            templateKey: 'visitor-approved',
-            recipient: appointment.visitor.email,
-            payload: {
-              reference: appointment.referenceNumber,
-              visitorName: appointment.visitor.fullName,
-              teacherName: appointment.teacher.name,
-              schoolName: settings.schoolName,
-              destinationName: appointment.destination?.nameEn,
-              scheduledAt: formatDateTime(appointment.scheduledStart),
-              windowText: `${formatTimeRange(validFrom, expiresAt)} on ${formatDateTime(appointment.scheduledStart).split(',')[0]}`,
-              decisionNote: options.note,
-              fallbackCode: formatFallbackCode(fallbackCode),
-              instructions: appointment.destination?.instructionsEn ?? undefined,
-              statusUrl,
-            },
-          },
-          tx,
-        ),
-      );
-    }
+    // Nothing is sent to the visitor. Their private page reads the new state
+    // directly, so reopening the link they saved is how they learn of it.
 
     await recordAudit(
       {
@@ -272,7 +238,6 @@ export async function approveAppointment(options: {
       visitId: visit.id,
       badgeNumber,
       alreadyApproved: false,
-      notificationIds,
     };
   });
 }
@@ -281,7 +246,6 @@ export interface RejectionResult {
   appointmentId: string;
   referenceNumber: string;
   alreadyRejected: boolean;
-  notificationIds: string[];
 }
 
 /**
@@ -298,7 +262,6 @@ export async function rejectAppointment(options: {
   now?: Date;
 }): Promise<RejectionResult> {
   const now = options.now ?? new Date();
-  const settings = await getSettings();
 
   return prisma.$transaction(async (tx) => {
     const appointment = await tx.appointment.findFirst({
@@ -306,7 +269,6 @@ export async function rejectAppointment(options: {
         id: options.appointmentId,
         ...(options.actorRole === Role.TEACHER ? { teacherId: options.actorUserId } : {}),
       },
-      include: { visitor: true, teacher: true },
     });
 
     if (!appointment) {
@@ -318,7 +280,6 @@ export async function rejectAppointment(options: {
         appointmentId: appointment.id,
         referenceNumber: appointment.referenceNumber,
         alreadyRejected: true,
-        notificationIds: [],
       };
     }
 
@@ -354,28 +315,7 @@ export async function rejectAppointment(options: {
       data: { status: VisitStatus.CANCELLED },
     });
 
-    const notificationIds: string[] = [];
-
-    if (appointment.visitor.email) {
-      notificationIds.push(
-        await queueEmail(
-          {
-            type: 'visitor.rejected',
-            templateKey: 'visitor-rejected',
-            recipient: appointment.visitor.email,
-            payload: {
-              reference: appointment.referenceNumber,
-              visitorName: appointment.visitor.fullName,
-              teacherName: appointment.teacher.name,
-              schoolName: settings.schoolName,
-              scheduledAt: formatDateTime(appointment.scheduledStart),
-              decisionNote: options.note,
-            },
-          },
-          tx,
-        ),
-      );
-    }
+    // The visitor sees the decision and the reason on their private page.
 
     await recordAudit(
       {
@@ -392,7 +332,6 @@ export async function rejectAppointment(options: {
       appointmentId: appointment.id,
       referenceNumber: appointment.referenceNumber,
       alreadyRejected: false,
-      notificationIds,
     };
   });
 }
@@ -404,17 +343,16 @@ export async function rejectAppointment(options: {
 export async function cancelAppointmentByToken(options: {
   tokenHash: string;
   now?: Date;
-}): Promise<{ cancelled: boolean; referenceNumber?: string; notificationIds: string[] }> {
+}): Promise<{ cancelled: boolean; referenceNumber?: string }> {
   const now = options.now ?? new Date();
-  const settings = await getSettings();
 
   return prisma.$transaction(async (tx) => {
     const appointment = await tx.appointment.findUnique({
       where: { publicTokenHash: options.tokenHash },
-      include: { visitor: true, teacher: true },
+      include: { visitor: true },
     });
 
-    if (!appointment) return { cancelled: false, notificationIds: [] };
+    if (!appointment) return { cancelled: false };
 
     const cancellable: AppointmentStatus[] = [
       AppointmentStatus.PENDING,
@@ -423,7 +361,7 @@ export async function cancelAppointmentByToken(options: {
     ];
 
     if (!cancellable.includes(appointment.status)) {
-      return { cancelled: false, referenceNumber: appointment.referenceNumber, notificationIds: [] };
+      return { cancelled: false, referenceNumber: appointment.referenceNumber };
     }
 
     // A visit already under way is the guard's business, not the visitor's.
@@ -436,7 +374,7 @@ export async function cancelAppointmentByToken(options: {
     });
 
     if (activeVisit) {
-      return { cancelled: false, referenceNumber: appointment.referenceNumber, notificationIds: [] };
+      return { cancelled: false, referenceNumber: appointment.referenceNumber };
     }
 
     await tx.appointment.update({
@@ -454,24 +392,21 @@ export async function cancelAppointmentByToken(options: {
       data: { status: VisitStatus.CANCELLED },
     });
 
-    const notificationIds: string[] = [];
-
-    if (appointment.visitor.email) {
-      notificationIds.push(
-        await queueEmail(
-          {
-            type: 'visitor.cancelled',
-            templateKey: 'visitor-cancelled',
-            recipient: appointment.visitor.email,
-            payload: {
-              reference: appointment.referenceNumber,
-              visitorName: appointment.visitor.fullName,
-              schoolName: settings.schoolName,
-              scheduledAt: formatDateTime(appointment.scheduledStart),
-            },
-          },
-          tx,
-        ),
+    /*
+     * The host is told, so they are not left expecting someone. A request
+     * still held for review was never shown to the teacher, so telling them it
+     * was cancelled would disclose that it existed.
+     */
+    if (appointment.status !== AppointmentStatus.REVIEW_REQUIRED) {
+      await queueInAppNotification(
+        {
+          userId: appointment.teacherId,
+          type: 'host.cancelled',
+          title: 'A visitor cancelled',
+          body: `${appointment.visitor.fullName} cancelled their visit on ${formatDateTime(appointment.scheduledStart)} (${appointment.referenceNumber}).`,
+          link: `/teacher/requests/${appointment.id}`,
+        },
+        tx,
       );
     }
 
@@ -485,6 +420,6 @@ export async function cancelAppointmentByToken(options: {
       tx,
     );
 
-    return { cancelled: true, referenceNumber: appointment.referenceNumber, notificationIds };
+    return { cancelled: true, referenceNumber: appointment.referenceNumber };
   });
 }

@@ -19,7 +19,8 @@ import { formatDate, formatDateTime, formatTimeRange } from '@/lib/time';
 import { Alert, Card, DetailRow, PageHeading, Pill } from '@/components/ui/surface';
 import { buttonClasses } from '@/components/ui/button';
 import { VisitStatusPill } from '@/components/status-pill';
-import { CheckInPanel, CheckOutPanel, DenyPanel } from './gate-actions';
+import { listCheckpointsForVisit } from '@/lib/domain/checkpoints';
+import { CheckInPanel, CheckOutPanel, DenyPanel, SightingPanel } from './gate-actions';
 
 export const metadata: Metadata = { title: 'Visit detail' };
 export const dynamic = 'force-dynamic';
@@ -56,6 +57,32 @@ export default async function GuardVisitDetailPage({
   // entry since the pass was scanned.
   const blacklist = await blacklistStateForVisit(visit.id, now);
   const requiresIdSighted = visit.appointment?.visitType.requiresIdSighted ?? true;
+
+  const checkpoints = settings.checkpointEnabled
+    ? await listCheckpointsForVisit(visit.id)
+    : [];
+
+  /*
+   * Neutral third-person labels, not the button captions. "Visitor has left
+   * me" is the right words on a host's own button and the wrong ones in a
+   * guard's timeline, where the reader is not the host.
+   */
+  const CHECKPOINT_KIND_LABELS: Record<string, string> = {
+    ARRIVAL: t.timelineArrived,
+    PRESENCE: t.timelineSeen,
+    DEPARTURE: t.timelineDeparted,
+  };
+
+  /*
+   * How the sighting was captured is shown, not hidden. A host tapping a
+   * button and a scanned credential are different levels of evidence, and a
+   * timeline that rendered them identically would overstate the weaker one.
+   */
+  const CHECKPOINT_METHOD_LABELS: Record<string, string> = {
+    HOST_CONFIRM: 'host',
+    SCAN: 'scan',
+    GUARD_SIGHTING: 'guard',
+  };
 
   return (
     <>
@@ -160,6 +187,42 @@ export default async function GuardVisitDetailPage({
               <p className="mt-1 text-sm">{visit.guardNote}</p>
             </div>
           ) : null}
+
+          {settings.checkpointEnabled ? (
+            <div className="border-t border-[var(--line-soft)] px-5 py-4">
+              <p className="text-xs tracking-wide text-muted uppercase">{t.lastSeen}</p>
+              {checkpoints.length === 0 ? (
+                <p className="mt-2 text-sm text-muted">{t.lastSeenNever}</p>
+              ) : (
+                <ol className="mt-2 space-y-2">
+                  {checkpoints.map((checkpoint) => (
+                    <li key={checkpoint.id} className="text-sm">
+                      <span className="font-medium text-[var(--text-strong)]">
+                        {CHECKPOINT_KIND_LABELS[checkpoint.kind] ?? checkpoint.kind}
+                      </span>
+                      {checkpoint.destination ? (
+                        <>
+                          {' '}
+                          {t.atDestination}{' '}
+                          {locale === 'ms'
+                            ? checkpoint.destination.nameMs
+                            : checkpoint.destination.nameEn}
+                        </>
+                      ) : null}
+                      <span className="block text-xs text-muted">
+                        {formatDateTime(checkpoint.createdAt)} &middot; {t.confirmedBy.toLowerCase()}{' '}
+                        {checkpoint.scannedBy.name} (
+                        {CHECKPOINT_METHOD_LABELS[checkpoint.method] ?? checkpoint.method})
+                      </span>
+                      {checkpoint.note ? (
+                        <span className="block text-xs text-muted">{checkpoint.note}</span>
+                      ) : null}
+                    </li>
+                  ))}
+                </ol>
+              )}
+            </div>
+          ) : null}
         </Card>
 
         {/* The guard is admitting the whole party, so they need to see who it is. */}
@@ -183,6 +246,7 @@ export default async function GuardVisitDetailPage({
           {visit.status === VisitStatus.CHECKED_IN ? (
             <>
               <CheckOutPanel visitId={visit.id} t={t} />
+              {settings.checkpointEnabled ? <SightingPanel visitId={visit.id} t={t} /> : null}
               <Link href={`/guard/badge/${visit.id}`} className={buttonClasses('secondary', 'lg')}>
                 {t.reprintBadge}
               </Link>

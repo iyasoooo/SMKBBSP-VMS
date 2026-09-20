@@ -36,7 +36,6 @@ export default async function AdminLayout({ children }: { children: React.ReactN
   const administrative = [
     { href: '/admin/users', label: 'Users' },
     { href: '/admin/destinations', label: 'Destinations' },
-    { href: '/admin/notifications', label: 'Email' },
     { href: '/admin/settings', label: 'Settings' },
   ];
 

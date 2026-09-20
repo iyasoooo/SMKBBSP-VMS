@@ -10,7 +10,7 @@ import { Card, EmptyState, PageHeading, TableScroll } from '@/components/ui/surf
 import { VisitStatusPill } from '@/components/status-pill';
 import { Pagination } from '@/components/pagination';
 import { ActionForm } from '@/components/action-form';
-import { ReportFilterBar } from '@/app/admin/reports/filters';
+import { ReportFilterBar } from '@/components/report-filters';
 
 export const metadata: Metadata = { title: 'Visit history' };
 export const dynamic = 'force-dynamic';
@@ -52,7 +52,11 @@ export default async function AdminVisitsPage({
         description="Search and filter every recorded visit. Identity numbers are masked."
       />
 
-      <ReportFilterBar filters={filters} options={{ teachers, destinations, visitTypes }} />
+      <ReportFilterBar
+        filters={filters}
+        options={{ teachers, destinations, visitTypes }}
+        canExport
+      />
 
       <Card className="mb-5 p-4">
         <h2 className="text-sm font-semibold">Housekeeping</h2>

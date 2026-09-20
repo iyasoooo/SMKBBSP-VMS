@@ -1,8 +1,9 @@
 # SMKBBSP VisitorPass
 
 > A school visitor management system for SMK Bandar Baru Sri Petaling. A visitor requests an
-> appointment without an account, the host teacher approves it, and an approved visitor receives an
-> expiring QR pass by email. At the gate a guard scans the pass, records that physical
+> appointment without an account and is shown a private link on screen; when the host teacher
+> approves, that same link becomes an expiring QR pass. The system sends no email. At the gate a
+> guard scans the pass, records that physical
 > identification was sighted, checks the visitor in, and prints a badge. Next.js App Router,
 > TypeScript strict, PostgreSQL 16 via Prisma.
 
@@ -60,12 +61,19 @@ data, so a denied request cannot briefly stream it. Teacher-scoped queries filte
 the query itself, so a valid id belonging to another teacher matches nothing.
 
 **Transactions and idempotency.** Approval, check-in, check-out and walk-in each write their status
-change, visit, credential, outbox rows and audit entry in one transaction, or none of them. Repeating
-any of them returns the existing result rather than creating a second visit, badge, credential or
-email.
+change, visit, credential, in-app notifications and audit entry in one transaction, or none of them.
+Repeating any of them returns the existing result rather than creating a second visit, badge,
+credential or notification.
 
-**The outbox.** Notification rows are written inside the business transaction; delivery happens
-after commit. Never send mail inside a transaction — an SMTP outage must not roll back a check-in.
+**No email.** The system sends nothing to anyone; there is no mail library installed and
+`tests/unit/no-email.test.ts` fails if one is added. Staff are notified in-app
+(`lib/domain/in-app-notifications.ts`), inside the business transaction. Visitors have no account:
+submission redirects them to `/v/<token>`, the only place the raw token is ever shown.
+
+**Never rotate the visitor's token on approval.** Approval binds the credential to the token issued
+at submission. The visitor was shown that link once and nothing can be sent to them afterwards, so a
+rotated link would strand an approved visitor. Only an administrator's reissue rotates it, and it
+hands the new link back to that administrator. `decisions.test.ts` pins this end to end.
 
 **Time.** Instants are stored in UTC and displayed in `Asia/Kuala_Lumpur`. Every "today", date range
 and school-hours decision is evaluated against the Malaysian calendar day via `lib/time.ts`, never
@@ -95,7 +103,6 @@ lib/
   domain/           business services — the layer that owns transitions.
                     appointments, decisions, gate, credentials, blacklist, badges,
                     admin, analytics, settings, presenters, in-app-notifications
-  email/            outbox.ts (transactional), templates.ts
   reports/          query.ts shared by screen, pdf.ts and xlsx.ts
   redact.ts         one redactor, shared by audit and logger
   time.ts           UTC storage, Kuala Lumpur presentation
@@ -120,7 +127,6 @@ npm run test:e2e       # prepares the E2E database, then Playwright
 npm run build          # production build
 npm run db:migrate     # create and apply a migration
 npm run db:seed        # deterministic demonstration data
-npm run ocr:assets     # fetch the self-hosted OCR runtime into public/ocr
 ```
 
 Run `lint`, `typecheck`, `test` and `build` before claiming any change is complete.
@@ -150,7 +156,73 @@ so nothing is prerendered against a database that may not exist.
 **The lockfile is generated on Windows** and lacks Linux/musl variants of sharp's optional
 dependencies, so Docker and CI use `npm install` rather than `npm ci`.
 
+**Card reading is a vision model on an Ollama host, and it is server-side.** The browser posts a
+photograph to `/api/ocr` (`app/api/ocr/route.ts`), which calls the model through
+`lib/ocr/ollama.ts`. The browser never addresses the model host, which is what keeps
+`connect-src 'self'` intact. This replaced a browser-side recognizer (PP-OCRv5 via ONNX Runtime)
+because a classical recognizer transcribes lines and leaves a parser guessing which line was the
+name, and a real laminated MyKad defeats that guess. Set `OCR_OLLAMA_URL` empty and the feature
+disappears rather than failing at the moment somebody uses it.
+
+**The model host is not the application server.** In the deployed system a laptop at the school
+runs Ollama and the VPS reaches it over a Tailscale private network, so the photograph crosses a
+WireGuard tunnel and never the public internet. This is the intended architecture rather than a
+stopgap, and two things follow from it. Ollama has no authentication, so the tailnet is the entire
+access control and the model port must never be published or forwarded. And the host is expected to
+be offline sometimes - a laptop gets shut - so unavailability is a normal state that reports itself
+and lets the form be typed, never something to retry or queue around. `HOSTING.md` has the setup,
+including why the container needs the numeric `100.x` address rather than a MagicDNS name.
+
+**Ollama's default context window is 4096 tokens regardless of the model's own limit**, and a
+photographed card lands close enough to that ceiling to cross it depending on the picture. The host
+then answers `400 exceed_context_size_error` rather than truncating, which surfaces as a failed
+read of a perfectly good photograph. `lib/ocr/ollama.ts` therefore sets `num_ctx` explicitly. If
+card reading starts failing on images that plainly ought to work, check that first.
+
+**A language model fails differently, and the code is built around that.** A recognizer that
+cannot read a digit returns something visibly wrong. A model returns a *fluent, well-formed*
+identity number that nobody printed. There is no calibrated confidence to fall back on - asking a
+model to rate its own certainty produces a number that reads well and means nothing - so the only
+evidence used is whether a value could be real. `readIdentityNumber` knows a MyKad encodes a valid
+birth date and an issued state code, and anything that fails it is returned as `null` rather than
+flagged: a number that cannot be a MyKad is not worth showing a person at all. Never add a
+confidence figure sourced from the model.
+
+**The model's output is untrusted input.** It arrives as text that is *asked* to be JSON and
+frequently is not - fenced, prefaced with prose, or truncated. `extractJsonObject` pulls the first
+balanced object out (string-aware, so a brace inside a name cannot cut it short) and a Zod schema
+discards everything else. Pin the model by name: an Ollama host can carry cloud-routed tags that
+proxy to ollama.com — `gpt-oss:120b-cloud` is the published shape — and a loose model name would
+eventually send someone's identity card to a third party. Two separate refusals cover this, and
+they cover different mistakes. `isCloudRoutedModel` in `lib/env.ts` refuses a cloud tag at startup,
+because the model-list check cannot: a cloud tag genuinely is installed on the host and so passes
+it. `lib/ocr/ollama.ts` then checks the host's model list and refuses a name it does not find,
+which is what stops a loose name resolving to whatever happens to be there.
+
+**Only what the form can use is requested.** A card carries an address, a birthplace and a
+religion; none have a field on the visitor form, so none are asked for. Extracting them would put
+personal data in a server's memory - and possibly a log - for no purpose. The card *type* is the
+one extra, and it is used solely to warn when a passport was photographed while the form says
+MyKad.
+
+**Frame voting is gone, and it was a real loss.** The camera still takes a burst, but only the
+sharpest frame is sent. Voting across frames cancelled the random half of OCR error, because
+sensor noise and hand shake differ per frame - but each frame is now a model call measured in
+seconds, so three would mean half a minute at the gate and three times the rate-limit budget for
+one scan. The blur warning in `lib/ocr/prepare-image.ts` is what remains of that safeguard.
+
+**The card is not binarised before it is sent.** The preparation step used to threshold it to pure
+black and white, which suited a classical recognizer. It is off-distribution input for a model
+trained on ordinary photographs, and a threshold that clips a thin stroke deletes evidence
+silently. `measureSharpness` reads the greyscale without touching the pixels for that reason.
+
 ## Data and privacy in this repository
+
+The one image path. `/api/ocr` is the only endpoint that accepts an image. The photograph is held
+for the length of one request, never written to disk, never cached and never logged, and nothing
+read off the card is persisted - the identity number reaches the database only if the visitor
+submits the form themselves, through the ordinary encrypted path. There is no upload directory and
+nothing should create one.
 
 All seeded people, contacts and identity numbers are invented. Email addresses use the reserved
 `.test` TLD, which cannot resolve on the public internet. No real staff member, student or parent

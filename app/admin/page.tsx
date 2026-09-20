@@ -7,6 +7,9 @@ import {
   getOperationalAlerts,
   type DashboardRange,
 } from '@/lib/domain/analytics';
+import { arrivalCompliance } from '@/lib/domain/checkpoints';
+import { getSettings } from '@/lib/domain/settings';
+import { zonedDayRangeToUtc } from '@/lib/time';
 import { parseIsoDayString, formatDate, formatDuration } from '@/lib/time';
 import { Alert, Card, CardHeader, PageHeading } from '@/components/ui/surface';
 import { CategoryBars, PeakHoursChart, VisitsByDayChart } from './charts';
@@ -32,9 +35,13 @@ export default async function AdminDashboardPage({
   const params = await searchParams;
   const range = resolveRange(params);
 
-  const [metrics, alerts] = await Promise.all([
+  const rangeUtc = zonedDayRangeToUtc(range.from, range.to);
+
+  const [metrics, alerts, settings, compliance] = await Promise.all([
     getDashboardMetrics(range),
     getOperationalAlerts(),
+    getSettings(),
+    arrivalCompliance({ from: rangeUtc.start, to: rangeUtc.end }),
   ]);
 
   return (
@@ -115,6 +122,42 @@ export default async function AdminDashboardPage({
             hint={`${metrics.totals.completedVisits} completed visits`}
           />
         </div>
+
+        {/*
+          Arrival-confirmation adoption.
+          Read this before switching `checkpoint.alertsEnabled` on: the alert
+          treats silence as a signal, and silence only means something once
+          staff reliably speak up. Turning alerts on at a low rate would flag
+          ordinary visits and train guards to ignore the panel.
+        */}
+        {settings.checkpointEnabled ? (
+          <div className="mb-5 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+            <Stat
+              label="Arrivals confirmed"
+              value={`${compliance.percentage}%`}
+              hint={`${compliance.confirmedVisits} of ${compliance.eligibleVisits} admitted visits`}
+            />
+            <Stat
+              label="By host tap"
+              value={compliance.byMethod.HOST_CONFIRM}
+              hint="Host confirmed in their own queue"
+            />
+            <Stat
+              label="By pass scan"
+              value={compliance.byMethod.SCAN}
+              hint="Visitor pass resolved at a checkpoint"
+            />
+            <Stat
+              label="Arrival alerts"
+              value={settings.checkpointAlertsEnabled ? 'On' : 'Off'}
+              hint={
+                settings.checkpointAlertsEnabled
+                  ? `Flagged after ${settings.checkpointArrivalGraceMinutes} min`
+                  : 'Turn on once confirmations are routine'
+              }
+            />
+          </div>
+        ) : null}
 
         <div className="grid gap-5 lg:grid-cols-2">
           <Card>

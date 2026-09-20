@@ -5,6 +5,7 @@ import { useFormStatus } from 'react-dom';
 import { walkInAction } from '@/app/guard/actions';
 import { Button } from '@/components/ui/button';
 import { Checkbox, Field, Input, Select, Textarea, fieldAria } from '@/components/ui/field';
+import { SearchableSelect, type SearchableOption } from '@/components/ui/searchable-select';
 import { Alert } from '@/components/ui/surface';
 import { MAX_PARTY_SIZE } from '@/lib/constants';
 import type { GuardDictionary } from '@/lib/i18n/dictionary';
@@ -12,7 +13,13 @@ import type { ActionResult } from '@/lib/result';
 
 export interface WalkInOptions {
   teachers: Array<{ id: string; name: string; department: string }>;
-  destinations: Array<{ id: string; nameEn: string }>;
+  destinations: Array<{
+    id: string;
+    nameEn: string;
+    nameMs: string;
+    block: string | null;
+    levelName: string | null;
+  }>;
   visitTypes: Array<{ id: string; nameEn: string; defaultDurationMinutes: number; requiresIdSighted: boolean }>;
 }
 
@@ -39,6 +46,22 @@ export function WalkInForm({ options, t }: { options: WalkInOptions; t: GuardDic
 
   const [visitTypeId, setVisitTypeId] = useState(options.visitTypes[0]?.id ?? '');
   const [idSighted, setIdSighted] = useState(false);
+  const [destinationId, setDestinationId] = useState('');
+
+  // Block and level separate the rooms that share a name; the Malay name is
+  // searchable because that is what a guard is told at the gate.
+  const destinationOptions: SearchableOption[] = options.destinations.map((destination) => {
+    const where = [destination.levelName, destination.block ? `Block ${destination.block}` : null]
+      .filter(Boolean)
+      .join(' · ');
+
+    return {
+      value: destination.id,
+      label: destination.nameEn,
+      detail: where || undefined,
+      keywords: destination.nameMs,
+    };
+  });
 
   const errors = state && !state.ok ? (state.fieldErrors ?? {}) : {};
   const formError = state && !state.ok ? state.message : null;
@@ -193,20 +216,26 @@ export function WalkInForm({ options, t }: { options: WalkInOptions; t: GuardDic
             </Select>
           </Field>
 
+          {/*
+            Searchable for the same reason the public form is: the school has
+            ninety places, and scrolling a native dropdown that long on a tablet
+            at the gate - with a visitor waiting - is the worst version of this
+            control. The guard can type two letters instead.
+          */}
           <Field id="destinationId" label={t.destination} error={errors.destinationId}>
-            <Select
-              {...fieldAria('destinationId', { error: errors.destinationId })}
+            <SearchableSelect
+              id="destinationId"
               name="destinationId"
-              defaultValue=""
-              className="h-12 text-base"
-            >
-              <option value="">-</option>
-              {options.destinations.map((destination) => (
-                <option key={destination.id} value={destination.id}>
-                  {destination.nameEn}
-                </option>
-              ))}
-            </Select>
+              value={destinationId}
+              onChange={setDestinationId}
+              options={destinationOptions}
+              emptyOption="-"
+              placeholder={t.destinationSearch}
+              hasError={Boolean(errors.destinationId)}
+              describedBy={
+                fieldAria('destinationId', { error: errors.destinationId })['aria-describedby']
+              }
+            />
           </Field>
         </div>
 

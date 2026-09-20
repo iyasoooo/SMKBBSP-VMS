@@ -250,7 +250,7 @@ export async function getOperationalAlerts(now: Date = new Date()): Promise<Oper
 
   const overdueCutoff = new Date(now.getTime() - settings.overdueGraceMinutes * 60_000);
 
-  const [overdue, reviewRequired, stalePending, failedNotifications] = await Promise.all([
+  const [overdue, reviewRequired, stalePending] = await Promise.all([
     prisma.visit.count({
       where: {
         status: VisitStatus.CHECKED_IN,
@@ -265,7 +265,6 @@ export async function getOperationalAlerts(now: Date = new Date()): Promise<Oper
         scheduledStart: { lt: new Date(now.getTime() + 24 * 60 * 60 * 1000) },
       },
     }),
-    prisma.notification.count({ where: { status: 'FAILED' } }),
   ]);
 
   if (overdue > 0) {
@@ -298,15 +297,13 @@ export async function getOperationalAlerts(now: Date = new Date()): Promise<Oper
     });
   }
 
-  if (failedNotifications > 0) {
-    alerts.push({
-      id: 'notifications',
-      severity: 'info',
-      title: `${failedNotifications} email${failedNotifications === 1 ? '' : 's'} failed to send`,
-      detail: 'Delivery can be retried from the notifications screen.',
-      href: '/admin/notifications',
-    });
-  }
+  /*
+   * There is no delivery alert any more. Nothing is sent, so nothing can fail:
+   * in-app notifications are written inside their business transaction and are
+   * complete on write. Any FAILED rows left in the table are email history from
+   * before that change, and an alert about them would link to a screen that no
+   * longer exists.
+   */
 
   return alerts;
 }

@@ -31,8 +31,7 @@ export function CancelRequestForm({ token }: { token: string }) {
   if (state?.ok) {
     return (
       <Alert tone="info" title="Request cancelled">
-        Your request has been cancelled and your host has been notified. Refresh this page to see
-        the updated status.
+        Your request has been cancelled. Refresh this page to see the updated status.
       </Alert>
     );
   }

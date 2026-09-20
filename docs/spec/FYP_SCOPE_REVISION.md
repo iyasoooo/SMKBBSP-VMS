@@ -28,7 +28,7 @@ The system does not claim to prove that a physical identification card is genuin
 
 ## Revised abstract draft
 
-SMKBBSP currently records visitors using a paper logbook at the school gate. This process is slow during busy periods, exposes previously written personal information, is difficult to search, and does not provide a structured method for host approval or emergency visitor accounting. This project proposes a web-based Smart Visitor Management System with QR Code and Appointment-Based Access Control for SMK Bandar Baru Sri Petaling. Visitors submit an appointment request by selecting a host teacher, visit time, destination, and purpose. The teacher approves or rejects the request, and an approved visitor receives an expiring QR pass by email. At the gate, a security guard scans the pass, records physical identification sighting where required, checks the visitor in, and issues a printable badge. The system also supports guard-assisted walk-in registration, check-out, blacklist checks, host notifications, searchable visitor history, an emergency on-site list, dashboard analytics, audit logs, and PDF/Excel reports. Role-based access control separates visitor, teacher, guard, and administrator functions, while sensitive identity values are masked and protected. Optional optical character recognition may assist data entry from a Malaysian identity card, but the visitor or guard must confirm the extracted details and the feature does not claim to authenticate identity. The system is developed and evaluated through functional, usability, security, and performance testing using realistic school gate workflows.
+SMKBBSP currently records visitors using a paper logbook at the school gate. This process is slow during busy periods, exposes previously written personal information, is difficult to search, and does not provide a structured method for host approval or emergency visitor accounting. This project proposes a web-based Smart Visitor Management System with QR Code and Appointment-Based Access Control for SMK Bandar Baru Sri Petaling. Visitors submit an appointment request by selecting a host teacher, visit time, destination, and purpose. On submission the visitor receives a private link on screen; when the teacher approves the request, that link becomes an expiring QR pass. The system sends no email, so it needs no external mail service. At the gate, a security guard scans the pass, records physical identification sighting where required, checks the visitor in, and issues a printable badge. The system also supports guard-assisted walk-in registration, check-out, blacklist checks, host notifications, searchable visitor history, an emergency on-site list, dashboard analytics, audit logs, and PDF/Excel reports. Role-based access control separates visitor, teacher, guard, and administrator functions, while sensitive identity values are masked and protected. Optional optical character recognition may assist data entry from a Malaysian identity card, but the visitor or guard must confirm the extracted details and the feature does not claim to authenticate identity. The system is developed and evaluated through functional, usability, security, and performance testing using realistic school gate workflows.
 
 ## Revised problem statements
 
@@ -56,7 +56,7 @@ To implement appointment-based access control in which a host teacher approves o
 
 ### Objective 3
 
-To evaluate whether the system improves school gate operations through badge printing, email notifications, blacklist checks, emergency on-site reporting, analytics, exports, and role-based audit logs.
+To evaluate whether the system improves school gate operations through badge printing, in-app staff notifications, blacklist checks, emergency on-site reporting, analytics, exports, and role-based audit logs.
 
 The evaluation should measure task completion, correctness, usability, response time, and access-control behavior. Do not claim that a QR code authenticates a person's identity; it authorizes an approved appointment and is combined with the guard's physical-ID sighting process.
 
@@ -68,7 +68,6 @@ The evaluation should measure task completion, correctness, usability, response 
 - Teacher
 - Security Guard
 - Administrator
-- SMTP email service as an external supporting service
 
 ### Core modules
 
@@ -79,7 +78,7 @@ The evaluation should measure task completion, correctness, usability, response 
 5. Walk-in registration
 6. Check-in and check-out
 7. Visitor badge printing
-8. Email notifications
+8. In-app staff notifications
 9. Visitor history and search
 10. Blacklist management
 11. Emergency on-site list
@@ -90,7 +89,38 @@ The evaluation should measure task completion, correctness, usability, response 
 
 ### Optional module
 
-Browser-side OCR for assisted Malaysian IC data entry. The image is not retained, the extracted data is editable, and a human confirms the result.
+OCR for assisted Malaysian IC data entry. The image is not retained, the extracted data is editable, and a human confirms the result.
+
+Reading was originally browser-side. It moved to a self-hosted vision model (Qwen3.5 0.8B via Ollama) called by the application server, because a browser-sized text recognizer transcribes lines without knowing which line is the name, and a real laminated MyKad defeats that inference often enough to make the feature useless. The trade is deliberate and is recorded here rather than hidden:
+
+| | Browser-side recognizer | Self-hosted vision model |
+| --- | --- | --- |
+| Photograph leaves the device | No | Yes, to a machine the school controls |
+| Confidence signal | Per-character, calibrated | None; structural validation only |
+| Accuracy on real cards | Poor | Good |
+| Runs on a 1 vCPU host | Yes | No; needs a separate model host |
+
+Two consequences follow. The claim "the image never leaves your device" is no longer made anywhere in the interface. And because a language model produces fluent output whether or not it read correctly, any value that is not *structurally possible* as a MyKad number is discarded rather than shown - the system has no calibrated confidence to report and does not pretend to.
+
+This remains assisted data entry. It is not identity verification, it does not check any registry, and it cannot detect a forgery.
+
+#### Where the model runs
+
+The vision model does not run on the application server. A small VPS of the size this project deploys to cannot hold one, and a server that could would cost more than the rest of the hosting combined. Instead a laptop at the school runs Ollama, and the application server reaches it over a Tailscale private network. The photograph travels inside a WireGuard tunnel between two machines the school controls; it does not cross the public internet and it does not reach a third party.
+
+This is a deliberate architecture rather than a temporary measure, and it should be described that way in the report. Its honest cost is availability: card reading works when the laptop is awake and on the network, and not otherwise. The system is built so that this degrades rather than breaks - the scan panel reports itself unavailable and the form is typed in, exactly as it could always be - but a reviewer is entitled to note that a feature depending on a laptop being switched on is weaker than one that does not depend on anything.
+
+A second property is worth stating because it cuts the other way. Ollama has no authentication: anything able to reach its port can use the model. The private network is therefore not a convenience but the entire access control, which is why the port is never published, forwarded, or bound to a public interface.
+
+#### A failure mode specific to language models
+
+A conventional recognizer that cannot read a digit produces something visibly wrong, and a person notices. A language model produces something *plausible*, and a person may not.
+
+This is not hypothetical here. During testing, an unreadable image caused the model to return the example values written into its own prompt - a correctly formatted identity number and a placeholder name - and that reply passed structural validation cleanly, because a well-formed fabrication is structurally indistinguishable from a well-formed reading. Structural validation catches values that *could not* be real. It cannot catch a value that could be real but was invented.
+
+Two safeguards follow, and the report should claim only what they actually deliver. The extracted values are always presented for a human to confirm and correct before anything is submitted, so a fabricated reading has to survive a person looking at the card in their hand. And no confidence figure is displayed, because the only available source for one would be the model's opinion of itself, which reads convincingly and means nothing.
+
+The correct claim is therefore narrow: card reading reduces typing, under human confirmation, and its output is treated as an untrusted suggestion at every point. It is not a measurement, and its accuracy is not characterised in this project.
 
 ### Explicit exclusions
 
@@ -111,7 +141,7 @@ Browser-side OCR for assisted Malaysian IC data entry. The image is not retained
 | Three ML anomaly models | Deterministic overdue, expired, repeat-state, and blacklist rules | Explainable and testable with limited FYP data. |
 | Geofencing | Guard-operated QR check-in at the physical gate | Guard action already establishes operational gate presence. |
 | Campus live routing | Destination and host printed on badge | Lower complexity and easier to maintain. |
-| Twilio SMS | SMTP email with Mailpit local demo | No paid account or external dependency. |
+| Twilio SMS | No outbound messages at all: in-app notifications for staff, and a private link shown on screen for visitors | No paid account, no mail server, and no visitor contact detail needed to deliver a pass. |
 | Web Speech anomaly alert | High-contrast operational alert and overdue list | Accessible, predictable, and testable. |
 | Plain SHA-256 of NRIC | Keyed HMAC for matching plus AES-GCM encryption where retrieval is required | Plain hashes of predictable identifiers are vulnerable to guessing. |
 | OCR as fallback verification | Optional OCR-assisted form filling | OCR reads text; it does not verify authenticity. |

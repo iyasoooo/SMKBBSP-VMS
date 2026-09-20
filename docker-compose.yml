@@ -4,8 +4,8 @@
 #   docker compose logs -f app       follow the application log
 #   docker compose down              stop (data survives in the named volume)
 #
-# Services start in dependency order: PostgreSQL and Mailpit become healthy,
-# then `migrate` runs to completion, then `app` starts. That ordering means the
+# Services start in dependency order: PostgreSQL becomes healthy, then
+# `migrate` runs to completion, then `app` starts. That ordering means the
 # application never comes up against a schema that has not been applied yet.
 #
 # Secrets are read from `.env` and are never baked into the image. The named
@@ -35,24 +35,6 @@ services:
       retries: 12
       start_period: 10s
 
-  mailpit:
-    image: axllent/mailpit:latest
-    container_name: smkbbsp_mailpit
-    restart: unless-stopped
-    environment:
-      MP_SMTP_AUTH_ACCEPT_ANY: 1
-      MP_SMTP_AUTH_ALLOW_INSECURE: 1
-      MP_MAX_MESSAGES: 5000
-    ports:
-      - '1025:1025' # SMTP
-      - '8025:8025' # web UI  ->  http://localhost:8025
-    healthcheck:
-      test: ['CMD', 'wget', '-qO-', 'http://localhost:8025/readyz']
-      interval: 5s
-      timeout: 5s
-      retries: 12
-      start_period: 5s
-
   # One-shot schema migration. Runs to completion and exits; `app` waits for it.
   # Kept separate from the app so that scaling the app to more than one replica
   # could never have two containers racing to migrate the same database.
@@ -63,7 +45,14 @@ services:
     image: smkbbsp-visitorpass:latest
     container_name: smkbbsp_migrate
     restart: 'no'
-    command: ['npx', 'prisma', 'migrate', 'deploy']
+    command:
+      - sh
+      - -c
+      # Migrations create the map's tables; they do not fill them. The map is
+      # reference data - the school's own floor plan - so it is written here,
+      # before the app starts, rather than by the demo seed (which refuses to
+      # run against a production database, and rightly so).
+      - npx prisma migrate deploy && npm run map:sync
     environment:
       DATABASE_URL: postgresql://${POSTGRES_USER:-visitorpass}:${POSTGRES_PASSWORD:-visitorpass_local_dev}@postgres:5432/${POSTGRES_DB:-visitorpass}?schema=public
     depends_on:
@@ -84,9 +73,6 @@ services:
       PORT: 3000
       # Container-internal hostnames replace localhost.
       DATABASE_URL: postgresql://${POSTGRES_USER:-visitorpass}:${POSTGRES_PASSWORD:-visitorpass_local_dev}@postgres:5432/${POSTGRES_DB:-visitorpass}?schema=public
-      SMTP_HOST: mailpit
-      SMTP_PORT: 1025
-      SMTP_SECURE: 'false'
       APP_URL: ${APP_URL:-http://localhost:3000}
       APP_TIMEZONE: ${APP_TIMEZONE:-Asia/Kuala_Lumpur}
       # No defaults for the secrets on purpose: compose fails fast with a clear
@@ -95,15 +81,35 @@ services:
       IDENTITY_ENCRYPTION_KEY: ${IDENTITY_ENCRYPTION_KEY:?set IDENTITY_ENCRYPTION_KEY in .env}
       IDENTITY_HMAC_KEY: ${IDENTITY_HMAC_KEY:?set IDENTITY_HMAC_KEY in .env}
       IDENTITY_KEY_VERSION: ${IDENTITY_KEY_VERSION:-1}
-      MAIL_FROM_NAME: ${MAIL_FROM_NAME:-SMKBBSP VisitorPass}
-      MAIL_FROM_ADDRESS: ${MAIL_FROM_ADDRESS:-visitorpass@smkbbsp.test}
       SEED_ADMIN_PASSWORD: ${SEED_ADMIN_PASSWORD:-Admin#Demo2025}
       SEED_GUARD_PASSWORD: ${SEED_GUARD_PASSWORD:-Guard#Demo2025}
       SEED_TEACHER_PASSWORD: ${SEED_TEACHER_PASSWORD:-Teacher#Demo2025}
+      # Card reading. The model host is not part of this stack - it runs on the
+      # developer's own machine - so the container reaches it through the Docker
+      # host gateway.
+      #
+      # Deliberately *not* `${OCR_OLLAMA_URL}`. Compose substitutes that from
+      # `.env`, where it is `http://127.0.0.1:11434` because that is correct for
+      # `npm run dev` on the host. Inside a container 127.0.0.1 is the container
+      # itself, so inheriting it would point the app at nothing and the scan
+      # panel would report itself unavailable - which is exactly what happened.
+      # The same reasoning already applies to DATABASE_URL above.
+      OCR_OLLAMA_URL: http://host.docker.internal:11434
+      OCR_OLLAMA_MODEL: ${OCR_OLLAMA_MODEL:-qwen3.5:0.8b}
+      # Longer than the host default: a model sharing a laptop with Docker is
+      # slower than one with the machine to itself.
+      OCR_TIMEOUT_MS: ${OCR_TIMEOUT_MS:-120000}
+    # Makes the name above resolve on Linux too.
+    #
+    # Docker Desktop provides `host.docker.internal` for free on Windows and
+    # macOS, so this line changes nothing there. Plain Docker on Linux does not,
+    # and without the mapping the name simply fails to resolve: the card reader
+    # reports itself unavailable and the compose file looks broken for reasons
+    # the comment above has already explained once.
+    extra_hosts:
+      - 'host.docker.internal:host-gateway'
     depends_on:
       postgres:
-        condition: service_healthy
-      mailpit:
         condition: service_healthy
       migrate:
         condition: service_completed_successfully

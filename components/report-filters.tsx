@@ -13,18 +13,28 @@ export interface FilterOptions {
 }
 
 /**
- * Report filter bar.
+ * Report filter bar, shared by the administrator and guard report screens.
  *
  * Filters live in the query string, which is what lets the export links carry
  * exactly the same filters the table is showing - the download URL is built
  * from the current parameters rather than from a parallel piece of state.
+ * Navigation uses the current pathname, so the same bar drives either screen.
  */
 export function ReportFilterBar({
   filters,
   options,
+  canExport = false,
 }: {
   filters: ReportFilters;
   options: FilterOptions;
+  /**
+   * Whether to offer the downloads. Off for guards: the gate terminal is a
+   * shared device that is often left signed in, and a one-click download of
+   * every visit the school has ever recorded does not belong on it. This only
+   * removes the buttons - the export route enforces the same rule itself,
+   * since a link is not access control.
+   */
+  canExport?: boolean;
 }) {
   const router = useRouter();
   const pathname = usePathname();
@@ -170,20 +180,22 @@ export function ReportFilterBar({
           Reset
         </Button>
 
-        <span className="ml-auto flex gap-2">
-          <a
-            href={`/admin/reports/export?format=xlsx&${exportQuery}`}
-            className={buttonClasses('secondary', 'md')}
-          >
-            Export Excel
-          </a>
-          <a
-            href={`/admin/reports/export?format=pdf&${exportQuery}`}
-            className={buttonClasses('secondary', 'md')}
-          >
-            Export PDF
-          </a>
-        </span>
+        {canExport ? (
+          <span className="ml-auto flex gap-2">
+            <a
+              href={`/admin/reports/export?format=xlsx&${exportQuery}`}
+              className={buttonClasses('secondary', 'md')}
+            >
+              Export Excel
+            </a>
+            <a
+              href={`/admin/reports/export?format=pdf&${exportQuery}`}
+              className={buttonClasses('secondary', 'md')}
+            >
+              Export PDF
+            </a>
+          </span>
+        ) : null}
       </div>
     </form>
   );

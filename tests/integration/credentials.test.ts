@@ -1,5 +1,5 @@
 import { afterAll, beforeEach, describe, expect, it } from 'vitest';
-import { AppointmentStatus, NotificationStatus, VisitStatus } from '@prisma/client';
+import { AppointmentStatus, VisitStatus } from '@prisma/client';
 import {
   createApprovedAppointment,
   resetDatabase,
@@ -151,7 +151,12 @@ describe('reissuePass', () => {
     expect(await testDb.qrCredential.count({ where: { appointmentId } })).toBe(3);
   });
 
-  it('queues a replacement email containing no raw token', async () => {
+  /*
+   * Nothing can be sent to the visitor, so reissue hands the new link back to
+   * the administrator. It must be the real, working link - and it must exist
+   * only in that return value, never in a stored row.
+   */
+  it('hands back a working link and code, and stores the link nowhere', async () => {
     const { appointmentId } = await createApprovedAppointment(fixtures);
 
     const result = await reissuePass({
@@ -160,17 +165,28 @@ describe('reissuePass', () => {
       appUrl: 'http://localhost:3000',
     });
 
-    expect(result.emailed).toBe(true);
+    const match = /^http:\/\/localhost:3000\/v\/([A-Za-z0-9_-]+)$/.exec(result.passUrl);
+    expect(match).not.toBeNull();
+    const newToken = match?.[1] ?? '';
 
-    const notification = await testDb.notification.findFirstOrThrow({
-      where: { id: { in: result.notificationIds } },
+    // The returned link opens this appointment, and is its active pass.
+    const appointment = await testDb.appointment.findUniqueOrThrow({
+      where: { id: appointmentId },
+      include: { credentials: { where: { revokedAt: null } } },
     });
-    expect(notification.status).toBe(NotificationStatus.PENDING);
+    expect(appointment.publicTokenHash).toBe(hashToken(newToken));
+    expect(appointment.credentials[0]?.tokenHash).toBe(hashToken(newToken));
 
-    // The payload legitimately carries the new pass URL, but the stored
-    // appointment hash must never appear in it.
-    const appointment = await testDb.appointment.findUniqueOrThrow({ where: { id: appointmentId } });
-    expect(JSON.stringify(notification.payload)).not.toContain(appointment.publicTokenHash);
+    // The returned code is the one the gate will accept.
+    expect(result.fallbackCode.replace(/\W/g, '')).toBe(deriveFallbackCode(hashToken(newToken)));
+    expect(appointment.credentials[0]?.fallbackCodeHash).toBe(
+      hashFallbackCode(deriveFallbackCode(hashToken(newToken))),
+    );
+
+    // Nothing was sent, and neither the audit nor any notification holds it.
+    expect(await testDb.notification.count()).toBe(0);
+    const audit = await testDb.auditLog.findMany();
+    expect(JSON.stringify(audit)).not.toContain(newToken);
   });
 
   it('refuses for an appointment that is not approved', async () => {

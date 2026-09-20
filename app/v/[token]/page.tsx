@@ -6,11 +6,13 @@ import { prisma } from '@/lib/db/prisma';
 import { deriveFallbackCode, formatFallbackCode, hashToken } from '@/lib/crypto/tokens';
 import { buildPassUrl, renderQrDataUrl } from '@/lib/qr';
 import { getSettings } from '@/lib/domain/settings';
+import { DEFAULT_ORIGIN_CODE } from '@/lib/map/campus-plan';
 import { consumeRateLimit, RATE_LIMITS } from '@/lib/rate-limit';
 import { getEnv } from '@/lib/env';
 import { formatDate, formatDateTime, formatTimeRange } from '@/lib/time';
 import { Alert, Card, DetailRow, Pill } from '@/components/ui/surface';
 import { CancelRequestForm } from './cancel-form';
+import { CopyLinkButton } from './copy-link';
 
 export const metadata: Metadata = { title: 'Your visit request', robots: { index: false } };
 export const dynamic = 'force-dynamic';
@@ -30,10 +32,14 @@ export const dynamic = 'force-dynamic';
  */
 export default async function VisitorStatusPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ token: string }>;
+  searchParams: Promise<{ new?: string }>;
 }) {
-  const { token } = await params;
+  const [{ token }, query] = await Promise.all([params, searchParams]);
+  // Set only by the submission redirect. It changes a banner, nothing else.
+  const justSubmitted = query.new === '1';
   const settings = await getSettings();
 
   const headerList = await headers();
@@ -58,7 +64,7 @@ export default async function VisitorStatusPage({
     include: {
       visitor: { select: { fullName: true, identityType: true, identityLast4: true } },
       teacher: { select: { name: true } },
-      destination: true,
+      destination: { include: { mapNode: { select: { code: true } } } },
       visitType: true,
       visit: true,
       credentials: { orderBy: { createdAt: 'desc' }, take: 1 },
@@ -85,6 +91,26 @@ export default async function VisitorStatusPage({
     ? formatFallbackCode(deriveFallbackCode(tokenHash))
     : null;
 
+  /*
+   * Show the "pass appears here" placeholder only while a decision is still
+   * outstanding. REVIEW_REQUIRED is deliberately folded in with PENDING: the
+   * visitor is never told their request was flagged, so both states must read
+   * identically here as well as in `describeStatus`.
+   */
+  const isAwaitingDecision =
+    (appointment.status === AppointmentStatus.PENDING ||
+      appointment.status === AppointmentStatus.REVIEW_REQUIRED) &&
+    !visit;
+
+  /*
+   * Ask the visitor to save the link for as long as they still need it: from
+   * submission until they arrive. After check-in the printed badge takes over,
+   * and a closed request has nothing left to come back for.
+   */
+  const stillNeedsLink =
+    (isAwaitingDecision || appointment.status === AppointmentStatus.APPROVED) &&
+    (!visit || visit.status === VisitStatus.EXPECTED);
+
   const canCancel =
     (appointment.status === AppointmentStatus.PENDING ||
       appointment.status === AppointmentStatus.REVIEW_REQUIRED ||
@@ -102,6 +128,34 @@ export default async function VisitorStatusPage({
         <p className="mt-2 font-mono text-sm text-muted">{appointment.referenceNumber}</p>
       </header>
 
+      {justSubmitted ? (
+        <Alert tone="success" title="Request submitted">
+          Your request has been sent to your host teacher. This page is your request.
+        </Alert>
+      ) : null}
+
+      {/*
+        There is no email and no account, so this page is the visitor's only
+        way back. Saying so plainly, and early, is the whole defence against a
+        lost link - there is no recovery once it is gone.
+      */}
+      {stillNeedsLink ? (
+        <Card className="border-2 border-[var(--accent)] p-5">
+          <h2 className="text-base font-semibold">Save this page now</h2>
+          <p className="mt-1 text-sm leading-relaxed text-muted">
+            This link is the only way back to your request.{' '}
+            <strong className="font-semibold text-[var(--text-strong)]">
+              Nothing will be emailed or texted to you
+            </strong>
+            , and the school cannot look it up for you. Bookmark it, copy it somewhere safe, or take
+            a screenshot.
+          </p>
+          <div className="mt-4 max-w-xs">
+            <CopyLinkButton />
+          </div>
+        </Card>
+      ) : null}
+
       <Alert tone={statusPresentation.tone === 'success' ? 'success' : statusPresentation.alertTone}>
         {statusPresentation.description}
       </Alert>
@@ -112,7 +166,8 @@ export default async function VisitorStatusPage({
           <div className="border-b border-[var(--line-soft)] px-5 py-4">
             <h2 className="text-base font-semibold">Your visitor pass</h2>
             <p className="mt-0.5 text-sm text-muted">
-              Show this at the guard house. Screen brightness helps the scanner.
+              Show this on your phone at the guard house. There is nothing to print. Screen
+              brightness helps the scanner.
             </p>
           </div>
 
@@ -145,6 +200,45 @@ export default async function VisitorStatusPage({
                 {formatDate(credential.validFrom)}
               </p>
             </div>
+          </div>
+        </Card>
+      ) : isAwaitingDecision ? (
+        /*
+         * The pass and this page share one token, so the visitor is already
+         * holding the link their QR will appear in. Saying so is the whole
+         * point of this card: without it the page looks like a dead end.
+         *
+         * It deliberately promises nothing about the outcome - an approval
+         * that has not happened must not be implied by the pass slot existing.
+         */
+        <Card className="overflow-hidden">
+          <div className="border-b border-[var(--line-soft)] px-5 py-4">
+            <h2 className="text-base font-semibold">Your visitor pass</h2>
+            <p className="mt-0.5 text-sm text-muted">Not ready yet.</p>
+          </div>
+
+          <div className="flex flex-col items-center gap-4 p-6">
+            <div
+              aria-hidden="true"
+              className="flex h-[200px] w-[200px] items-center justify-center rounded-lg border-2 border-dashed border-[var(--line-soft)] bg-[var(--surface-inset)]"
+            >
+              <span className="text-sm text-muted">QR pass</span>
+            </div>
+
+            {/*
+             * True because approval binds the pass to this page's own token
+             * rather than rotating it (see `lib/domain/decisions.ts`). If that
+             * ever changes, this sentence becomes a lie that strands visitors.
+             */}
+            <p className="max-w-sm text-center text-sm leading-relaxed text-muted">
+              If your request is approved, your QR pass will appear{' '}
+              <strong className="font-semibold text-[var(--text-strong)]">here, on this page</strong>.
+              Come back to this same link to check.
+            </p>
+
+            <p className="max-w-sm text-center text-xs text-muted">
+              The pass becomes scannable shortly before your visit time, not straight away.
+            </p>
           </div>
         </Card>
       ) : null}
@@ -180,9 +274,25 @@ export default async function VisitorStatusPage({
         </Card>
       ) : null}
 
-      {appointment.destination?.instructionsEn && isApproved ? (
+      {isApproved && (appointment.destination?.instructionsEn || appointment.destination?.mapNode) ? (
         <Alert tone="info" title="Finding your way">
           {appointment.destination.instructionsEn}
+          {/* The written instruction stays; the map is an extra way to read it,
+              not a replacement. A visitor on a bad connection at the gate still
+              gets the sentence. */}
+          {appointment.destination.mapNode ? (
+            <p className="mt-2">
+              <Link
+                href={{
+                  pathname: '/map',
+                  query: { from: DEFAULT_ORIGIN_CODE, to: appointment.destination.mapNode.code },
+                }}
+                className="font-semibold underline underline-offset-2"
+              >
+                See the walking route from the guard house
+              </Link>
+            </p>
+          ) : null}
         </Alert>
       ) : null}
 
@@ -230,7 +340,7 @@ export default async function VisitorStatusPage({
 function Unavailable({
   schoolName,
   title = 'This link is not available',
-  body = 'The link may have expired, been cancelled, or been typed incorrectly. Please check the most recent email from the school, or submit a new request.',
+  body = 'The link may have expired, been cancelled, or been typed incorrectly. If you have lost your link, please submit a new request, or ask at the guard house when you arrive.',
 }: {
   schoolName: string;
   title?: string;
@@ -308,7 +418,7 @@ function describeStatus(
         tone: 'warning',
         alertTone: 'info',
         description:
-          'Your request has been received and is waiting for a decision. We will email you as soon as it is reviewed.',
+          'Your request has been received and is waiting for your host teacher to decide. Come back to this page to see the decision.',
       };
 
     case AppointmentStatus.APPROVED:

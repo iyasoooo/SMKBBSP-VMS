@@ -15,6 +15,8 @@ import {
   AppointmentStatus,
   BlacklistCategory,
   BlacklistStatus,
+  CheckpointKind,
+  CheckpointMethod,
   IdentityType,
   MatchPolicy,
   NotificationChannel,
@@ -48,6 +50,7 @@ import {
 import { allocateBadgeNumber } from '@/lib/domain/badges';
 import { ensureSettingDefaults } from '@/lib/domain/settings';
 import { CONSENT_VERSION } from '@/lib/constants';
+import { syncSchoolMap } from '@/lib/map/sync';
 import { addDays, toIsoDayString, zonedTimeToUtc, getZonedParts } from '@/lib/time';
 import {
   SEED_BLACKLIST_REVIEW_SUBJECT,
@@ -101,6 +104,7 @@ function isWeekend(date: Date): boolean {
 
 async function clearOperationalData(): Promise<void> {
   // Ordered so foreign keys never block a delete.
+  await prisma.visitCheckpoint.deleteMany();
   await prisma.visitEvent.deleteMany();
   await prisma.visit.deleteMany();
   await prisma.qrCredential.deleteMany();
@@ -135,7 +139,7 @@ async function seedUsers(): Promise<{
   const admin = await prisma.user.create({
     data: {
       email: 'admin@smkbbsp.test',
-      name: 'Encik Hasrul bin Idris (Pentadbir)',
+      name: 'Mohd Asyraf bin Muhammad Hilmi (Admin)',
       passwordHash: adminHash,
       role: Role.ADMIN,
       preferredLocale: 'en',
@@ -473,6 +477,7 @@ async function seedHistory(context: HistoryContext): Promise<void> {
     context,
     startHour: 8,
     status: VisitStatus.CHECKED_OUT,
+    confirmArrival: true,
     label: 'completed-today',
   });
 
@@ -482,6 +487,7 @@ async function seedHistory(context: HistoryContext): Promise<void> {
     startHour: Math.max(8, getZonedParts(today).hour - 1),
     status: VisitStatus.CHECKED_IN,
     partySize: 1,
+    confirmArrival: true,
     label: 'active-normal',
   });
 
@@ -585,11 +591,24 @@ interface TodayVisitOptions {
   partySize?: number;
   durationMinutes?: number;
   withCredential?: boolean;
+  /**
+   * Whether the host confirmed the visitor reached them. Left false for one
+   * on-site visit on purpose, so the dashboard has a visitor nobody has placed
+   * and the arrival alert has something to show once it is switched on.
+   */
+  confirmArrival?: boolean;
   label: string;
 }
 
 async function createTodayVisit(options: TodayVisitOptions): Promise<void> {
-  const { context, startHour, status, partySize = 1, withCredential = false } = options;
+  const {
+    context,
+    startHour,
+    status,
+    partySize = 1,
+    withCredential = false,
+    confirmArrival = false,
+  } = options;
   const { visitorIds, teachers, guards, destinations, visitTypes, badgePrefix } = context;
 
   const activeTeachers = teachers.filter((_, index) => SEED_TEACHERS[index]?.isAcceptingVisits);
@@ -710,43 +729,78 @@ async function createTodayVisit(options: TodayVisitOptions): Promise<void> {
   }
 
   if (events.length > 0) await prisma.visitEvent.createMany({ data: events });
+
+  if (checkedInAt && confirmArrival) {
+    const confirmedAt = new Date(checkedInAt.getTime() + 4 * 60_000);
+
+    await prisma.visitCheckpoint.create({
+      data: {
+        visitId: visit.id,
+        destinationId: destination.id,
+        scannedById: teacher.id,
+        kind: CheckpointKind.ARRIVAL,
+        method: CheckpointMethod.HOST_CONFIRM,
+        createdAt: confirmedAt,
+      },
+    });
+
+    await prisma.visitEvent.create({
+      data: {
+        visitId: visit.id,
+        type: VisitEventType.CHECKPOINT_RECORDED,
+        actorUserId: teacher.id,
+        metadata: { kind: CheckpointKind.ARRIVAL, method: CheckpointMethod.HOST_CONFIRM },
+        createdAt: confirmedAt,
+      },
+    });
+  }
 }
 
+/**
+ * A little in-app history for the demo teacher, so their notification page is
+ * not empty on first login. Shaped exactly like the rows the application
+ * writes: IN_APP, owned by a user, complete on write. One is left unread so
+ * the unread state is visible too.
+ */
 async function seedNotifications(): Promise<void> {
   const now = new Date();
+  const teacher = await prisma.user.findUniqueOrThrow({
+    where: { email: 'teacher@smkbbsp.test' },
+    select: { id: true },
+  });
+
+  const inApp = {
+    channel: NotificationChannel.IN_APP,
+    status: NotificationStatus.SENT,
+    recipient: 'in-app',
+    templateKey: 'in-app',
+    userId: teacher.id,
+  };
 
   await prisma.notification.createMany({
     data: [
       {
-        type: 'visitor.request_received',
-        channel: NotificationChannel.EMAIL,
-        recipient: 'nurul.huda@contoh.test',
-        templateKey: 'visitor-request-received',
-        payload: { reference: 'VP-26C4-9XQT' },
-        status: NotificationStatus.SENT,
-        attempts: 1,
-        sentAt: addDays(now, -2),
-      },
-      {
+        ...inApp,
         type: 'teacher.new_request',
-        channel: NotificationChannel.EMAIL,
-        recipient: 'teacher@smkbbsp.test',
-        templateKey: 'teacher-new-request',
-        payload: { reference: 'VP-26C4-9XQT' },
-        status: NotificationStatus.SENT,
-        attempts: 1,
+        payload: {
+          title: 'New visit request awaiting your decision',
+          body: 'A parent has asked to meet you. Reference VP-26C4-9XQT.',
+        },
+        link: '/teacher/requests',
         sentAt: addDays(now, -2),
+        createdAt: addDays(now, -2),
       },
       {
-        // A realistic failure so the admin retry screen has something to act on.
-        type: 'visitor.approved',
-        channel: NotificationChannel.EMAIL,
-        recipient: 'kamarul.ariffin@contoh.test',
-        templateKey: 'visitor-approved',
-        payload: { reference: 'VP-26C4-2LMN' },
-        status: NotificationStatus.FAILED,
-        attempts: 3,
-        lastErrorCode: 'ECONNREFUSED',
+        ...inApp,
+        type: 'host.arrival',
+        payload: {
+          title: 'Your visitor has arrived',
+          body: 'Your visitor checked in at the guard house (reference VP-26C4-2LMN).',
+        },
+        link: '/teacher/visits',
+        sentAt: addDays(now, -1),
+        createdAt: addDays(now, -1),
+        readAt: addDays(now, -1),
       },
     ],
   });
@@ -772,6 +826,16 @@ async function main(): Promise<void> {
 
   const { destinations, visitTypes } = await seedReferenceData();
   console.log(`  reference: ${destinations.length} destinations, ${visitTypes.length} visit types`);
+
+  // Shared with `npm run map:sync`, which is what a production deploy runs:
+  // the map is the school's floor plan, not demonstration data.
+  const mapCounts = await syncSchoolMap(prisma, (message) => console.warn(`  ! ${message}`));
+  console.log(
+    `  school map: ${mapCounts.levels} levels, ${mapCounts.nodes} nodes, ${mapCounts.edges} edges`,
+  );
+  console.log(
+    `  school map: ${mapCounts.bound} curated destinations bound, ${mapCounts.derived} derived from rooms`,
+  );
 
   const visitorIds = await seedVisitors();
   console.log(`  visitors: ${visitorIds.length}`);

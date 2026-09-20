@@ -9,8 +9,8 @@ import type { MetadataRoute } from 'next';
  */
 export default function manifest(): MetadataRoute.Manifest {
   return {
-    name: 'SMKBBSP VisitorPass',
-    short_name: 'VisitorPass',
+    name: 'SMKBBSP Visitor Management System',
+    short_name: 'SMKBBSP VMS',
     description:
       'Request a school visit, receive an approved QR pass, and check in at the gate.',
     /*
