@@ -11,6 +11,7 @@ import { consumeRateLimit, RATE_LIMITS } from '@/lib/rate-limit';
 import { getEnv } from '@/lib/env';
 import { formatDate, formatDateTime, formatTimeRange } from '@/lib/time';
 import { Alert, Card, DetailRow, Pill } from '@/components/ui/surface';
+import { Crest } from '@/components/ui/crest';
 import { CancelRequestForm } from './cancel-form';
 import { CopyLinkButton } from './copy-link';
 
@@ -162,46 +163,103 @@ export default async function VisitorStatusPage({
 
       {/* ---------------- Pass ---------------- */}
       {qrDataUrl && credential ? (
-        <Card className="overflow-hidden">
-          <div className="border-b border-[var(--line-soft)] px-5 py-4">
-            <h2 className="text-base font-semibold">Your visitor pass</h2>
-            <p className="mt-0.5 text-sm text-muted">
-              Show this on your phone at the guard house. There is nothing to print. Screen
-              brightness helps the scanner.
-            </p>
-          </div>
-
-          <div className="flex flex-col items-center gap-4 p-6">
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img
-              src={qrDataUrl}
-              alt={`QR visitor pass for reference ${appointment.referenceNumber}`}
-              width={280}
-              height={280}
-              className="rounded-lg border border-[var(--line-soft)] bg-white p-3"
-            />
-
-            {fallbackCode ? (
-              <div className="text-center">
-                <p className="text-xs tracking-wide text-muted uppercase">
-                  If the scanner does not work
+        /*
+         * Styled as the printed badge the guard will hand over on arrival, so
+         * the pass on the phone and the badge on the lanyard read as one
+         * document. It is deliberately black on white in both themes: the pass
+         * is a thing to be shown and scanned, and a dark card would both break
+         * that resemblance and give the scanner less to work with.
+         *
+         * It carries only what the badge carries. No identity number, no phone,
+         * no purpose - a pass is held up to strangers at a gate.
+         */
+        <section
+          aria-label="Your visitor pass"
+          className="overflow-hidden rounded-xl border-2 border-black bg-white p-5 text-black sm:p-6"
+        >
+          <div className="flex items-start justify-between gap-4 border-b-2 border-black pb-3">
+            <div className="flex items-start gap-3">
+              <Crest size={44} className="mt-0.5 shrink-0" />
+              <div className="min-w-0">
+                <p className="text-[10px] font-semibold tracking-[0.2em] uppercase">
+                  {settings.schoolName}
                 </p>
-                <p className="mt-1 font-mono text-2xl font-semibold tracking-widest text-[var(--text-strong)]">
-                  {fallbackCode}
+                <p className="mt-1 text-2xl leading-none font-black tracking-tight sm:text-3xl">
+                  VISITOR
                 </p>
-                <p className="mt-1 text-xs text-muted">Read this code to the guard.</p>
               </div>
-            ) : null}
-
-            <div className="w-full rounded-lg bg-[var(--surface-inset)] px-4 py-3 text-center">
-              <p className="text-xs text-muted">Pass valid</p>
-              <p className="text-sm font-semibold text-[var(--text-strong)]">
-                {formatTimeRange(credential.validFrom, credential.expiresAt)} on{' '}
-                {formatDate(credential.validFrom)}
+            </div>
+            <div className="shrink-0 text-right">
+              <p className="text-[10px] tracking-wide uppercase">Reference</p>
+              <p className="font-mono text-sm font-bold sm:text-base">
+                {appointment.referenceNumber}
               </p>
             </div>
           </div>
-        </Card>
+
+          <div className="mt-4 flex flex-col gap-5 sm:flex-row">
+            <div className="min-w-0 flex-1">
+              <p className="text-[10px] tracking-wide uppercase">Name</p>
+              <p className="text-xl leading-tight font-bold break-words sm:text-2xl">
+                {appointment.visitor.fullName}
+              </p>
+
+              <div className="mt-3 grid grid-cols-2 gap-x-4 gap-y-2 text-sm">
+                <div>
+                  <p className="text-[10px] tracking-wide uppercase">Host</p>
+                  <p className="font-semibold">{appointment.teacher.name}</p>
+                </div>
+                <div>
+                  <p className="text-[10px] tracking-wide uppercase">Destination</p>
+                  <p className="font-semibold">
+                    {appointment.destination?.nameEn ?? 'General Office'}
+                  </p>
+                </div>
+                <div>
+                  <p className="text-[10px] tracking-wide uppercase">Date</p>
+                  <p className="font-semibold">{formatDate(credential.validFrom)}</p>
+                </div>
+                <div>
+                  <p className="text-[10px] tracking-wide uppercase">Valid</p>
+                  <p className="font-semibold">
+                    {formatTimeRange(credential.validFrom, credential.expiresAt)}
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            {/* Centred while stacked on a phone, pinned beside the details on a
+                wider screen, exactly as on the printed badge. */}
+            <div className="shrink-0 self-center text-center sm:self-start">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                src={qrDataUrl}
+                alt={`QR visitor pass for reference ${appointment.referenceNumber}`}
+                width={180}
+                height={180}
+                className="rounded border border-black p-1"
+              />
+              <p className="mt-1 text-[9px]">Scan at the guard house</p>
+
+              {fallbackCode ? (
+                <div className="mt-3 border-t border-black pt-2">
+                  <p className="text-[9px] tracking-wide uppercase">If the scanner fails</p>
+                  <p className="font-mono text-lg font-bold tracking-widest">{fallbackCode}</p>
+                </div>
+              ) : null}
+            </div>
+          </div>
+
+          <div className="mt-4 border-t-2 border-black pt-2">
+            <p className="text-[11px] font-semibold">
+              Show this on your phone at the guard house. There is nothing to print, and screen
+              brightness helps the scanner.
+            </p>
+            {appointment.partySize > 1 ? (
+              <p className="mt-1 text-[11px]">Party of {appointment.partySize} people.</p>
+            ) : null}
+          </div>
+        </section>
       ) : isAwaitingDecision ? (
         /*
          * The pass and this page share one token, so the visitor is already
