@@ -35,7 +35,13 @@ test('a host confirms their visitor, and the gate sees where they were last seen
   await page.getByLabel(/I have seen the visitor/).check();
   await page.getByRole('button', { name: 'Register and check in' }).click();
 
-  await expect(page).toHaveURL(/\/guard\/badge\//);
+  /*
+   * The walk-in is replaced in place by the visitor's digital pass rather than
+   * redirecting to a printable badge. All this step needs is proof the
+   * registration committed, because everything after it depends on the visit
+   * existing and being checked in.
+   */
+  await expect(page.getByText('Registered and checked in.')).toBeVisible();
 
   // --- 2. Nobody has confirmed them yet ----------------------------------
 
