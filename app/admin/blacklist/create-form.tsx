@@ -117,7 +117,7 @@ export function BlacklistCreateForm() {
         label="Internal reason"
         required
         error={errors.reason}
-        hint="Restricted. Never shown to guards, teachers, the visitor, or in exports."
+        hint="Restricted. Never shown to guards, host staff, the visitor, or in exports."
       >
         <Textarea
           {...fieldAria('bl-reason', { error: errors.reason, hint: true })}

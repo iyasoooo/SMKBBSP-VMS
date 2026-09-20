@@ -65,7 +65,7 @@ export function CreateUserForm() {
           onChange={(event) => setRole(event.target.value)}
           required
         >
-          <option value="TEACHER">Teacher</option>
+          <option value="TEACHER">Staff (can host visitors)</option>
           <option value="GUARD">Security guard</option>
           <option value="ADMIN">Administrator</option>
           <option value="PRINCIPAL">Principal (view only)</option>

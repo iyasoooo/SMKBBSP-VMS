@@ -482,7 +482,7 @@ export function RequestForm({
           label="Reason for your visit"
           required
           error={errors.purpose}
-          hint="A short sentence is enough. This is shared with your host teacher."
+          hint="A short sentence is enough. This is shared with the staff member you are meeting."
         >
           <Textarea
             {...fieldAria('purpose', { error: errors.purpose, hint: true })}
@@ -731,7 +731,7 @@ export function RequestForm({
 
       <div className="flex flex-col gap-3 border-t border-[var(--line-soft)] pt-6 sm:flex-row sm:items-center sm:justify-between">
         <p className="text-xs text-muted">
-          Your request is not confirmed until your host teacher approves it.
+          Your request is not confirmed until the staff member you asked for approves it.
         </p>
         <SubmitButton />
       </div>

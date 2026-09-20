@@ -43,11 +43,9 @@ export default async function WalkInPage() {
         <WalkInForm
           t={t}
           options={{
-            teachers: teachers.map((teacher) => ({
-              id: teacher.id,
-              name: teacher.name,
-              department: teacher.teacherProfile?.department ?? 'Staff',
-            })),
+            // Name only, matching the public form: the department is internal
+            // organisation and only adds noise to a list of people to choose from.
+            teachers: teachers.map((teacher) => ({ id: teacher.id, name: teacher.name })),
             destinations: destinations.map((destination) => ({
               id: destination.id,
               nameEn: destination.nameEn,

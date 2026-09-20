@@ -229,7 +229,7 @@ const en: GuardDictionary = {
   passCancelled: 'Visit cancelled',
 
   visitor: 'Visitor',
-  host: 'Host teacher',
+  host: 'Host staff',
   destination: 'Destination',
   destinationSearch: 'Search for a room or block',
   purpose: 'Purpose',
@@ -305,7 +305,7 @@ const en: GuardDictionary = {
   lastSeenNever: 'Not confirmed since the gate',
   awaitingArrival: 'Has not reached host',
   awaitingArrivalHelp:
-    'Checked in at the gate but nobody has confirmed seeing them since. Contact the host teacher.',
+    'Checked in at the gate but nobody has confirmed seeing them since. Contact the host staff member.',
   needsAttention: 'Needs attention',
   confirmArrival: 'Visitor has arrived',
   confirmDeparture: 'Visitor has left me',
@@ -387,7 +387,7 @@ const ms: GuardDictionary = {
   passCancelled: 'Lawatan dibatalkan',
 
   visitor: 'Pelawat',
-  host: 'Guru yang ditemui',
+  host: 'Kakitangan yang ditemui',
   destination: 'Destinasi',
   destinationSearch: 'Cari bilik atau blok',
   purpose: 'Tujuan',
@@ -461,9 +461,9 @@ const ms: GuardDictionary = {
     'Imbas kod QR pada pas pelawat, atau masukkan kod yang dipaparkan padanya. Ini merekodkan bahawa anda telah berjumpa dengannya.',
   lastSeen: 'Kali terakhir dilihat',
   lastSeenNever: 'Belum disahkan sejak pintu pagar',
-  awaitingArrival: 'Belum sampai kepada guru',
+  awaitingArrival: 'Belum sampai kepada kakitangan',
   awaitingArrivalHelp:
-    'Telah daftar masuk di pintu pagar tetapi belum ada sesiapa mengesahkan pertemuan. Hubungi guru yang ditemui.',
+    'Telah daftar masuk di pintu pagar tetapi belum ada sesiapa mengesahkan pertemuan. Hubungi kakitangan yang ditemui.',
   needsAttention: 'Perlu perhatian',
   confirmArrival: 'Pelawat telah sampai',
   confirmDeparture: 'Pelawat telah beredar',
@@ -483,9 +483,9 @@ const ms: GuardDictionary = {
     'Rekodkan bahawa anda telah melihat pelawat ini semasa rondaan. Nyatakan lokasinya jika bukan destinasi yang ditempah.',
   sightingNote: 'Di mana anda melihat mereka?',
   sightingRecorded: 'Penglihatan direkodkan. Terima kasih.',
-  timelineArrived: 'Tiba berjumpa guru',
+  timelineArrived: 'Tiba berjumpa kakitangan',
   timelineSeen: 'Dilihat semasa rondaan',
-  timelineDeparted: 'Beredar dari guru',
+  timelineDeparted: 'Beredar dari kakitangan',
 
   loading: 'Memuatkan...',
   errorGeneric: 'Berlaku masalah. Sila cuba lagi.',

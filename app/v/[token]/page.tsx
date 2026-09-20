@@ -383,7 +383,7 @@ export default async function VisitorStatusPage({
         </div>
         <dl className="divide-y divide-[var(--line-soft)] px-5 py-2">
           <DetailRow label="Visitor">{appointment.visitor.fullName}</DetailRow>
-          <DetailRow label="Host teacher">{appointment.teacher.name}</DetailRow>
+          <DetailRow label="Host staff">{appointment.teacher.name}</DetailRow>
           <DetailRow label="Date">{formatDate(appointment.scheduledStart)}</DetailRow>
           <DetailRow label="Time">
             {formatTimeRange(appointment.scheduledStart, appointment.scheduledEnd)}
@@ -547,7 +547,7 @@ function describeStatus(
         tone: 'warning',
         alertTone: 'info',
         description:
-          'Your request has been received and is waiting for your host teacher to decide. Come back to this page to see the decision.',
+          'Your request has been received and is waiting for the staff member you asked for to decide. Come back to this page to see the decision.',
       };
 
     case AppointmentStatus.APPROVED:

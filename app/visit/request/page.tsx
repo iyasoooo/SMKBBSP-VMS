@@ -60,7 +60,7 @@ export default async function RequestVisitPage() {
       <div className="mb-8">
         <h1 className="text-2xl font-semibold tracking-tight">Request a visit</h1>
         <p className="mt-2 text-sm leading-relaxed text-muted">
-          Complete this form to ask a teacher for an appointment. You do not need an account. When
+          Complete this form to ask a member of school staff for an appointment. You do not need an account. When
           you submit, you will be taken to a private page for your request - save that link, as it
           is the only way to check the decision and, once approved, it becomes your pass.
         </p>
@@ -68,7 +68,7 @@ export default async function RequestVisitPage() {
 
       {!canSubmit ? (
         <Alert tone="warning" title="Requests are not available right now">
-          No teachers are currently accepting visit requests. Please contact the school office
+          No staff are currently accepting visit requests. Please contact the school office
           directly, or come to the guard house during visiting hours (
           {formatMinutes(settings.openMinutes)} to {formatMinutes(settings.closeMinutes)}).
         </Alert>

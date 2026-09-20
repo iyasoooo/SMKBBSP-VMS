@@ -13,7 +13,8 @@ import type { GuardDictionary } from '@/lib/i18n/dictionary';
 import type { ActionResult } from '@/lib/result';
 
 export interface WalkInOptions {
-  teachers: Array<{ id: string; name: string; department: string }>;
+  /** Name only. A visitor asks for a person, not a department. */
+  teachers: Array<{ id: string; name: string }>;
   destinations: Array<{
     id: string;
     nameEn: string;
@@ -246,7 +247,7 @@ export function WalkInForm({ options, t }: { options: WalkInOptions; t: GuardDic
             </option>
             {options.teachers.map((teacher) => (
               <option key={teacher.id} value={teacher.id}>
-                {teacher.name} - {teacher.department}
+                {teacher.name}
               </option>
             ))}
           </Select>
