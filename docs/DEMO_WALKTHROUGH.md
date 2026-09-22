@@ -256,7 +256,7 @@ clear connection error rather than pretending a write succeeded.
 
 Being upfront about these reads far better than being caught by them.
 
-- IC card reading (P1) needs the self-hosted model host online; when it is off,
+- IC card reading (P1) needs the Ollama service running with its model downloaded; when it is not,
   the scan panel reports itself unavailable and the form is typed in. It assists
   data entry only and never verifies identity.
 - Rate limiting is a fixed window in the database — correct for one instance,

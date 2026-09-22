@@ -21,8 +21,10 @@
 #
 # Required env keys (Dokploy Environment tab):
 #   APP_DOMAIN, APP_URL, POSTGRES_PASSWORD,
-#   SESSION_SECRET, IDENTITY_ENCRYPTION_KEY, IDENTITY_HMAC_KEY
-#   (optional overrides: OCR_OLLAMA_MODEL, OCR_TIMEOUT_MS, MAIL_*, SEED_*)
+#   SESSION_SECRET, IDENTITY_ENCRYPTION_KEY, IDENTITY_HMAC_KEY,
+#   SEED_ADMIN_PASSWORD, SEED_GUARD_PASSWORD, SEED_TEACHER_PASSWORD
+#   (optional overrides: OCR_OLLAMA_URL, OCR_OLLAMA_MODEL, OCR_TIMEOUT_MS,
+#    POSTGRES_USER, POSTGRES_DB, APP_TIMEZONE)
 
 services:
   postgres:
@@ -166,10 +168,15 @@ services:
       SEED_GUARD_PASSWORD: ${SEED_GUARD_PASSWORD:?set SEED_GUARD_PASSWORD in the Dokploy Environment tab}
       SEED_TEACHER_PASSWORD: ${SEED_TEACHER_PASSWORD:?set SEED_TEACHER_PASSWORD in the Dokploy Environment tab}
       # Card reading runs on the internal Ollama service. A CPU-only VPS is much
-      # slower than a GPU laptop, so the timeout is raised well above the local
-      # default. If OCR_OLLAMA_MODEL is left empty the scan panel disappears and
-      # the form is simply typed in.
-      OCR_OLLAMA_URL: http://ollama:11434
+      # slower than a GPU machine, so the timeout is raised well above the local
+      # default.
+      #
+      # `-` rather than `:-`, deliberately: unset gives the internal service,
+      # but OCR_OLLAMA_URL set to empty in the Environment tab stays empty, which
+      # is what switches card reading off - the scan panel disappears and the
+      # form is simply typed in. With `:-` an empty value would fall back to the
+      # default and there would be no way to turn the feature off.
+      OCR_OLLAMA_URL: ${OCR_OLLAMA_URL-http://ollama:11434}
       OCR_OLLAMA_MODEL: ${OCR_OLLAMA_MODEL:-qwen3.5:0.8b}
       OCR_TIMEOUT_MS: ${OCR_TIMEOUT_MS:-120000}
     networks:

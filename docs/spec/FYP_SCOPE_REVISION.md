@@ -98,7 +98,7 @@ Reading was originally browser-side. It moved to a self-hosted vision model (Qwe
 | Photograph leaves the device | No | Yes, to a machine the school controls |
 | Confidence signal | Per-character, calibrated | None; structural validation only |
 | Accuracy on real cards | Poor | Good |
-| Runs on a 1 vCPU host | Yes | No; needs a separate model host |
+| Runs on a small (2 GB) server | Yes | No; the deployment uses an 8 GB server |
 
 Two consequences follow. The claim "the image never leaves your device" is no longer made anywhere in the interface. And because a language model produces fluent output whether or not it read correctly, any value that is not *structurally possible* as a MyKad number is discarded rather than shown - the system has no calibrated confidence to report and does not pretend to.
 
@@ -106,11 +106,11 @@ This remains assisted data entry. It is not identity verification, it does not c
 
 #### Where the model runs
 
-The vision model does not run on the application server. A small VPS of the size this project deploys to cannot hold one, and a server that could would cost more than the rest of the hosting combined. Instead a laptop at the school runs Ollama, and the application server reaches it over a Tailscale private network. The photograph travels inside a WireGuard tunnel between two machines the school controls; it does not cross the public internet and it does not reach a third party.
+The vision model runs on the application server itself, as an Ollama service inside the same Docker Compose stack as the application and the database. The application reaches it over the stack's private Docker network; the service has no published port and no public domain. The photograph therefore never leaves the server that already holds the visitor's record, it does not cross the public internet, and it does not reach a third party.
 
-This is a deliberate architecture rather than a temporary measure, and it should be described that way in the report. Its honest cost is availability: card reading works when the laptop is awake and on the network, and not otherwise. The system is built so that this degrades rather than breaks - the scan panel reports itself unavailable and the form is typed in, exactly as it could always be - but a reviewer is entitled to note that a feature depending on a laptop being switched on is weaker than one that does not depend on anything.
+This is a deliberate architecture, and it should be described that way in the report. An earlier design ran the model on a laptop at the school, reached over a Tailscale private network. It was replaced so that the system has a single deployment target, and because card reading then worked only while that laptop was awake and online. With the model on the server, card reading is available whenever the rest of the system is. The honest costs move elsewhere. The server must be large enough to hold the model: the deployment uses 8 GB of memory, where the rest of the system runs in 2 GB. And with no GPU the model runs on CPU, so a read is slow (the timeout allows up to two minutes) and shares the processor with the gate screens, which is why card reading is rate-limited. The system still treats an unavailable model as a normal state - the scan panel reports itself unavailable and the form is typed in, exactly as it could always be - and no visit or check-in waits on it.
 
-A second property is worth stating because it cuts the other way. Ollama has no authentication: anything able to reach its port can use the model. The private network is therefore not a convenience but the entire access control, which is why the port is never published, forwarded, or bound to a public interface.
+A second property is worth stating because it cuts the other way. Ollama has no authentication: anything able to reach its port can use the model. Keeping it on the stack's private network is therefore not a convenience but the entire access control, which is why the port is never published, forwarded, or bound to a public interface.
 
 #### A failure mode specific to language models
 

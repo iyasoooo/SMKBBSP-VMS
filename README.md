@@ -370,13 +370,13 @@ Documented deliberately; none blocks the P0 feature set.
    is handled as a walk-in. The end-to-end test reflects this: it asserts the correct refusal for a
    not-yet-valid pass, then exercises the gate lifecycle through a walk-in.
 6. **OCR (P1) needs a model host, and is absent without one.** Card reading calls a self-hosted
-   vision model (Qwen3.5 0.8B through Ollama) from the application server. The model does not run
-   on the application server: a laptop at the school runs it and the server reaches that laptop
-   over a Tailscale private network, so the photograph crosses a WireGuard tunnel between two
-   machines the school controls rather than the public internet. The honest cost is availability -
-   card reading works while that laptop is awake and online, and not otherwise. Where
-   `OCR_OLLAMA_URL` is unset, or the host is simply switched off, the scan
-   panel does not appear and the form is typed in. The photograph is held for one request and
+   vision model (Qwen3.5 0.8B through Ollama) from the application server. In production the model
+   runs on the same VPS, as an internal service of the Compose stack with no published port, so the
+   photograph never leaves the server or crosses the public internet. The honest costs are size and
+   speed: the server needs 8 GB of memory rather than 2 GB, and the model runs on CPU, so a read is
+   slow and shares the processor with the gate. Where `OCR_OLLAMA_URL` is unset the scan panel does
+   not appear; where the model is down or not yet downloaded it reports itself unavailable. Either
+   way the form is typed in. The photograph is held for one request and
    never stored, but it does leave the browser, and no interface text claims otherwise. Because a
    language model reports no calibrated confidence, any value that is not structurally possible as
    a MyKad number is discarded rather than shown; doubt is inferred from structure, never from the

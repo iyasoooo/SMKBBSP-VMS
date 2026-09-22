@@ -98,7 +98,7 @@ The current paper process is slow, exposes previous visitors' personal details, 
 
 ### P1 - implement after every P0 test passes
 
-1. OCR assistance for Malaysian IC fields with mandatory user correction/confirmation and immediate image disposal. Reading runs on a self-hosted vision model the application server calls; the photograph is held for one request and never stored, and the feature is absent where no model host is configured. The model host is a separate machine from the application server, reached over a private network (Tailscale) rather than the public internet, and its unavailability is a supported state in which the form is typed in.
+1. OCR assistance for Malaysian IC fields with mandatory user correction/confirmation and immediate image disposal. Reading runs on a self-hosted vision model the application server calls; the photograph is held for one request and never stored, and the feature is absent where no model host is configured. The model runs on the application server as an internal service of the production stack, reachable only over the stack's private Docker network and never published, and its unavailability is a supported state in which the form is typed in.
 2. Revoke/reissue QR pass. A reissued link is shown once to the administrator, who hands it to the visitor.
 3. Configurable visit windows, badge prefix, data-retention interval, and overdue threshold.
 4. No-show batch action for past approved visits.
