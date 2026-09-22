@@ -196,6 +196,10 @@ describe('blacklist screening', () => {
         displayName: 'Blocked companion',
         matchPolicy: MatchPolicy.BLOCK,
         reason: 'Test entry',
+        // Set explicitly rather than taking the database default: the database
+        // clock can run ahead of this process, which would leave the entry
+        // not yet in force when screening runs a moment later.
+        validFrom: new Date(Date.now() - 60_000),
         createdById: fixtures.admin.id,
       },
     });
