@@ -86,7 +86,7 @@ export default async function TeacherVisitsPage({
 
   return (
     <>
-      <PageHeading title="My visits" description="Visits where you are the host teacher." />
+      <PageHeading title="My visits" description="Visits where you are the host." />
 
       <nav aria-label="Filter visits" className="mb-4 flex flex-wrap gap-2">
         {FILTERS.map((option) => {

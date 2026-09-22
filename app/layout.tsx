@@ -9,7 +9,7 @@ export const metadata: Metadata = {
     template: '%s | SMKBBSP Visitor Management System',
   },
   description:
-    'Appointment-based visitor management for SMK Bandar Baru Sri Petaling: request a visit, get teacher approval, and check in at the gate with a QR pass.',
+    'Appointment-based visitor management for SMK Bandar Baru Sri Petaling: request a visit, get staff approval, and check in at the gate with a QR pass.',
   robots: { index: false, follow: false },
   icons: {
     // Both are rendered from the crest by `npm run pwa:icons`. The small one is

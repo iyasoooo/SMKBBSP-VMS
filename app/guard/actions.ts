@@ -1,7 +1,6 @@
 'use server';
 
 import { revalidatePath } from 'next/cache';
-import { redirect } from 'next/navigation';
 import { z } from 'zod';
 import { CheckpointKind, CheckpointMethod, Role } from '@prisma/client';
 import { authorizeMutation, AuthorizationError } from '@/lib/auth/authorize';
@@ -17,6 +16,8 @@ import {
   type PassLookupResult,
 } from '@/lib/domain/gate';
 import { CheckpointError, recordCheckpoint } from '@/lib/domain/checkpoints';
+import { buildPassUrl, renderQrDataUrl } from '@/lib/qr';
+import { getEnv } from '@/lib/env';
 import { walkInSchema } from '@/lib/validation/appointment';
 import { DENIAL_CODES } from '@/lib/constants';
 import { fail, ok, toFieldErrors, type ActionResult } from '@/lib/result';
@@ -221,16 +222,32 @@ export async function denyEntryAction(
   }
 }
 
+/** What the guard is shown once a walk-in is registered and checked in. */
+export interface WalkInSuccess {
+  visitId: string;
+  badgeNumber: string;
+  /**
+   * The visitor's pass, rendered here rather than handed over as a token.
+   *
+   * There is no email and no account, so the guard's screen is the only way
+   * the link can reach the visitor: they photograph this QR. Rendering it
+   * server-side keeps the raw token out of the redirect URL, out of browser
+   * history and out of the logs - the client only ever receives an image.
+   */
+  passQrDataUrl: string;
+  fallbackCode: string;
+}
+
 /**
  * Walk-in registration.
  *
- * On success this redirects straight to the badge print view, because the
- * guard's very next action is always to hand the visitor their badge.
+ * This returns rather than redirects. The visitor cannot be sent their pass,
+ * so the guard has to show it to them before the screen moves on.
  */
 export async function walkInAction(
-  _previous: ActionResult<undefined> | null,
+  _previous: ActionResult<WalkInSuccess> | null,
   formData: FormData,
-): Promise<ActionResult<undefined>> {
+): Promise<ActionResult<WalkInSuccess>> {
   let user;
   try {
     user = await authorizeGuard();
@@ -262,11 +279,19 @@ export async function walkInAction(
     });
   }
 
-  let visitId: string;
+  let success: WalkInSuccess;
 
   try {
     const result = await registerWalkIn({ input: parsed.data, guardUserId: user.id });
-    visitId = result.visitId;
+    success = {
+      visitId: result.visitId,
+      badgeNumber: result.badgeNumber,
+      passQrDataUrl: await renderQrDataUrl(
+        buildPassUrl(getEnv().APP_URL, result.passToken),
+        { width: 320 },
+      ),
+      fallbackCode: result.fallbackCode,
+    };
   } catch (error) {
     if (error instanceof GateError) return fail(error.message, { code: error.code });
     log.error('walk-in failed', undefined, error);
@@ -275,7 +300,7 @@ export async function walkInAction(
 
   revalidatePath('/guard');
   revalidatePath('/guard/active');
-  redirect(`/guard/badge/${visitId}?new=1`);
+  return ok(success);
 }
 
 const guardSightingSchema = z.object({

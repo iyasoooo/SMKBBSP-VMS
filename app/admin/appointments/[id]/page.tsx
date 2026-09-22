@@ -194,10 +194,10 @@ export default async function AdminAppointmentDetailPage({
                 <ActionForm
                   action={resolveReviewAction}
                   hidden={{ appointmentId: appointment.id, outcome: 'RELEASE' }}
-                  submitLabel="Release to host teacher"
+                  submitLabel="Release to host staff"
                   variant="success"
-                  confirm="Release this request to the host teacher?"
-                  successMessage="Released. The host teacher can now decide."
+                  confirm="Release this request to the host staff member?"
+                  successMessage="Released. The host staff member can now decide."
                 />
                 <ActionForm
                   action={resolveReviewAction}
@@ -221,7 +221,7 @@ export default async function AdminAppointmentDetailPage({
                 action={adminApproveAction}
                 hidden={{ appointmentId: appointment.id }}
                 submitLabel="Approve now"
-                confirm="Approve this request on the teacher's behalf?"
+                confirm="Approve this request on the staff member's behalf?"
                 successMessage="Approved. The pass now appears on the visitor's private page."
               />
             </Card>

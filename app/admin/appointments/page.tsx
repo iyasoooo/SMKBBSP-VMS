@@ -58,7 +58,7 @@ export default async function AdminAppointmentsPage({
     <>
       <PageHeading
         title="Appointments"
-        description="Every visit request, across all teachers."
+        description="Every visit request, across all staff."
       />
 
       <nav aria-label="Filter by status" className="mb-4 flex flex-wrap gap-2">

@@ -58,8 +58,8 @@ export default async function HomePage() {
             Request a school visit, and carry your pass on your phone.
           </h1>
           <p className="mt-4 text-base leading-relaxed text-muted">
-            Choose the teacher you want to meet and a time that suits you. When you submit, you get
-            a private link to your request - save it. Once the teacher approves, that same link
+            Choose the member of staff you want to meet and a time that suits you. When you submit, you get
+            a private link to your request - save it. Once they approve, that same link
             becomes your QR visitor pass, so just show it on your phone at the guard house on the
             day of your visit.
           </p>
@@ -86,8 +86,8 @@ export default async function HomePage() {
             },
             {
               step: '2',
-              title: 'Teacher approves',
-              body: 'Your host teacher reviews the request. Open your link to see the decision.',
+              title: 'Staff approves',
+              body: 'The staff member you asked for reviews the request. Open your link to see the decision.',
             },
             {
               step: '3',

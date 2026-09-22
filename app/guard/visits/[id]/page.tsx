@@ -17,7 +17,6 @@ import {
 } from '@/lib/domain/presenters';
 import { formatDate, formatDateTime, formatTimeRange } from '@/lib/time';
 import { Alert, Card, DetailRow, PageHeading, Pill } from '@/components/ui/surface';
-import { buttonClasses } from '@/components/ui/button';
 import { VisitStatusPill } from '@/components/status-pill';
 import { listCheckpointsForVisit } from '@/lib/domain/checkpoints';
 import { CheckInPanel, CheckOutPanel, DenyPanel, SightingPanel } from './gate-actions';
@@ -247,9 +246,6 @@ export default async function GuardVisitDetailPage({
             <>
               <CheckOutPanel visitId={visit.id} t={t} />
               {settings.checkpointEnabled ? <SightingPanel visitId={visit.id} t={t} /> : null}
-              <Link href={`/guard/badge/${visit.id}`} className={buttonClasses('secondary', 'lg')}>
-                {t.reprintBadge}
-              </Link>
             </>
           ) : null}
 

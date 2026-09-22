@@ -18,10 +18,13 @@ test.describe('walk-in registration', () => {
 
     await page.getByRole('button', { name: 'Register and check in' }).click();
 
-    // Straight to the badge, which is the guard's next physical action.
-    await expect(page).toHaveURL(/\/guard\/badge\//);
-    await expect(page.getByText('VISITOR', { exact: true })).toBeVisible();
-    await expect(page.getByText(visitorName).first()).toBeVisible();
+    /*
+     * The guard stays on the page and is handed the visitor's pass to show
+     * them. Nothing is printed, and there is no other channel: if this QR is
+     * not on screen the visitor leaves the gate without a pass at all.
+     */
+    await expect(page.getByText('Registered and checked in.')).toBeVisible();
+    await expect(page.getByRole('img', { name: 'Show this to the visitor' })).toBeVisible();
 
     await page.goto('/guard/active');
     await expect(page.getByRole('cell', { name: visitorName })).toBeVisible();

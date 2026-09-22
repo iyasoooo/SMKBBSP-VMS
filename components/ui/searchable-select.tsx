@@ -260,6 +260,9 @@ export function SearchableSelect({
           className={clsx(
             'absolute z-20 mt-1 max-h-72 w-full overflow-y-auto rounded-lg border',
             'border-[var(--line-strong)] bg-[var(--surface-card)] py-1 shadow-lg',
+            // Keeps a flick that reaches the end of the list from scrolling the
+            // form behind it, which on a phone reads as the page jumping away.
+            'overscroll-contain',
           )}
         >
           {rows.length === 0 ? (
@@ -273,12 +276,30 @@ export function SearchableSelect({
                   id={`${listboxId}-${index}`}
                   role="option"
                   aria-selected={isSelected}
-                  // Pointer down rather than click: click fires after blur, by
-                  // which time the list has already closed under the cursor.
+                  /*
+                   * Mouse only, and only to hold focus.
+                   *
+                   * Choosing on `pointerdown` made the list unusable on a
+                   * phone: a scroll gesture *begins* with a pointerdown, so
+                   * the moment a finger touched the list it picked whatever
+                   * was under it and closed - and `preventDefault` cancelled
+                   * the pan as well, so the list could not be scrolled at all.
+                   *
+                   * What pointerdown is still needed for is the mouse case it
+                   * was added for: without it the input blurs, the list closes,
+                   * and the click lands on nothing. A touch pointer needs no
+                   * such help, so it is left entirely alone.
+                   */
                   onPointerDown={(event) => {
-                    event.preventDefault();
-                    choose(option);
+                    if (event.pointerType === 'mouse') event.preventDefault();
                   }}
+                  /*
+                   * Selection happens here instead. A tap produces a click; a
+                   * scroll does not, because the browser suppresses the click
+                   * once the gesture turns into a pan. That distinction is
+                   * exactly the one this control was getting wrong.
+                   */
+                  onClick={() => choose(option)}
                   onMouseEnter={() => setHighlight(index)}
                   className={clsx(
                     'flex min-h-[var(--spacing-touch)] cursor-pointer flex-col justify-center px-3 py-2',

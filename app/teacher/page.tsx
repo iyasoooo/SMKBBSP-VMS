@@ -10,7 +10,7 @@ import { Card, CardHeader, EmptyState, PageHeading } from '@/components/ui/surfa
 import { ButtonLink } from '@/components/ui/button';
 import { AppointmentStatusPill, VisitStatusPill } from '@/components/status-pill';
 
-export const metadata: Metadata = { title: 'Teacher overview' };
+export const metadata: Metadata = { title: 'Staff overview' };
 export const dynamic = 'force-dynamic';
 
 export default async function TeacherHomePage() {

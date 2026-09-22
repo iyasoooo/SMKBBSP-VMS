@@ -482,7 +482,7 @@ export function RequestForm({
           label="Reason for your visit"
           required
           error={errors.purpose}
-          hint="A short sentence is enough. This is shared with your host teacher."
+          hint="A short sentence is enough. This is shared with the staff member you are meeting."
         >
           <Textarea
             {...fieldAria('purpose', { error: errors.purpose, hint: true })}
@@ -504,17 +504,35 @@ export function RequestForm({
             error={errors.partySize}
             hint="Including yourself."
           >
-            <Input
+            {/*
+              A list rather than a number box.
+
+              `type="number"` could not be used on a phone at all. It has no
+              spinner arrows on a touch screen, so the only way to change it is
+              to type - but the value is clamped on every keystroke, and
+              clearing the box to type a new number produced an empty string,
+              which clamped straight back to 1. The field fought every attempt
+              to edit it.
+
+              A select also suits the data better: the range is 1 to 20 and the
+              value drives how many companion rows appear, so there is nothing
+              to gain from free text and a native picker is far easier to use
+              one-handed.
+            */}
+            <Select
               {...fieldAria('partySize', { error: errors.partySize, hint: true })}
               name="partySize"
-              type="number"
-              min={1}
-              max={MAX_PARTY_SIZE}
               required
               value={partySize}
               onChange={(event) => changePartySize(Number(event.target.value))}
               hasError={Boolean(errors.partySize)}
-            />
+            >
+              {Array.from({ length: MAX_PARTY_SIZE }, (_, index) => index + 1).map((count) => (
+                <option key={count} value={count}>
+                  {count === 1 ? '1 (just me)' : count}
+                </option>
+              ))}
+            </Select>
           </Field>
 
           <Field
@@ -713,7 +731,7 @@ export function RequestForm({
 
       <div className="flex flex-col gap-3 border-t border-[var(--line-soft)] pt-6 sm:flex-row sm:items-center sm:justify-between">
         <p className="text-xs text-muted">
-          Your request is not confirmed until your host teacher approves it.
+          Your request is not confirmed until the staff member you asked for approves it.
         </p>
         <SubmitButton />
       </div>

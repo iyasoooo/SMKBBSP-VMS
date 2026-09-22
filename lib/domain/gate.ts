@@ -9,6 +9,8 @@ import {
 } from '@prisma/client';
 import { prisma } from '@/lib/db/prisma';
 import {
+  deriveFallbackCode,
+  formatFallbackCode,
   generateReferenceNumber,
   generateToken,
   hashFallbackCode,
@@ -630,6 +632,16 @@ export interface WalkInResult {
   visitId: string;
   badgeNumber: string;
   referenceNumber: string;
+  /**
+   * The visitor's own pass link, returned exactly once.
+   *
+   * Only the hash is stored, so this is the sole moment the raw token exists
+   * outside the visitor's browser. The caller renders it as a QR on the guard's
+   * screen for the visitor to photograph; it must never be redirected to,
+   * logged, or persisted.
+   */
+  passToken: string;
+  fallbackCode: string;
 }
 
 /**
@@ -788,6 +800,28 @@ export async function registerWalkIn(options: {
       },
     });
 
+    /*
+     * The walk-in's pass. Before this existed the token above was hashed into
+     * the appointment and then thrown away, so a walk-in carried a private
+     * link nobody could ever be given and scanning anything for them returned
+     * "pass not recognised".
+     *
+     * The window runs from now, because they are already inside, to the end of
+     * the expected visit plus the same grace the approval path allows. Expiry
+     * does not strand anyone at the exit: `lookupByCredential` resolves
+     * CHECKED_IN before it ever considers the window, so a visitor who
+     * overstays still scans out.
+     */
+    await tx.qrCredential.create({
+      data: {
+        appointmentId: appointment.id,
+        tokenHash: hashToken(rawToken),
+        fallbackCodeHash: hashFallbackCode(deriveFallbackCode(hashToken(rawToken))),
+        validFrom: now,
+        expiresAt: new Date(expectedEnd.getTime() + settings.qrGraceAfterMinutes * 60_000),
+      },
+    });
+
     await tx.visitEvent.createMany({
       data: [
         { visitId: visit.id, type: VisitEventType.CREATED, actorUserId: options.guardUserId },
@@ -828,7 +862,13 @@ export async function registerWalkIn(options: {
       tx,
     );
 
-    return { visitId: visit.id, badgeNumber, referenceNumber };
+    return {
+      visitId: visit.id,
+      badgeNumber,
+      referenceNumber,
+      passToken: rawToken,
+      fallbackCode: formatFallbackCode(deriveFallbackCode(hashToken(rawToken))),
+    };
   });
 }
 

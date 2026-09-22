@@ -109,13 +109,13 @@ export function ReportFilterBar({
           </Select>
         </Labeled>
 
-        <Labeled label="Host teacher" id="f-teacher">
+        <Labeled label="Host staff" id="f-teacher">
           <Select
             id="f-teacher"
             value={draft.teacherId ?? ''}
             onChange={(e) => setDraft({ ...draft, teacherId: e.target.value || undefined })}
           >
-            <option value="">All teachers</option>
+            <option value="">All staff</option>
             {options.teachers.map((teacher) => (
               <option key={teacher.id} value={teacher.id}>
                 {teacher.name}

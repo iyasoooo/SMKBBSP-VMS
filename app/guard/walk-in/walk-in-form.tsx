@@ -2,17 +2,19 @@
 
 import { useActionState, useState } from 'react';
 import { useFormStatus } from 'react-dom';
-import { walkInAction } from '@/app/guard/actions';
-import { Button } from '@/components/ui/button';
+import Link from 'next/link';
+import { walkInAction, type WalkInSuccess } from '@/app/guard/actions';
+import { Button, buttonClasses } from '@/components/ui/button';
 import { Checkbox, Field, Input, Select, Textarea, fieldAria } from '@/components/ui/field';
 import { SearchableSelect, type SearchableOption } from '@/components/ui/searchable-select';
-import { Alert } from '@/components/ui/surface';
+import { Alert, Card } from '@/components/ui/surface';
 import { MAX_PARTY_SIZE } from '@/lib/constants';
 import type { GuardDictionary } from '@/lib/i18n/dictionary';
 import type { ActionResult } from '@/lib/result';
 
 export interface WalkInOptions {
-  teachers: Array<{ id: string; name: string; department: string }>;
+  /** Name only. A visitor asks for a person, not a department. */
+  teachers: Array<{ id: string; name: string }>;
   destinations: Array<{
     id: string;
     nameEn: string;
@@ -39,7 +41,7 @@ function SubmitButton({ label, busyLabel }: { label: string; busyLabel: string }
  * narrow screens so it stays usable one-handed while the visitor waits.
  */
 export function WalkInForm({ options, t }: { options: WalkInOptions; t: GuardDictionary }) {
-  const [state, formAction] = useActionState<ActionResult<undefined> | null, FormData>(
+  const [state, formAction] = useActionState<ActionResult<WalkInSuccess> | null, FormData>(
     walkInAction,
     null,
   );
@@ -66,6 +68,59 @@ export function WalkInForm({ options, t }: { options: WalkInOptions; t: GuardDic
   const errors = state && !state.ok ? (state.fieldErrors ?? {}) : {};
   const formError = state && !state.ok ? state.message : null;
   const blocked = state && !state.ok && state.code === 'BLOCKED';
+
+  /*
+   * Registration succeeded, so the form is replaced rather than reset. The
+   * visitor is already checked in and standing there: the only thing left is
+   * handing them their pass, and a form still on screen invites the guard to
+   * submit it twice.
+   */
+  if (state?.ok) {
+    return (
+      <div className="flex flex-col gap-5">
+        <Alert tone="success" title={t.walkInDone}>
+          {t.badgeNumber}: <strong className="font-mono">{state.data.badgeNumber}</strong>
+        </Alert>
+
+        <Card className="flex flex-col items-center gap-4 p-6 text-center">
+          <div>
+            <h2 className="text-base font-semibold">{t.showPassHeading}</h2>
+            <p className="mt-1 text-sm text-muted">{t.showPassInstruction}</p>
+          </div>
+
+          {/* Rendered by the server from the visitor's own token; the client
+              never receives the token itself. eslint-disable because this is a
+              data URL, which next/image cannot take. */}
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src={state.data.passQrDataUrl}
+            alt={t.showPassHeading}
+            width={260}
+            height={260}
+            className="rounded-lg border border-[var(--line-soft)] bg-white p-3"
+          />
+
+          <div>
+            <p className="text-xs tracking-wide text-muted uppercase">{t.manualCodeLabel}</p>
+            <p className="mt-1 font-mono text-xl font-semibold tracking-widest text-[var(--text-strong)]">
+              {state.data.fallbackCode}
+            </p>
+          </div>
+
+          <p className="max-w-sm text-sm text-muted">{t.passSaveWarning}</p>
+        </Card>
+
+        <div className="flex flex-wrap gap-3">
+          <Link href={`/guard/visits/${state.data.visitId}`} className={buttonClasses('primary', 'lg')}>
+            {t.openVisit}
+          </Link>
+          <Link href="/guard/walk-in" className={buttonClasses('secondary', 'lg')}>
+            {t.registerAnother}
+          </Link>
+        </div>
+      </div>
+    );
+  }
 
   const selectedType = options.visitTypes.find((type) => type.id === visitTypeId);
   const requiresId = selectedType?.requiresIdSighted ?? true;
@@ -192,7 +247,7 @@ export function WalkInForm({ options, t }: { options: WalkInOptions; t: GuardDic
             </option>
             {options.teachers.map((teacher) => (
               <option key={teacher.id} value={teacher.id}>
-                {teacher.name} - {teacher.department}
+                {teacher.name}
               </option>
             ))}
           </Select>
@@ -252,17 +307,32 @@ export function WalkInForm({ options, t }: { options: WalkInOptions; t: GuardDic
         </Field>
 
         <div className="grid gap-4 sm:grid-cols-3">
+          {/*
+            A picker, matching the public form.
+
+            This one was never broken - it is uncontrolled, so it could be
+            cleared and retyped - but a number box has no spinner arrows on a
+            touch screen, and this is the tablet screen a guard works on one
+            handed with a visitor waiting. Tapping a number beats summoning a
+            keyboard to type one, and the range is 1 to 20 either way.
+
+            No translated labels needed: the options are numerals.
+          */}
           <Field id="partySize" label={t.partySize} required error={errors.partySize}>
-            <Input
+            <Select
               {...fieldAria('partySize', { error: errors.partySize })}
               name="partySize"
-              type="number"
-              min={1}
-              max={MAX_PARTY_SIZE}
               defaultValue={1}
               required
               className="h-12 text-base"
-            />
+              hasError={Boolean(errors.partySize)}
+            >
+              {Array.from({ length: MAX_PARTY_SIZE }, (_, index) => index + 1).map((count) => (
+                <option key={count} value={count}>
+                  {count}
+                </option>
+              ))}
+            </Select>
           </Field>
 
           <Field

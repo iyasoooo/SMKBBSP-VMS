@@ -217,7 +217,7 @@ export const REPORT_COLUMNS = [
   { key: 'visitorName', label: 'Visitor', width: 26 },
   { key: 'identityMasked', label: 'Identity (masked)', width: 18 },
   { key: 'category', label: 'Category', width: 12 },
-  { key: 'hostName', label: 'Host teacher', width: 26 },
+  { key: 'hostName', label: 'Host staff', width: 26 },
   { key: 'destinationName', label: 'Destination', width: 22 },
   { key: 'visitTypeName', label: 'Visit type', width: 20 },
   { key: 'source', label: 'Source', width: 10 },

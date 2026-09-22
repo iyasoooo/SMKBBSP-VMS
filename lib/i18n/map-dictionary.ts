@@ -31,6 +31,9 @@ export interface MapDictionary {
   needBothEnds: string;
   zoomIn: string;
   zoomOut: string;
+  maximise: string;
+  minimise: string;
+  maximiseHint: string;
   search: string;
   searchPlaceholder: string;
   noMatches: string;
@@ -65,6 +68,9 @@ const en: MapDictionary = {
   needBothEnds: 'Choose a starting point and a destination to see the route.',
   zoomIn: 'Zoom in',
   zoomOut: 'Zoom out',
+  maximise: 'Bigger map',
+  minimise: 'Smaller map',
+  maximiseHint: 'Fill the screen with the map and the directions.',
   search: 'Search',
   searchPlaceholder: 'Search for a room, block or class',
   noMatches: 'No place matches that search.',
@@ -109,6 +115,9 @@ const ms: MapDictionary = {
   needBothEnds: 'Pilih tempat mula dan destinasi untuk melihat laluan.',
   zoomIn: 'Zum masuk',
   zoomOut: 'Zum keluar',
+  maximise: 'Peta lebih besar',
+  minimise: 'Peta lebih kecil',
+  maximiseHint: 'Penuhkan skrin dengan peta dan arah perjalanan.',
   search: 'Cari',
   searchPlaceholder: 'Cari bilik, blok atau kelas',
   noMatches: 'Tiada tempat sepadan dengan carian itu.',

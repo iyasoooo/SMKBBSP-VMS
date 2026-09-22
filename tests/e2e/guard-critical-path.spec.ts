@@ -126,19 +126,33 @@ test('AT-003/006/010/016/017/018 full appointment to check-out journey', async (
   await page.getByLabel(/I have seen the visitor/).check();
   await page.getByRole('button', { name: 'Register and check in' }).click();
 
-  // --- 5. Badge renders with the right fields, and without the wrong ones --
+  /*
+   * --- 5. The pass is handed over on screen, and carries nothing sensitive --
+   *
+   * Walk-ins no longer print a badge and no longer redirect to one: the form
+   * is replaced in place by the visitor's digital pass, which the guard turns
+   * the tablet around to show. AT-017 still applies, only to a different
+   * artefact - what the visitor is handed must not carry their identity
+   * number, their phone number or why they came.
+   */
+  await mark('5. The pass is shown on screen and carries nothing sensitive');
+  await expect(page).toHaveURL(/\/guard\/walk-in/);
+  await expect(page.getByText('Registered and checked in.')).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Show this to the visitor' })).toBeVisible();
+  await expect(page.getByRole('img', { name: 'Show this to the visitor' })).toBeVisible();
 
-  await mark('5. Badge renders with the right fields, and without the wrong ones');
-  await expect(page).toHaveURL(/\/guard\/badge\//);
-  await expect(page.getByText('VISITOR', { exact: true })).toBeVisible();
-  await expect(page.getByText(gateVisitor).first()).toBeVisible();
-  await expect(page.locator('svg').first()).toBeVisible(); // the badge QR
+  // The badge number and the manual code are both offered, because the QR is
+  // not the only way in - a camera that will not focus must not strand anyone.
+  await expect(page.getByText(/^V-\d{6}-\d{4}$/)).toBeVisible();
+  await expect(page.getByText('Pass code')).toBeVisible();
 
-  // AT-017: the badge must not carry identity, contact or purpose.
-  const badgeText = (await page.locator('body').innerText()).toLowerCase();
-  expect(badgeText).not.toContain('014-555');
-  expect(badgeText).not.toContain('gate lifecycle end to end check');
-  expect(badgeText).not.toMatch(/\b\d{12}\b/);
+  // Kept for step 7, which leaves by the same pass the visitor arrived with.
+  const passCode = await page.getByText(/^[A-Z0-9]{4}-[A-Z0-9]{4}$/).innerText();
+
+  const passText = (await page.locator('body').innerText()).toLowerCase();
+  expect(passText).not.toContain('014-555');
+  expect(passText).not.toContain('gate lifecycle end to end check');
+  expect(passText).not.toMatch(/\b\d{12}\b/);
 
   // --- 6. Emergency list includes them ------------------------------------
 
@@ -153,19 +167,30 @@ test('AT-003/006/010/016/017/018 full appointment to check-out journey', async (
 
   // --- 7. Check out -------------------------------------------------------
 
-  await mark('7. Check out');
-  await page.goto('/guard/active');
-  await page
-    .getByRole('row')
-    .filter({ hasText: gateVisitor })
-    .getByRole('link')
-    .first()
-    .click();
+  /*
+   * Out by the same pass they came in with, which is the flow at going-home
+   * time: scan, check out, next person. The scan is what identifies the visit,
+   * so the action sits on the scan result rather than a page further in.
+   *
+   * Driven through the manual code because CI has no camera; the code and the
+   * QR resolve to the same credential.
+   */
+  await mark('7. Check out from the scan result');
+  await page.goto('/guard/scan');
+  await page.getByLabel('Pass code').fill(passCode);
+  await page.getByRole('button', { name: 'Look up' }).click();
+
+  // Recognised as someone already inside rather than as an expired or unknown
+  // pass - the distinction the whole check-out path rests on.
+  await expect(page.getByText('Already checked in')).toBeVisible();
 
   await page.getByRole('button', { name: 'Check out', exact: true }).click();
+  await expect(page.getByText('Visitor checked out.')).toBeVisible();
 
-  // The action revalidates, so the page re-renders into its completed state
-  // and the check-out panel is replaced. Assert the persisted result.
+  // And it is persisted, not just acknowledged on screen.
+  await page.goto('/guard/scan');
+  await page.getByLabel('Pass code').fill(passCode);
+  await page.getByRole('button', { name: 'Look up' }).click();
   await expect(page.getByText('Visit already completed')).toBeVisible();
 
   // --- 8. Emergency list excludes them ------------------------------------

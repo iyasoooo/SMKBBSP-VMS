@@ -58,7 +58,7 @@ export default async function TeacherRequestsPage({
     <>
       <PageHeading
         title="My requests"
-        description="Visit requests where you are the host teacher."
+        description="Visit requests where you are the host."
       />
 
       <nav aria-label="Filter requests" className="mb-4 flex flex-wrap gap-2">

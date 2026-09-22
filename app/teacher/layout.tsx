@@ -18,7 +18,7 @@ export default async function TeacherLayout({ children }: { children: React.Reac
   return (
     <StaffShell
       user={user}
-      roleLabel="Teacher"
+      roleLabel="Staff"
       schoolShortName={settings.schoolShortName}
       locale={locale}
       nav={[

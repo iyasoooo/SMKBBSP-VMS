@@ -56,7 +56,7 @@ export const HOST_TEACHER_OPTION = 'Puan Aminah binti Zulkifli';
  */
 export async function selectHostTeacher(
   page: Page,
-  labelText: string | RegExp = 'Host teacher',
+  labelText: string | RegExp = 'Host staff',
   teacherName: string = HOST_TEACHER_OPTION,
 ): Promise<void> {
   const select = page.getByLabel(labelText);

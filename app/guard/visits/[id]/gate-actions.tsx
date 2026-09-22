@@ -3,7 +3,6 @@
 import { useActionState, useState } from 'react';
 import { useFormStatus } from 'react-dom';
 import { useRouter } from 'next/navigation';
-import Link from 'next/link';
 import {
   checkInAction,
   checkOutAction,
@@ -66,17 +65,13 @@ export function CheckInPanel({
         <p className="mt-1">
           {t.badgeNumber}: <strong className="font-mono">{state.data.badgeNumber}</strong>
         </p>
+        {/* Nothing to hand over here: this visitor arrived on an approved
+            appointment, so they are already holding their pass. */}
         <div className="mt-3 flex flex-wrap gap-3">
-          <Link
-            href={`/guard/badge/${state.data.visitId}`}
-            className={buttonClasses('primary', 'lg')}
-          >
-            {t.printBadge}
-          </Link>
           <button
             type="button"
             onClick={() => router.refresh()}
-            className={buttonClasses('secondary', 'lg')}
+            className={buttonClasses('primary', 'lg')}
           >
             {t.back}
           </button>
