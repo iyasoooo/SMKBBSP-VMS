@@ -423,3 +423,43 @@ export async function cancelAppointmentByToken(options: {
     return { cancelled: true, referenceNumber: appointment.referenceNumber };
   });
 }
+
+/**
+ * Close requests nobody decided on before their time ran out.
+ *
+ * A PENDING request whose slot has ended can no longer be approved (see the
+ * `PAST` check above), so no pass can come of it. Leaving it PENDING anyway
+ * would count it as undecided in every queue and report forever, and tell the
+ * visitor it is still waiting. The spec's `PENDING -> EXPIRED` transition
+ * records what has actually happened.
+ *
+ * There is no scheduler in this application, so expiry is lazy: every screen
+ * that shows appointment statuses calls this first. It is one indexed update
+ * and idempotent, so calling it on every read is cheap and a race between two
+ * callers only splits the count between their audit entries.
+ *
+ * REVIEW_REQUIRED is deliberately left alone. Those requests matched the
+ * blacklist and are waiting on an administrator, whose decision should be
+ * recorded as theirs rather than quietly overtaken by the clock.
+ */
+export async function expireLapsedRequests(now: Date = new Date()): Promise<number> {
+  return prisma.$transaction(async (tx) => {
+    const { count } = await tx.appointment.updateMany({
+      where: { status: AppointmentStatus.PENDING, scheduledEnd: { lt: now } },
+      data: { status: AppointmentStatus.EXPIRED },
+    });
+
+    if (count > 0) {
+      await recordAudit(
+        {
+          action: AUDIT_ACTIONS.APPOINTMENT_EXPIRED,
+          targetType: 'Appointment',
+          metadata: { affected: count, cutoff: now.toISOString() },
+        },
+        tx,
+      );
+    }
+
+    return count;
+  });
+}

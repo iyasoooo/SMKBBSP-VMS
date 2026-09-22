@@ -4,6 +4,7 @@ import { AppointmentStatus, VisitStatus } from '@prisma/client';
 import { prisma } from '@/lib/db/prisma';
 import { requireTeacher } from '@/lib/auth/authorize';
 import { getSettings } from '@/lib/domain/settings';
+import { expireLapsedRequests } from '@/lib/domain/decisions';
 import { endOfZonedDay, formatDate, formatTimeRange, startOfZonedDay } from '@/lib/time';
 import { SAFE_VISITOR_SELECT, toSafeVisitor } from '@/lib/domain/presenters';
 import { Card, CardHeader, EmptyState, PageHeading } from '@/components/ui/surface';
@@ -15,6 +16,7 @@ export const dynamic = 'force-dynamic';
 
 export default async function TeacherHomePage() {
   const user = await requireTeacher();
+  await expireLapsedRequests();
   const settings = await getSettings();
 
   const now = new Date();

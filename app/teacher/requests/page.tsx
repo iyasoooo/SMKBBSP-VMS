@@ -2,6 +2,7 @@ import type { Metadata } from 'next';
 import Link from 'next/link';
 import { AppointmentStatus, type Prisma } from '@prisma/client';
 import { prisma } from '@/lib/db/prisma';
+import { expireLapsedRequests } from '@/lib/domain/decisions';
 import { requireTeacher } from '@/lib/auth/authorize';
 import { formatDate, formatTimeRange } from '@/lib/time';
 import { SAFE_VISITOR_SELECT, toSafeVisitor } from '@/lib/domain/presenters';
@@ -31,6 +32,7 @@ export default async function TeacherRequestsPage({
   searchParams: Promise<{ filter?: string; page?: string }>;
 }) {
   const user = await requireTeacher();
+  await expireLapsedRequests();
   const params = await searchParams;
 
   const filter = FILTERS.find((f) => f.key === params.filter) ?? FILTERS[0];

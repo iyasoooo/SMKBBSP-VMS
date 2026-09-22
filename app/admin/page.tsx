@@ -9,6 +9,7 @@ import {
 } from '@/lib/domain/analytics';
 import { arrivalCompliance } from '@/lib/domain/checkpoints';
 import { getSettings } from '@/lib/domain/settings';
+import { expireLapsedRequests } from '@/lib/domain/decisions';
 import { zonedDayRangeToUtc } from '@/lib/time';
 import { parseIsoDayString, formatDate, formatDuration } from '@/lib/time';
 import { Alert, Card, CardHeader, PageHeading } from '@/components/ui/surface';
@@ -32,6 +33,7 @@ export default async function AdminDashboardPage({
   searchParams: Promise<{ from?: string; to?: string }>;
 }) {
   await requireOversight();
+  await expireLapsedRequests();
   const params = await searchParams;
   const range = resolveRange(params);
 
