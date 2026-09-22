@@ -2,6 +2,7 @@ import type { Metadata } from 'next';
 import Link from 'next/link';
 import { AppointmentStatus, type Prisma } from '@prisma/client';
 import { prisma } from '@/lib/db/prisma';
+import { expireLapsedRequests } from '@/lib/domain/decisions';
 import { requireOversight } from '@/lib/auth/authorize';
 import { SAFE_VISITOR_SELECT, toSafeVisitor } from '@/lib/domain/presenters';
 import { formatDate, formatTimeRange } from '@/lib/time';
@@ -27,6 +28,7 @@ export default async function AdminAppointmentsPage({
   searchParams: Promise<{ status?: string; page?: string }>;
 }) {
   await requireOversight('/admin/appointments');
+  await expireLapsedRequests();
   const params = await searchParams;
 
   const activeTab =

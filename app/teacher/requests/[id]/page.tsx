@@ -3,6 +3,7 @@ import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { AppointmentStatus } from '@prisma/client';
 import { prisma } from '@/lib/db/prisma';
+import { expireLapsedRequests } from '@/lib/domain/decisions';
 import { CompanionList, COMPANION_SELECT } from '@/components/companion-list';
 import { requireTeacher } from '@/lib/auth/authorize';
 import { formatDate, formatDateTime, formatTimeRange } from '@/lib/time';
@@ -26,6 +27,7 @@ export default async function TeacherRequestDetailPage({
 }) {
   const user = await requireTeacher();
   const { id } = await params;
+  await expireLapsedRequests();
 
   /*
    * The `teacherId` filter is the authorization check.

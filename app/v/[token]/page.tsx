@@ -6,6 +6,7 @@ import { prisma } from '@/lib/db/prisma';
 import { deriveFallbackCode, formatFallbackCode, hashToken } from '@/lib/crypto/tokens';
 import { buildPassUrl, renderQrDataUrl } from '@/lib/qr';
 import { getSettings } from '@/lib/domain/settings';
+import { expireLapsedRequests } from '@/lib/domain/decisions';
 import { DEFAULT_ORIGIN_CODE } from '@/lib/map/campus-plan';
 import { consumeRateLimit, RATE_LIMITS } from '@/lib/rate-limit';
 import { getEnv } from '@/lib/env';
@@ -56,6 +57,9 @@ export default async function VisitorStatusPage({
       />
     );
   }
+
+  // A request whose time ran out undecided should read as expired, not waiting.
+  await expireLapsedRequests();
 
   const tokenHash = hashToken(token);
   const now = new Date();

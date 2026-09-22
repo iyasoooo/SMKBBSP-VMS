@@ -12,11 +12,13 @@ import {
   approveAppointment,
   cancelAppointmentByToken,
   DecisionError,
+  expireLapsedRequests,
   rejectAppointment,
 } from '@/lib/domain/decisions';
 import { lookupPassByToken } from '@/lib/domain/gate';
 import { deriveFallbackCode, hashFallbackCode, hashToken } from '@/lib/crypto/tokens';
 import type { AppointmentRequestInput } from '@/lib/validation/appointment';
+import { AUDIT_ACTIONS } from '@/lib/constants';
 
 let fixtures: BaseFixtures;
 
@@ -388,5 +390,88 @@ describe('visitor cancellation by token', () => {
 
     const untouched = await testDb.appointment.findUniqueOrThrow({ where: { id: appointment.id } });
     expect(untouched.status).toBe(AppointmentStatus.APPROVED);
+  });
+});
+
+describe('lapsed requests expire', () => {
+  /** An instant just after the request's slot has ended. */
+  function afterSlot(appointment: { scheduledEnd: Date }): Date {
+    return new Date(appointment.scheduledEnd.getTime() + 60_000);
+  }
+
+  it('moves an undecided request to EXPIRED once its slot has ended', async () => {
+    const { appointment } = await createPendingRequest();
+
+    const count = await expireLapsedRequests(afterSlot(appointment));
+
+    expect(count).toBe(1);
+    const updated = await testDb.appointment.findUniqueOrThrow({ where: { id: appointment.id } });
+    expect(updated.status).toBe(AppointmentStatus.EXPIRED);
+  });
+
+  it('leaves a request whose slot has not ended yet', async () => {
+    const { appointment } = await createPendingRequest();
+
+    const count = await expireLapsedRequests(new Date(appointment.scheduledEnd.getTime() - 60_000));
+
+    expect(count).toBe(0);
+    const updated = await testDb.appointment.findUniqueOrThrow({ where: { id: appointment.id } });
+    expect(updated.status).toBe(AppointmentStatus.PENDING);
+  });
+
+  it('never overtakes a decision, or a request held for an administrator', async () => {
+    const approved = await createPendingRequest();
+    await approveAppointment({
+      appointmentId: approved.appointment.id,
+      actorUserId: fixtures.teacher.id,
+      actorRole: Role.TEACHER,
+    });
+    const held = await createPendingRequest({ identityNumber: '900202-10-5566' });
+    await testDb.appointment.update({
+      where: { id: held.appointment.id },
+      data: { status: AppointmentStatus.REVIEW_REQUIRED },
+    });
+
+    const later = new Date(
+      Math.max(approved.appointment.scheduledEnd.getTime(), held.appointment.scheduledEnd.getTime()) +
+        60_000,
+    );
+    expect(await expireLapsedRequests(later)).toBe(0);
+
+    const statuses = await testDb.appointment.findMany({
+      where: { id: { in: [approved.appointment.id, held.appointment.id] } },
+      select: { id: true, status: true },
+    });
+    const byId = new Map(statuses.map((row) => [row.id, row.status]));
+    expect(byId.get(approved.appointment.id)).toBe(AppointmentStatus.APPROVED);
+    expect(byId.get(held.appointment.id)).toBe(AppointmentStatus.REVIEW_REQUIRED);
+  });
+
+  it('audits the sweep once, and a repeat changes and records nothing', async () => {
+    const { appointment } = await createPendingRequest();
+    const now = afterSlot(appointment);
+
+    await expireLapsedRequests(now);
+    expect(await expireLapsedRequests(now)).toBe(0);
+
+    const entries = await testDb.auditLog.findMany({
+      where: { action: AUDIT_ACTIONS.APPOINTMENT_EXPIRED },
+    });
+    expect(entries).toHaveLength(1);
+    expect(entries[0]?.actorUserId).toBeNull();
+    expect(entries[0]?.metadata).toMatchObject({ affected: 1 });
+  });
+
+  it('leaves the expired request impossible to approve', async () => {
+    const { appointment } = await createPendingRequest();
+    await expireLapsedRequests(afterSlot(appointment));
+
+    await expect(
+      approveAppointment({
+        appointmentId: appointment.id,
+        actorUserId: fixtures.teacher.id,
+        actorRole: Role.TEACHER,
+      }),
+    ).rejects.toMatchObject({ code: 'ALREADY_DECIDED' });
   });
 });

@@ -3,6 +3,7 @@ import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { AppointmentStatus, VisitStatus } from '@prisma/client';
 import { prisma } from '@/lib/db/prisma';
+import { expireLapsedRequests } from '@/lib/domain/decisions';
 import { CompanionList, COMPANION_SELECT } from '@/components/companion-list';
 import { canAdminister, requireOversight } from '@/lib/auth/authorize';
 import { adminApproveAction, resolveReviewAction, revokePassAction } from '@/app/admin/actions';
@@ -29,6 +30,7 @@ export default async function AdminAppointmentDetailPage({
 }) {
   const user = await requireOversight();
   const { id } = await params;
+  await expireLapsedRequests();
 
   const appointment = await prisma.appointment.findUnique({
     where: { id },
