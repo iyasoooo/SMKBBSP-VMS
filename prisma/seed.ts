@@ -149,7 +149,7 @@ async function seedUsers(): Promise<{
   const guard = await prisma.user.create({
     data: {
       email: 'guard@smkbbsp.test',
-      name: 'Encik Samad bin Osman (Pengawal)',
+      name: 'Nazri bin Baba (Pengawal)',
       passwordHash: guardHash,
       role: Role.GUARD,
       preferredLocale: 'ms',
@@ -169,7 +169,7 @@ async function seedUsers(): Promise<{
   const guard2 = await prisma.user.create({
     data: {
       email: 'guard2@smkbbsp.test',
-      name: 'Encik Ravi a/l Chandran (Pengawal)',
+      name: 'Vinsan a/l Perumal (Pengawal)',
       passwordHash: guardHash,
       role: Role.GUARD,
       preferredLocale: 'ms',
