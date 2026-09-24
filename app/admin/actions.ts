@@ -15,6 +15,7 @@ import {
   revealIdentity,
   setBlacklistStatus,
   setUserActive,
+  updateStaffUser,
 } from '@/lib/domain/admin';
 import { approveAppointment, DecisionError } from '@/lib/domain/decisions';
 import { CredentialError, reissuePass, revokePass } from '@/lib/domain/credentials';
@@ -318,6 +319,55 @@ export async function createUserAction(
     return ok();
   } catch (error) {
     return handle(error, 'The account could not be created.');
+  }
+}
+
+const updateUserSchema = z.object({
+  userId: z.string().min(1),
+  name: z.string().trim().min(2, 'Enter a name.').max(120),
+  department: z.string().trim().max(80).optional(),
+  /*
+   * A checkbox is absent from the form data when it is unticked, so its value
+   * is derived from presence. The field is only sent for accounts that have a
+   * host profile; for everyone else it stays undefined and the service leaves
+   * the profile untouched rather than creating one.
+   */
+  isAcceptingVisits: z.boolean().optional(),
+});
+
+/**
+ * Correct a staff member's name, department, or whether they take visitors.
+ *
+ * Email and role are deliberately not editable here - see `updateStaffUser`.
+ */
+export async function updateUserAction(
+  _previous: ActionResult<undefined> | null,
+  formData: FormData,
+): Promise<ActionResult<undefined>> {
+  try {
+    const user = await admin();
+
+    const hasProfileFields = formData.has('hasProfile');
+
+    const parsed = updateUserSchema.safeParse({
+      userId: formData.get('userId'),
+      name: formData.get('name'),
+      department: hasProfileFields ? formData.get('department') || undefined : undefined,
+      isAcceptingVisits: hasProfileFields ? formData.get('isAcceptingVisits') === 'on' : undefined,
+    });
+
+    if (!parsed.success) {
+      return fail('Please correct the highlighted fields.', {
+        fieldErrors: toFieldErrors(parsed.error.issues),
+      });
+    }
+
+    await updateStaffUser({ ...parsed.data, adminUserId: user.id });
+
+    revalidatePath('/admin/users');
+    return ok();
+  } catch (error) {
+    return handle(error, 'The account could not be updated.');
   }
 }
 

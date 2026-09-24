@@ -2,7 +2,7 @@ import type { Metadata } from 'next';
 import { Role } from '@prisma/client';
 import { prisma } from '@/lib/db/prisma';
 import { requireAdmin } from '@/lib/auth/authorize';
-import { resetPasswordAction, setUserActiveAction } from '@/app/admin/actions';
+import { resetPasswordAction, setUserActiveAction, updateUserAction } from '@/app/admin/actions';
 import { formatDateTime } from '@/lib/time';
 import { Alert, Card, PageHeading, Pill, TableScroll } from '@/components/ui/surface';
 import { ActionForm } from '@/components/action-form';
@@ -108,6 +108,67 @@ export default async function UsersPage() {
                       </td>
                       <td className="px-4 py-3">
                         <div className="flex flex-col gap-3">
+                          {/*
+                            Collapsed by default. Correcting a name is rare next
+                            to deactivating or resetting a password, and three
+                            inputs open on every row would bury the two actions
+                            somebody actually came here for.
+                          */}
+                          <details className="text-sm">
+                            <summary className="cursor-pointer text-xs text-muted underline-offset-2 hover:underline">
+                              Edit details
+                            </summary>
+
+                            <ActionForm
+                              action={updateUserAction}
+                              hidden={{
+                                userId: user.id,
+                                // Marks the profile fields as present, so the
+                                // action can tell "left blank" from "not sent".
+                                ...(user.teacherProfile ? { hasProfile: '1' } : {}),
+                              }}
+                              submitLabel="Save changes"
+                              variant="secondary"
+                              successMessage="Saved."
+                              className="mt-2 flex flex-col gap-2"
+                            >
+                              <Input
+                                name="name"
+                                defaultValue={user.name}
+                                minLength={2}
+                                maxLength={120}
+                                required
+                                aria-label={`Name for ${user.name}`}
+                              />
+
+                              {user.teacherProfile ? (
+                                <>
+                                  <Input
+                                    name="department"
+                                    defaultValue={user.teacherProfile.department}
+                                    maxLength={80}
+                                    placeholder="Department"
+                                    aria-label={`Department for ${user.name}`}
+                                  />
+                                  {/*
+                                    Unticking removes them from the public
+                                    request form without disabling the account -
+                                    the difference between on leave and gone.
+                                  */}
+                                  <label className="flex min-h-[var(--spacing-touch)] cursor-pointer items-center gap-2 text-xs">
+                                    <input
+                                      type="checkbox"
+                                      name="isAcceptingVisits"
+                                      defaultChecked={user.teacherProfile.isAcceptingVisits}
+                                      className="size-4 rounded border-[var(--line-strong)] accent-[var(--accent)]"
+                                    />
+                                    Accepting visitors
+                                  </label>
+                                </>
+                              ) : null}
+                            </ActionForm>
+                          </details>
+
                           {user.isActive ? (
                             isLastAdmin ? (
                               <span className="text-xs text-muted">

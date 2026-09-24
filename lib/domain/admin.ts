@@ -335,6 +335,89 @@ export async function resetUserPassword(options: {
   });
 }
 
+/**
+ * Correct a staff member's details.
+ *
+ * Deliberately narrow. A name is a spelling correction and a marriage, and a
+ * school will need both; a department and whether somebody is taking visitors
+ * are the two facts that change while a person stays the same person.
+ *
+ * Three things are excluded on purpose, and each belongs in its own action
+ * rather than hidden inside an edit form:
+ *
+ *   - The **email** is the credential someone signs in with. Changing it is a
+ *     change of identity, not of detail, and it needs a deliberate flow.
+ *   - The **role** is a privilege change. It has to revoke sessions so nobody
+ *     keeps acting under the authority they just lost, and an edit form that
+ *     quietly grants ADMIN is exactly the control this codebase avoids.
+ *   - **Active or not** already has `setUserActive`, which knows to refuse the
+ *     last administrator and to revoke sessions.
+ *
+ * Nothing here touches a session: none of these fields changes who the person
+ * is or what they may do, so signing everybody out would be noise.
+ */
+export async function updateStaffUser(options: {
+  userId: string;
+  name: string;
+  department?: string;
+  isAcceptingVisits?: boolean;
+  adminUserId: string;
+}): Promise<void> {
+  const user = await prisma.user.findUnique({
+    where: { id: options.userId },
+    select: { id: true, name: true, role: true, teacherProfile: { select: { id: true } } },
+  });
+  if (!user) throw new AdminError('NOT_FOUND', 'That account could not be found.');
+
+  const name = options.name.trim();
+  if (name.length < 2) throw new AdminError('INVALID', 'Enter a name.');
+
+  await prisma.$transaction(async (tx) => {
+    await tx.user.update({ where: { id: user.id }, data: { name } });
+
+    /*
+     * The profile fields only exist for a host, and only when one was created.
+     * An account whose role never had a profile is left alone rather than
+     * having one invented for it.
+     */
+    if (user.teacherProfile) {
+      const profile: { department?: string; isAcceptingVisits?: boolean } = {};
+      if (options.department !== undefined) profile.department = options.department.trim() || 'General';
+      if (options.isAcceptingVisits !== undefined) {
+        profile.isAcceptingVisits = options.isAcceptingVisits;
+      }
+
+      if (Object.keys(profile).length > 0) {
+        await tx.teacherProfile.update({ where: { id: user.teacherProfile.id }, data: profile });
+      }
+    }
+
+    /*
+     * The previous name is recorded because that is the whole value of auditing
+     * a rename: a visit checked in by one name and reported under another is
+     * otherwise impossible to reconcile. Only names - never a password, and
+     * never anything the redactor would strip.
+     */
+    await recordAudit(
+      {
+        action: AUDIT_ACTIONS.USER_UPDATED,
+        targetType: 'User',
+        targetId: user.id,
+        actorUserId: options.adminUserId,
+        metadata: {
+          role: user.role,
+          previousName: user.name,
+          newName: name,
+          ...(options.isAcceptingVisits === undefined
+            ? {}
+            : { isAcceptingVisits: options.isAcceptingVisits }),
+        },
+      },
+      tx,
+    );
+  });
+}
+
 export async function createStaffUser(options: {
   email: string;
   name: string;
