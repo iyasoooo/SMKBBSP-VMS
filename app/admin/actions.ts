@@ -325,6 +325,7 @@ export async function createUserAction(
 const updateUserSchema = z.object({
   userId: z.string().min(1),
   name: z.string().trim().min(2, 'Enter a name.').max(120),
+  email: z.email('Enter a valid email address.'),
   department: z.string().trim().max(80).optional(),
   /*
    * A checkbox is absent from the form data when it is unticked, so its value
@@ -352,6 +353,7 @@ export async function updateUserAction(
     const parsed = updateUserSchema.safeParse({
       userId: formData.get('userId'),
       name: formData.get('name'),
+      email: formData.get('email'),
       department: hasProfileFields ? formData.get('department') || undefined : undefined,
       isAcceptingVisits: hasProfileFields ? formData.get('isAcceptingVisits') === 'on' : undefined,
     });

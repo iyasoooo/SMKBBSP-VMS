@@ -11,9 +11,12 @@ import { AUDIT_ACTIONS } from '@/lib/constants';
  * only remedy was deactivating the account and making another, which strands
  * every visit already attributed to the old one.
  *
- * What the tests are really guarding is the *narrowness* of the action. An
- * edit form that quietly changed a role or an email would be a privilege
- * escalation and an identity change wearing the clothes of a typo fix.
+ * What the tests are really guarding is the *narrowness* of the action. The
+ * role stays out of it entirely - an edit form that quietly granted ADMIN
+ * would be a privilege escalation wearing the clothes of a typo fix. The email
+ * is in, because an account renamed to a different person needs its address to
+ * follow, but it is treated as the credential it is: changing it ends every
+ * session for that account.
  */
 
 let fixtures: BaseFixtures;
@@ -66,9 +69,9 @@ describe('updateStaffUser', () => {
   });
 
   /*
-   * The two fields an edit must never touch. Both have their own deliberate
-   * routes - a role change has to revoke sessions, and an email change is a
-   * change of credential - so silently accepting them here would be the bug.
+   * The role is never editable here, and the email is only touched when one is
+   * supplied. Both matter: a silent role change is an escalation, and a silent
+   * address change would move somebody's sign-in without telling them.
    */
   it('leaves the role and the email exactly as they were', async () => {
     await updateStaffUser({
@@ -214,5 +217,142 @@ describe('the audit entry', () => {
       where: { action: AUDIT_ACTIONS.USER_UPDATED },
     });
     expect(entries).toBe(0);
+  });
+});
+
+/**
+ * The email is the credential, which is why it is treated apart from the rest.
+ *
+ * It was deliberately excluded at first, on the grounds that changing it is a
+ * change of identity rather than of detail. Practice disagreed: renaming a
+ * seeded account to a real member of staff leaves the previous holder's
+ * address on it, so the directory and the sign-in no longer agree and nothing
+ * says so.
+ */
+describe('changing the email', () => {
+  it('updates the address somebody signs in with', async () => {
+    await updateStaffUser({
+      userId: fixtures.teacher.id,
+      name: 'Cheong Kai Tian',
+      email: 'cheong.kaitian@smkbbsp.test',
+      adminUserId: fixtures.admin.id,
+    });
+
+    const after = await testDb.user.findUniqueOrThrow({ where: { id: fixtures.teacher.id } });
+    expect(after.email).toBe('cheong.kaitian@smkbbsp.test');
+    expect(after.name).toBe('Cheong Kai Tian');
+  });
+
+  it('lower-cases and trims, so the address cannot be entered two ways', async () => {
+    await updateStaffUser({
+      userId: fixtures.teacher.id,
+      name: fixtures.teacher.name,
+      email: '  Cheong.KaiTian@SMKBBSP.test  ',
+      adminUserId: fixtures.admin.id,
+    });
+
+    const after = await testDb.user.findUniqueOrThrow({ where: { id: fixtures.teacher.id } });
+    expect(after.email).toBe('cheong.kaitian@smkbbsp.test');
+  });
+
+  it('refuses an address another account already uses', async () => {
+    await expect(
+      updateStaffUser({
+        userId: fixtures.teacher.id,
+        name: fixtures.teacher.name,
+        email: fixtures.otherTeacher.email,
+        adminUserId: fixtures.admin.id,
+      }),
+    ).rejects.toBeInstanceOf(AdminError);
+
+    const after = await testDb.user.findUniqueOrThrow({ where: { id: fixtures.teacher.id } });
+    expect(after.email).toBe(fixtures.teacher.email);
+  });
+
+  it('accepts the account keeping its own address', async () => {
+    await updateStaffUser({
+      userId: fixtures.teacher.id,
+      name: 'Renamed, same address',
+      email: fixtures.teacher.email,
+      adminUserId: fixtures.admin.id,
+    });
+
+    const after = await testDb.user.findUniqueOrThrow({ where: { id: fixtures.teacher.id } });
+    expect(after.name).toBe('Renamed, same address');
+  });
+
+  it('refuses something that is not an address', async () => {
+    await expect(
+      updateStaffUser({
+        userId: fixtures.teacher.id,
+        name: fixtures.teacher.name,
+        email: 'not-an-address',
+        adminUserId: fixtures.admin.id,
+      }),
+    ).rejects.toBeInstanceOf(AdminError);
+  });
+
+  /*
+   * The reason this differs from a rename. Changing the address usually means
+   * the account has changed hands, and leaving the previous holder signed in
+   * would hand them the new person's access for up to twelve hours.
+   */
+  it('signs every session out when the address changes', async () => {
+    const session = await testDb.session.create({
+      data: {
+        userId: fixtures.teacher.id,
+        tokenHash: 'hash-for-email-change',
+        expiresAt: new Date(Date.now() + 60 * 60 * 1000),
+      },
+    });
+
+    await updateStaffUser({
+      userId: fixtures.teacher.id,
+      name: 'Cheong Kai Tian',
+      email: 'cheong.kaitian@smkbbsp.test',
+      adminUserId: fixtures.admin.id,
+    });
+
+    const after = await testDb.session.findUniqueOrThrow({ where: { id: session.id } });
+    expect(after.revokedAt).not.toBeNull();
+  });
+
+  it('leaves sessions alone when the address is unchanged', async () => {
+    const session = await testDb.session.create({
+      data: {
+        userId: fixtures.teacher.id,
+        tokenHash: 'hash-for-unchanged-email',
+        expiresAt: new Date(Date.now() + 60 * 60 * 1000),
+      },
+    });
+
+    await updateStaffUser({
+      userId: fixtures.teacher.id,
+      name: 'Just a rename',
+      email: fixtures.teacher.email,
+      adminUserId: fixtures.admin.id,
+    });
+
+    const after = await testDb.session.findUniqueOrThrow({ where: { id: session.id } });
+    expect(after.revokedAt).toBeNull();
+  });
+
+  it('records both addresses in the audit entry', async () => {
+    await updateStaffUser({
+      userId: fixtures.teacher.id,
+      name: 'Cheong Kai Tian',
+      email: 'cheong.kaitian@smkbbsp.test',
+      adminUserId: fixtures.admin.id,
+    });
+
+    const entry = await testDb.auditLog.findFirstOrThrow({
+      where: { action: AUDIT_ACTIONS.USER_UPDATED },
+      orderBy: { createdAt: 'desc' },
+    });
+
+    expect(entry.metadata).toMatchObject({
+      previousEmail: fixtures.teacher.email,
+      newEmail: 'cheong.kaitian@smkbbsp.test',
+    });
   });
 });

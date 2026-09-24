@@ -141,6 +141,23 @@ export default async function UsersPage() {
                                 aria-label={`Name for ${user.name}`}
                               />
 
+                              {/*
+                                The address someone signs in with. Changing it
+                                ends their sessions, because the usual reason to
+                                change one is that the account now belongs to
+                                somebody else.
+                              */}
+                              <Input
+                                name="email"
+                                type="email"
+                                defaultValue={user.email}
+                                maxLength={254}
+                                required
+                                autoCapitalize="none"
+                                spellCheck={false}
+                                aria-label={`Email for ${user.name}`}
+                              />
+
                               {user.teacherProfile ? (
                                 <>
                                   <Input

@@ -359,21 +359,70 @@ export async function resetUserPassword(options: {
 export async function updateStaffUser(options: {
   userId: string;
   name: string;
+  email?: string;
   department?: string;
   isAcceptingVisits?: boolean;
   adminUserId: string;
 }): Promise<void> {
   const user = await prisma.user.findUnique({
     where: { id: options.userId },
-    select: { id: true, name: true, role: true, teacherProfile: { select: { id: true } } },
+    select: {
+      id: true,
+      name: true,
+      email: true,
+      role: true,
+      teacherProfile: { select: { id: true } },
+    },
   });
   if (!user) throw new AdminError('NOT_FOUND', 'That account could not be found.');
 
   const name = options.name.trim();
   if (name.length < 2) throw new AdminError('INVALID', 'Enter a name.');
 
+  /*
+   * The email is the credential, so it is handled separately from the rest.
+   *
+   * It was left out of this action at first on the grounds that changing it is
+   * a change of identity rather than of detail. That is still true - which is
+   * exactly why it belongs here rather than nowhere. An account whose name has
+   * been changed to a different person is *already* a different identity, and
+   * leaving the previous holder's address on it is the worse outcome: they
+   * remain the one who can be found in the directory, and nothing warns
+   * anybody that the two no longer agree.
+   */
+  const email = options.email === undefined ? null : normalizeEmail(options.email);
+  if (options.email !== undefined) {
+    if (!email || !email.includes('@')) {
+      throw new AdminError('INVALID', 'Enter a valid email address.');
+    }
+
+    // The column is unique, so a clash would surface as a database error with
+    // nothing useful to show an administrator. Caught here instead.
+    const clash = await prisma.user.findUnique({ where: { email }, select: { id: true } });
+    if (clash && clash.id !== user.id) {
+      throw new AdminError('DUPLICATE', 'Another account already uses that email address.');
+    }
+  }
+
+  const emailChanged = email !== null && email !== user.email;
+
   await prisma.$transaction(async (tx) => {
-    await tx.user.update({ where: { id: user.id }, data: { name } });
+    await tx.user.update({
+      where: { id: user.id },
+      data: { name, ...(emailChanged ? { email } : {}) },
+    });
+
+    /*
+     * A changed address ends every session for the account.
+     *
+     * Not because the privileges changed - they have not - but because the
+     * reason to change one is usually that the account now belongs to somebody
+     * else. Leaving the previous holder signed in would hand the new person's
+     * access to the old one, silently, for up to twelve hours.
+     */
+    if (emailChanged) {
+      await revokeAllSessionsForUser(user.id, tx);
+    }
 
     /*
      * The profile fields only exist for a host, and only when one was created.
@@ -408,6 +457,9 @@ export async function updateStaffUser(options: {
           role: user.role,
           previousName: user.name,
           newName: name,
+          // Recorded for the same reason the names are: an account that
+          // changes hands has to be traceable across the change.
+          ...(emailChanged ? { previousEmail: user.email, newEmail: email } : {}),
           ...(options.isAcceptingVisits === undefined
             ? {}
             : { isAcceptingVisits: options.isAcceptingVisits }),
