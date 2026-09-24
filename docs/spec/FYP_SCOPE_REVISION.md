@@ -65,9 +65,12 @@ The evaluation should measure task completion, correctness, usability, response 
 ### Actors
 
 - Visitor without an account
-- Teacher
+- Staff host (the `TEACHER` role; every screen says "staff", because a visitor may be
+  coming to see a clerk in the office rather than a teacher)
 - Security Guard
 - Administrator
+- Principal — read-only oversight: reads every administrative screen and downloads
+  reports, and changes nothing. Enforced on the server, not by hiding controls.
 
 ### Core modules
 
@@ -84,8 +87,14 @@ The evaluation should measure task completion, correctness, usability, response 
 11. Emergency on-site list
 12. Dashboard analytics
 13. PDF and Excel exports
-14. User, destination, and visit-type management
+14. User, destination, and visit-type management, including correcting a staff
+    member's name, sign-in address, department, and whether they take visitors
 15. Audit logging
+16. Campus wayfinding across the school's four floor plans: shortest walking route
+    from the guard house to the visitor's destination, offered from their pass
+17. Staff arrival confirmations: a named member of staff records that a visitor
+    reached them, and a visitor nobody has confirmed within a configurable window
+    is flagged to the gate
 
 ### Optional module
 
@@ -140,7 +149,8 @@ The correct claim is therefore narrow: card reading reduces typing, under human 
 | Mock MyDigitalID mode | Removed | A mock cannot demonstrate real identity verification. |
 | Three ML anomaly models | Deterministic overdue, expired, repeat-state, and blacklist rules | Explainable and testable with limited FYP data. |
 | Geofencing | Guard-operated QR check-in at the physical gate | Guard action already establishes operational gate presence. |
-| Campus live routing | Destination and host shown on the digital pass | Lower complexity and easier to maintain. |
+| Campus live routing | Static wayfinding over the school's own floor plans: the four levels are modelled as a graph of rooms, corridors and stairs, and Dijkstra's algorithm gives the shortest walking route from the guard house to the destination. Reached from the visitor's own pass | The *live* half was the unachievable half. Tracking a visitor's position needs continuous location access, which was excluded on privacy grounds and stops working the moment a phone is locked. A route drawn on a plan the school already owns needs neither, and answers the question a lost visitor actually asks. |
+| Continuous location tracking | Staff arrival confirmations: a named member of staff records that the visitor reached them, and an unconfirmed arrival is flagged to the gate after a configurable window | Location is asserted by an authenticated person rather than sampled from a device. That costs precision - there is no answer to "where are they now" between confirmations - and buys a signal that does not evaporate when somebody locks their phone, which is what makes device tracking useless as a gate control. |
 | Twilio SMS | No outbound messages at all: in-app notifications for staff, and a private link shown on screen for visitors | No paid account, no mail server, and no visitor contact detail needed to deliver a pass. |
 | Web Speech anomaly alert | High-contrast operational alert and overdue list | Accessible, predictable, and testable. |
 | Plain SHA-256 of NRIC | Keyed HMAC for matching plus AES-GCM encryption where retrieval is required | Plain hashes of predictable identifiers are vulnerable to guessing. |
