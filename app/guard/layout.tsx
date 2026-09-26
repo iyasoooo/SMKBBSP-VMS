@@ -23,6 +23,7 @@ export default async function GuardLayout({ children }: { children: React.ReactN
       roleLabel={t.today}
       schoolShortName={settings.schoolShortName}
       locale={locale}
+      notificationsLabel={t.notifications}
       showLocaleToggle
       nav={[
         { href: '/guard', label: t.today },

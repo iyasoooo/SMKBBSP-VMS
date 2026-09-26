@@ -23,6 +23,7 @@ export interface GuardDictionary {
   emergency: string;
   history: string;
   schoolMap: string;
+  notifications: string;
   signOut: string;
   language: string;
   theme: string;
@@ -185,6 +186,7 @@ const en: GuardDictionary = {
   emergency: 'Emergency list',
   history: 'Visitor history',
   schoolMap: 'School map',
+  notifications: 'Notifications',
   signOut: 'Sign out',
   language: 'Language',
   theme: 'Theme',
@@ -343,6 +345,7 @@ const ms: GuardDictionary = {
   emergency: 'Senarai kecemasan',
   history: 'Sejarah pelawat',
   schoolMap: 'Peta sekolah',
+  notifications: 'Pemberitahuan',
   signOut: 'Log keluar',
   language: 'Bahasa',
   theme: 'Tema',
