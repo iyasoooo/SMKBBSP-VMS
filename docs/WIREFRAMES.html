@@ -1,1103 +1,864 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
 <title>VisitorPass Wireframes</title>
 <style>
-  :root {
-    --paper: #ffffff;
-    --sheet: #f5f5f5;
-    --ink: #1f1f1f;
-    --ink-2: #5a5a5a;
-    --ink-3: #909090;
-    --rule: #dcdcdc;
-    --rule-2: #b4b4b4;
-    --fill: #e8e8e8;
-    --fill-2: #d5d5d5;
-    --solid: #3a3a3a;
-
-    --f-ui: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Arial, sans-serif;
-    --f-mono: ui-monospace, "Cascadia Code", Menlo, Consolas, monospace;
-  }
-
   * { box-sizing: border-box; }
-
+  html { background: #ffffff; }
   body {
-    margin: 0;
-    background: var(--sheet);
-    color: var(--ink);
-    font-family: var(--f-ui);
-    font-size: 14px;
-    line-height: 1.5;
-    -webkit-font-smoothing: antialiased;
+    margin: 0; background: #ffffff; color: #111111;
+    font-family: Arial, "Helvetica Neue", Helvetica, sans-serif;
+    font-size: 13px; line-height: 1.45;
   }
+  /* wide enough for the laptop frame (800px) plus a callout on each side */
+  .page { max-width: 1140px; margin: 0 auto; padding: 40px 20px 80px; }
 
-  .sheet { max-width: 1060px; margin: 0 auto; padding: 0 20px 72px; }
+  h1 { font-size: 20px; margin: 0 0 6px; }
+  .lead { color: #444444; margin: 0 0 8px; max-width: 70ch; }
+  h2 { font-size: 15px; margin: 44px 0 6px; padding-bottom: 5px; border-bottom: 1px solid #111111; }
+  h2 + .lead { margin-bottom: 22px; }
 
-  header.top {
-    padding: 40px 0 14px;
-    border-bottom: 1px solid var(--rule-2);
-    display: flex;
-    align-items: baseline;
-    justify-content: space-between;
-    gap: 12px;
-    flex-wrap: wrap;
+  figure { margin: 0 0 40px; }
+  figcaption { margin-top: 14px; text-align: center; max-width: 76ch; margin-left: auto; margin-right: auto; }
+  figcaption b { font-weight: bold; }
+
+  .scroll { overflow-x: auto; padding-bottom: 4px; }
+  .wrap { display: flex; justify-content: center; min-width: min-content; padding: 0 140px; }
+
+  /* ---------------- annotation callout ----------------
+     A callout lives INSIDE the element it describes, so the connector
+     always meets that element's edge at its vertical centre. */
+  .anch { position: relative; }
+  .note {
+    position: absolute; top: 50%; transform: translateY(-50%);
+    width: 100px; border: 1px solid #111111; background: #ffffff;
+    padding: 5px 6px; font-size: 11px; text-align: center; line-height: 1.3;
   }
-  header.top h1 { margin: 0; font-size: 24px; font-weight: 700; }
-  header.top span { font-family: var(--f-mono); font-size: 11px; color: var(--ink-3); }
+  .note::after { content: ""; position: absolute; top: 50%; width: 52px; border-top: 1px solid #111111; }
+  .note::before { content: ""; position: absolute; top: calc(50% - 4px); border: 4px solid transparent; }
+  .note.l { right: calc(100% + 52px); }
+  .note.l::after { left: 100%; }
+  .note.l::before { left: calc(100% + 48px); border-left-color: #111111; }
+  .note.r { left: calc(100% + 52px); }
+  .note.r::after { right: 100%; }
+  .note.r::before { right: calc(100% + 48px); border-right-color: #111111; }
 
-  h2.group {
-    margin: 42px 0 16px;
-    font-family: var(--f-mono);
-    font-size: 11px;
-    font-weight: 600;
-    letter-spacing: .2em;
-    text-transform: uppercase;
-    color: var(--ink-3);
-    border-bottom: 1px solid var(--rule);
-    padding-bottom: 5px;
+  /* ---------------- devices ---------------- */
+  .phone {
+    width: 360px; flex: none; border: 3px solid #111111; border-radius: 26px;
+    background: #ffffff; padding: 22px 10px 24px;
   }
+  .phone .speaker { width: 54px; height: 5px; border-radius: 3px; background: #111111; margin: -12px auto 10px; }
+  .phone .home { width: 90px; height: 4px; border-radius: 2px; background: #111111; margin: 10px auto -14px; }
 
-  figure.plate { margin: 0 0 26px; }
-
-  .plate__head { display: flex; align-items: baseline; gap: 9px; margin-bottom: 7px; flex-wrap: wrap; }
-  .plate__head .no {
-    font-family: var(--f-mono); font-size: 11px; font-weight: 700; color: var(--ink-2);
-    border: 1px solid var(--rule-2); padding: 0 5px;
+  .tablet {
+    width: 680px; flex: none; border: 3px solid #111111; border-radius: 16px;
+    background: #ffffff; padding: 16px 14px;
   }
-  .plate__head h3 { margin: 0; font-size: 15px; font-weight: 600; }
-  .plate__head .route { font-family: var(--f-mono); font-size: 11px; color: var(--ink-3); }
+  .tablet .cam { width: 7px; height: 7px; border-radius: 50%; background: #111111; margin: -8px auto 8px; }
 
-  .frame-wrap { overflow-x: auto; padding-bottom: 4px; }
-
-  .wf { border: 1px solid var(--rule-2); background: var(--paper); min-width: 540px; }
-  .wf--phone { min-width: 290px; max-width: 320px; }
-  .wf--print { min-width: 440px; max-width: 560px; }
-
-  .wf__top {
-    display: flex; align-items: center; gap: 8px;
-    padding: 7px 10px;
-    border-bottom: 1px solid var(--rule-2);
-    background: var(--sheet);
-    font-size: 11px; color: var(--ink-2);
+  .laptop { flex: none; width: 800px; }
+  .laptop .lid { border: 3px solid #111111; border-radius: 8px 8px 0 0; background: #ffffff; padding: 8px; }
+  .laptop .chrome {
+    display: flex; align-items: center; gap: 6px; padding: 5px 7px;
+    border: 1px solid #999999; border-bottom: 0; background: #d6d6d6;
   }
-  .wf__logo { width: 16px; height: 16px; flex: none; border: 1px solid var(--rule-2); background: var(--fill); }
+  .laptop .chrome i { width: 8px; height: 8px; border-radius: 50%; background: #111111; flex: none; }
+  .laptop .chrome u { flex: 1; height: 13px; background: #ffffff; border: 1px solid #999999; text-decoration: none; }
+  .laptop .base { height: 11px; border: 3px solid #111111; border-top: 0; border-radius: 0 0 12px 12px; background: #d6d6d6; }
 
-  .wf__nav { display: flex; flex-wrap: wrap; padding: 0 6px; border-bottom: 1px solid var(--rule); background: var(--sheet); }
-  .wf__nav span { font-size: 11px; color: var(--ink-3); padding: 6px 8px; border-bottom: 2px solid transparent; white-space: nowrap; }
-  .wf__nav span.on { color: var(--ink); border-bottom-color: var(--ink); }
+  .screen { border: 1px solid #999999; background: #d8d8d8; }
 
-  .wf__main { padding: 11px; display: grid; gap: 9px; }
-
-  /* text stand-ins */
-  .bar { height: 7px; background: var(--fill); }
-  .bar + .bar { margin-top: 4px; }
-  .bar--d { background: var(--fill-2); }
-  .bar--t { height: 5px; }
-  .lines { display: grid; gap: 4px; }
-
-  .hd { display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; flex-wrap: wrap; }
-  .hd h4 { margin: 0 0 4px; font-size: 14px; font-weight: 600; }
-
-  .lbl { font-family: var(--f-mono); font-size: 9px; letter-spacing: .1em; text-transform: uppercase; color: var(--ink-3); }
-  .mono { font-family: var(--f-mono); font-size: 11px; color: var(--ink-2); }
-
-  .btnw {
-    display: inline-flex; align-items: center; justify-content: center;
-    border: 1px solid var(--rule-2); padding: 6px 11px;
-    font-size: 10.5px; color: var(--ink-2); background: var(--paper); white-space: nowrap;
+  /* ---------------- screen content ---------------- */
+  .appbar {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 9px 10px; background: #c9c9c9; border-bottom: 1px solid #999999;
   }
-  .btnw--solid { background: var(--solid); border-color: var(--solid); color: #fff; }
-  .btnw--big { padding: 11px 15px; }
+  .burger { width: 20px; display: grid; gap: 3px; }
+  .burger i { height: 3px; background: #111111; display: block; }
+  .avatar { width: 18px; height: 18px; border-radius: 50%; background: #8f8f8f; }
+  .appbar .ttl { font-weight: bold; }
 
-  .fieldw { display: grid; gap: 3px; min-width: 0; }
-  .fieldw .box { height: 26px; border: 1px solid var(--rule-2); background: var(--paper); }
-  .fieldw .box--tall { height: 44px; }
-  .fieldw .box--select { position: relative; }
-  .fieldw .box--select::after {
-    content: "▾"; position: absolute; right: 7px; top: 50%; transform: translateY(-50%);
-    font-size: 9px; color: var(--ink-3);
-  }
+  .ptitle { padding: 7px 10px; font-weight: bold; border-bottom: 1px solid #999999; background: #d8d8d8; }
+  .body { padding: 10px; display: flex; flex-direction: column; gap: 9px; }
 
-  .cardw { border: 1px solid var(--rule); padding: 9px; background: var(--paper); min-width: 0; }
-  .cardw > .lbl:first-child { display: block; margin-bottom: 7px; }
+  .card { background: #ffffff; border: 1px solid #999999; padding: 9px; display: flex; flex-direction: column; gap: 8px; }
+  .card > .h { font-weight: bold; }
 
-  .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
-  .grid3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
-  .grid4 { display: grid; grid-template-columns: repeat(4, 1fr); gap: 7px; }
-  .grid6 { display: grid; grid-template-columns: repeat(6, 1fr); gap: 7px; }
-  .split { display: grid; grid-template-columns: 1.1fr .9fr; gap: 9px; align-items: start; }
-  .split--wide { grid-template-columns: 1.55fr 1fr; }
-  .flex { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
-  .flex--end { justify-content: flex-end; }
-  .stack { display: grid; gap: 6px; }
+  .fld { border: 1px solid #999999; background: #ffffff; padding: 8px 9px; color: #777777; }
+  .fld.tall { padding-bottom: 30px; }
+  .fld.drop { position: relative; }
+  .fld.drop::after { content: "▾"; position: absolute; right: 9px; top: 7px; color: #777777; }
 
-  .tile { border: 1px solid var(--rule); padding: 7px 8px; background: var(--paper); }
-  .tile .n { font-size: 18px; font-weight: 700; line-height: 1.1; font-variant-numeric: tabular-nums; }
+  .btn { background: #b3b3b3; border: 1px solid #8a8a8a; padding: 9px 10px; text-align: center; }
+  .btn.dark { background: #6e6e6e; color: #ffffff; border-color: #4f4f4f; }
+  .btns { display: flex; flex-direction: column; gap: 9px; }
 
-  .rows { border: 1px solid var(--rule); }
-  .rows > .r { display: flex; align-items: center; gap: 8px; padding: 8px 9px; border-bottom: 1px solid var(--rule); min-height: 34px; }
-  .rows > .r:last-child { border-bottom: 0; }
-  .rows > .r > .grow { flex: 1; min-width: 0; }
-  .rows > .rhead {
-    background: var(--sheet); min-height: 0; padding: 5px 9px;
-    font-family: var(--f-mono); font-size: 9px; letter-spacing: .1em; text-transform: uppercase; color: var(--ink-3);
-  }
+  .tbl { border: 1px solid #999999; background: #ffffff; }
+  .tbl > div { display: flex; border-top: 1px solid #999999; }
+  .tbl > div:first-child { border-top: 0; }
+  .tbl > div > span { flex: 1; padding: 6px 8px; border-left: 1px solid #999999; min-width: 0; }
+  .tbl > div > span:first-child { border-left: 0; }
+  .tbl .hd { background: #c9c9c9; font-weight: bold; }
 
-  .pill {
-    font-family: var(--f-mono); font-size: 9px; letter-spacing: .05em; text-transform: uppercase;
-    border: 1px solid var(--rule-2); color: var(--ink-2); background: var(--paper);
-    padding: 2px 7px; white-space: nowrap;
-  }
-  .pill--fill { background: var(--fill-2); border-color: var(--fill-2); color: var(--ink); }
-  .pill--blank { width: 42px; height: 16px; display: inline-block; }
+  .txt { display: block; height: 7px; background: #c8c8c8; }
+  .tbl span > .txt { margin: 4px 0; }
 
-  .banner { border: 1px solid var(--rule-2); border-left-width: 3px; background: var(--sheet); padding: 8px 9px; }
-  .empty { border: 1px dashed var(--rule-2); padding: 15px; background: var(--paper); display: grid; place-items: center; }
+  .stat { background: #ffffff; border: 1px solid #999999; padding: 10px 8px; text-align: center; }
+  .stat b { display: block; font-size: 22px; line-height: 1.1; }
+  .stat span { color: #666666; font-size: 11px; }
 
-  .qr {
-    width: 80px; height: 80px; flex: none; border: 1px solid var(--ink-2);
-    background-image:
-      linear-gradient(45deg, var(--fill-2) 25%, transparent 25%, transparent 75%, var(--fill-2) 75%),
-      linear-gradient(45deg, var(--fill-2) 25%, transparent 25%, transparent 75%, var(--fill-2) 75%);
-    background-size: 14px 14px; background-position: 0 0, 7px 7px;
-  }
-  .qr--sm { width: 54px; height: 54px; background-size: 10px 10px; background-position: 0 0, 5px 5px; }
+  .ph { background: #c8c8c8; border: 1px solid #999999; display: flex; align-items: center; justify-content: center; }
+  .ph svg { width: 44px; height: 36px; }
 
-  .cam { border: 1px solid var(--ink-2); background: var(--fill); height: 142px; display: grid; place-items: center; }
-  .cam .reticle { width: 90px; height: 90px; border: 2px solid var(--ink-2); }
+  .r2 { display: grid; grid-template-columns: 1fr 1fr; gap: 9px; }
+  .r3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 9px; }
+  .r4 { display: grid; grid-template-columns: repeat(4, 1fr); gap: 9px; }
+  .chk { display: flex; align-items: center; gap: 8px; }
+  .chk i { width: 15px; height: 15px; border: 1px solid #111111; background: #ffffff; flex: none; }
 
-  .chart { height: 58px; border-left: 1px solid var(--rule-2); border-bottom: 1px solid var(--rule-2); display: flex; align-items: flex-end; gap: 3px; padding: 0 3px 0 4px; }
-  .chart i { flex: 1; background: var(--fill-2); display: block; }
+  .cols { display: flex; min-height: 300px; }
+  .nav { width: 150px; flex: none; background: #c9c9c9; border-right: 1px solid #999999; padding: 9px 8px; display: flex; flex-direction: column; gap: 3px; }
+  .nav .brand { display: flex; align-items: center; gap: 6px; font-weight: bold; margin-bottom: 7px; }
+  .nav .brand i { width: 16px; height: 16px; background: #8f8f8f; border-radius: 50%; flex: none; }
+  .nav a { display: flex; align-items: center; gap: 6px; padding: 5px 6px; color: #111111; text-decoration: none; }
+  .nav a i { width: 11px; height: 11px; border: 1px solid #555555; background: #ffffff; flex: none; }
+  .nav a.on { background: #ffffff; border: 1px solid #999999; font-weight: bold; }
+  .main { flex: 1; min-width: 0; padding: 10px; display: flex; flex-direction: column; gap: 9px; }
 
-  .check { border: 1px solid var(--ink-2); width: 15px; height: 15px; flex: none; }
-
-  .key, .map { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 9px; }
-  .key > div, .map section { border: 1px solid var(--rule); background: var(--paper); padding: 10px 11px; }
-  .key .lbl { display: block; margin-bottom: 7px; }
-  .map h3 { margin: 0 0 6px; font-family: var(--f-mono); font-size: 10px; letter-spacing: .12em; text-transform: uppercase; color: var(--ink-3); }
-  .map ul { margin: 0; padding: 0; list-style: none; display: grid; gap: 3px; }
-  .map li { font-family: var(--f-mono); font-size: 11px; color: var(--ink-2); }
-
-  a { color: var(--ink); }
-  a:focus-visible { outline: 2px solid var(--ink); outline-offset: 2px; }
-
-  @media (max-width: 700px) {
-    .sheet { padding: 0 12px 56px; }
-    .split, .split--wide { grid-template-columns: 1fr; }
-  }
+  @media print { figure { break-inside: avoid; } .page { padding: 0; } .scroll { overflow: visible; } }
 </style>
+</head>
+<body>
+<div class="page">
 
-<div class="sheet">
+<h1>4.2 Interface design &mdash; wireframe</h1>
+<p class="lead">Wireframes for the SMKBBSP VisitorPass system. The visitor and teacher pages are shown in mobile view, the security guard pages in tablet view, and the administrator pages in laptop view, because that is the device each user actually works on.</p>
 
-  <header class="top">
-    <h1>VisitorPass wireframes</h1>
-    <span>22 screens</span>
-  </header>
+<!-- ==================================================== VISITOR -->
+<h2>4.2.1 Visitor (Mobile View)</h2>
+<p class="lead">The visitor has no account. These pages are opened on a phone.</p>
 
-  <h2 class="group">Key</h2>
-  <div class="key">
-    <div><span class="lbl">Text</span><div class="lines"><div class="bar"></div><div class="bar" style="width:70%"></div></div></div>
-    <div><span class="lbl">Buttons</span><div class="flex"><span class="btnw btnw--solid">Primary</span><span class="btnw">Secondary</span></div></div>
-    <div><span class="lbl">Input</span><div class="fieldw"><div class="box"></div></div></div>
-    <div><span class="lbl">Empty</span><div class="empty" style="padding:8px"><div class="bar" style="width:60%"></div></div></div>
-  </div>
+<figure>
+  <div class="scroll"><div class="wrap">
+    <div class="phone">
+      <div class="speaker"></div>
+      <div class="screen">
+        <div class="appbar"><span class="ttl">VisitorPass</span><span class="avatar"></span></div>
+        <div class="body">
+          <div class="ph anch" style="height:70px">
+            <span class="note l">School logo</span>
+            <svg viewBox="0 0 48 40" aria-hidden="true"><rect x="1" y="1" width="46" height="38" fill="none" stroke="#777"/><circle cx="16" cy="13" r="4" fill="#777"/><polygon points="6,33 19,18 28,27 36,20 43,33" fill="#777"/></svg>
+          </div>
+          <div class="card">
+            <span class="h">Welcome to SMKBBSP</span>
+            <span class="txt"></span>
+            <span class="txt" style="width:70%"></span>
+          </div>
+          <div class="btns anch">
+            <span class="note r">Main menu buttons</span>
+            <div class="btn dark">Request a Visit</div>
+            <div class="btn">Check My Request</div>
+            <div class="btn">Staff Login</div>
+          </div>
+          <div class="card">
+            <span class="h">Visiting Hours</span>
+            <span class="txt" style="width:60%"></span>
+          </div>
+        </div>
+        <div class="home"></div>
+      </div>
+    </div>
+  </div></div>
+  <figcaption><b>Figure 4.1</b> Home page (Mobile View). This is the first page a visitor sees. From here the visitor can request a visit, check an existing request, or go to the staff login page.</figcaption>
+</figure>
 
-  <h2 class="group">Screen map</h2>
-  <div class="map">
-    <section>
-      <h3>Visitor</h3>
-      <ul><li>/</li><li>/visit/request</li><li>/visit/request/success</li><li>/v/[token]</li><li>/login</li></ul>
-    </section>
-    <section>
-      <h3>Guard</h3>
-      <ul><li>/guard</li><li>/guard/scan</li><li>/guard/visits/[id]</li><li>/guard/walk-in</li><li>/guard/active</li><li>/guard/emergency</li><li>/guard/badge/[id]</li></ul>
-    </section>
-    <section>
-      <h3>Teacher</h3>
-      <ul><li>/teacher</li><li>/teacher/requests</li><li>/teacher/requests/[id]</li><li>/teacher/visits</li></ul>
-    </section>
-    <section>
-      <h3>Admin</h3>
-      <ul><li>/admin</li><li>/admin/appointments</li><li>/admin/visits</li><li>/admin/reports</li><li>/admin/blacklist</li><li>/admin/users</li><li>/admin/destinations</li><li>/admin/audit</li><li>/admin/settings</li></ul>
-    </section>
-  </div>
+<figure>
+  <div class="scroll"><div class="wrap">
+    <div class="phone">
+      <div class="speaker"></div>
+      <div class="screen">
+        <div class="appbar"><span class="burger"><i></i><i></i><i></i></span><span class="avatar"></span></div>
+        <div class="ptitle">Request a Visit</div>
+        <div class="body">
+          <div class="card anch">
+            <span class="note l">Visitor details</span>
+            <span class="h">Your Details</span>
+            <div class="fld">Full Name</div>
+            <div class="fld">Phone Number</div>
+            <div class="fld">IC Number</div>
+          </div>
+          <div class="card anch">
+            <span class="note r">Visit details</span>
+            <span class="h">Visit Details</span>
+            <div class="fld drop">Teacher to Meet</div>
+            <div class="r2">
+              <div class="fld">Date</div>
+              <div class="fld">Time</div>
+            </div>
+            <div class="fld tall">Reason for Visit</div>
+          </div>
+          <div class="chk anch">
+            <span class="note l">Consent checkbox</span>
+            <i></i> I agree to the use of my data
+          </div>
+          <div class="btn dark">Submit Request</div>
+        </div>
+        <div class="home"></div>
+      </div>
+    </div>
+  </div></div>
+  <figcaption><b>Figure 4.2</b> Request a Visit page (Mobile View). The visitor fills in personal details and visit details, agrees to the use of the data, and submits the request to the teacher.</figcaption>
+</figure>
 
-  <!-- ============ VISITOR ============ -->
-  <h2 class="group">Visitor</h2>
+<figure>
+  <div class="scroll"><div class="wrap">
+    <div class="phone">
+      <div class="speaker"></div>
+      <div class="screen">
+        <div class="appbar"><span class="burger"><i></i><i></i><i></i></span><span class="avatar"></span></div>
+        <div class="ptitle">My Visitor Pass</div>
+        <div class="body">
+          <!-- The callout anchors to the card, not to the QR box inside it. The
+               QR box is centred and only 140px wide, so anchoring there would
+               leave the callout sitting on top of the phone's own frame. -->
+          <div class="card anch" style="align-items:center">
+            <span class="note l">QR code pass</span>
+            <span class="h">Request Approved</span>
+            <div class="ph" style="width:140px;height:140px">
+              <svg viewBox="0 0 48 40" aria-hidden="true"><rect x="1" y="1" width="46" height="38" fill="none" stroke="#777"/><rect x="7" y="7" width="12" height="12" fill="#777"/><rect x="29" y="7" width="12" height="12" fill="#777"/><rect x="7" y="25" width="12" height="8" fill="#777"/><rect x="29" y="25" width="5" height="5" fill="#777"/></svg>
+            </div>
+            <span>Backup Code : 4821</span>
+          </div>
+          <div class="tbl anch">
+            <span class="note r">Visit details</span>
+            <div><span>Teacher</span><span><i class="txt"></i></span></div>
+            <div><span>Date</span><span><i class="txt"></i></span></div>
+            <div><span>Time</span><span><i class="txt"></i></span></div>
+            <div><span>Place</span><span><i class="txt"></i></span></div>
+          </div>
+          <div class="btn">Save My Link</div>
+          <div class="btn">Cancel Visit</div>
+        </div>
+        <div class="home"></div>
+      </div>
+    </div>
+  </div></div>
+  <figcaption><b>Figure 4.3</b> Visitor Pass page (Mobile View). After the teacher approves the request, the visitor shows this QR code at the school gate. The backup code is used if the QR code cannot be scanned.</figcaption>
+</figure>
 
-  <figure class="plate">
-    <div class="plate__head"><span class="no">V-01</span><h3>Home</h3><span class="route">/</span></div>
-    <div class="frame-wrap">
-      <div class="wf wf--phone">
-        <div class="wf__top"><span class="wf__logo"></span><span style="flex:1"><span class="bar" style="display:block;width:70%"></span></span><span class="pill">EN / BM</span></div>
-        <div class="wf__main">
-          <div><h4 style="margin:0 0 5px;font-size:14px">Visitor pass</h4><div class="bar" style="width:85%"></div></div>
-          <span class="btnw btnw--solid btnw--big">Request a visit</span>
-          <span class="btnw btnw--big">Find my request</span>
-          <div class="cardw">
-            <span class="lbl">How it works</span>
-            <div class="lines">
-              <div class="bar" style="width:78%"></div>
-              <div class="bar" style="width:64%"></div>
-              <div class="bar" style="width:72%"></div>
-              <div class="bar" style="width:58%"></div>
+<figure>
+  <div class="scroll"><div class="wrap">
+    <div class="phone">
+      <div class="speaker"></div>
+      <div class="screen">
+        <div class="appbar"><span class="burger"><i></i><i></i><i></i></span><span class="avatar"></span></div>
+        <div class="ptitle">Request Status</div>
+        <div class="body">
+          <div class="card anch">
+            <span class="note l">Status message</span>
+            <span class="h">Waiting for Approval</span>
+            <span class="txt"></span>
+            <span class="txt" style="width:65%"></span>
+          </div>
+          <div class="tbl anch">
+            <span class="note r">Request details</span>
+            <div><span>Reference</span><span>VP-0421</span></div>
+            <div><span>Teacher</span><span><i class="txt"></i></span></div>
+            <div><span>Date</span><span><i class="txt"></i></span></div>
+            <div><span>Status</span><span>Pending</span></div>
+          </div>
+          <div class="btn">Cancel Request</div>
+        </div>
+        <div class="home"></div>
+      </div>
+    </div>
+  </div></div>
+  <figcaption><b>Figure 4.4</b> Request Status page (Mobile View). The visitor checks whether the request is still pending, approved or rejected, and may cancel it before the visit.</figcaption>
+</figure>
+
+<!-- ==================================================== TEACHER -->
+<h2>4.2.2 Teacher (Mobile View)</h2>
+<p class="lead">The teacher approves or rejects requests, usually on a phone between classes.</p>
+
+<figure>
+  <div class="scroll"><div class="wrap">
+    <div class="phone">
+      <div class="speaker"></div>
+      <div class="screen">
+        <div class="appbar"><span class="ttl">VisitorPass</span><span class="avatar"></span></div>
+        <div class="ptitle">Staff Login</div>
+        <div class="body">
+          <div class="ph" style="height:70px">
+            <svg viewBox="0 0 48 40" aria-hidden="true"><rect x="1" y="1" width="46" height="38" fill="none" stroke="#777"/><circle cx="16" cy="13" r="4" fill="#777"/><polygon points="6,33 19,18 28,27 36,20 43,33" fill="#777"/></svg>
+          </div>
+          <div class="card anch">
+            <span class="note r">Login form</span>
+            <div class="fld">Email</div>
+            <div class="fld">Password</div>
+            <div class="btn dark">LOGIN</div>
+          </div>
+        </div>
+        <div class="home"></div>
+      </div>
+    </div>
+  </div></div>
+  <figcaption><b>Figure 4.5</b> Staff Login page (Mobile View). The teacher, security guard and administrator all sign in through this page on their own device.</figcaption>
+</figure>
+
+<figure>
+  <div class="scroll"><div class="wrap">
+    <div class="phone">
+      <div class="speaker"></div>
+      <div class="screen">
+        <div class="appbar"><span class="burger"><i></i><i></i><i></i></span><span class="avatar"></span></div>
+        <div class="ptitle">Welcome, Teacher</div>
+        <div class="body">
+          <div class="r3 anch">
+            <span class="note l">Summary boxes</span>
+            <div class="stat"><b>3</b><span>New</span></div>
+            <div class="stat"><b>2</b><span>Today</span></div>
+            <div class="stat"><b>1</b><span>On Site</span></div>
+          </div>
+          <div class="card anch">
+            <span class="note r">Pending requests</span>
+            <span class="h">Waiting for Your Decision</span>
+            <div class="tbl">
+              <div class="hd"><span>Visitor</span><span>Date</span><span></span></div>
+              <div><span><i class="txt"></i></span><span>21/08</span><span>Open</span></div>
+              <div><span><i class="txt"></i></span><span>21/08</span><span>Open</span></div>
+              <div><span><i class="txt"></i></span><span>22/08</span><span>Open</span></div>
             </div>
           </div>
-          <div class="cardw"><span class="lbl">Gate hours</span><div class="bar" style="width:50%"></div></div>
-          <div class="flex flex--end"><span class="btnw">Staff login</span></div>
+          <div class="btn">View All Requests</div>
+        </div>
+        <div class="home"></div>
+      </div>
+    </div>
+  </div></div>
+  <figcaption><b>Figure 4.6</b> Teacher Dashboard (Mobile View). The teacher sees how many requests are waiting for a decision, how many visitors are expected today, and who is already on site.</figcaption>
+</figure>
+
+<figure>
+  <div class="scroll"><div class="wrap">
+    <div class="phone">
+      <div class="speaker"></div>
+      <div class="screen">
+        <div class="appbar"><span class="burger"><i></i><i></i><i></i></span><span class="avatar"></span></div>
+        <div class="ptitle">Visit Request</div>
+        <div class="body">
+          <div class="tbl anch">
+            <span class="note l">Request details</span>
+            <div><span>Visitor</span><span><i class="txt"></i></span></div>
+            <div><span>IC</span><span>******-**-1234</span></div>
+            <div><span>Date</span><span><i class="txt"></i></span></div>
+            <div><span>Time</span><span><i class="txt"></i></span></div>
+            <div><span>People</span><span>2</span></div>
+            <div><span>Reason</span><span><i class="txt"></i></span></div>
+          </div>
+          <div class="card">
+            <span class="h">Note to Visitor</span>
+            <div class="fld tall">Optional message</div>
+          </div>
+          <div class="btns anch">
+            <span class="note r">Approve or reject</span>
+            <div class="btn dark">Approve</div>
+            <div class="btn">Reject</div>
+          </div>
+        </div>
+        <div class="home"></div>
+      </div>
+    </div>
+  </div></div>
+  <figcaption><b>Figure 4.7</b> Visit Request page (Mobile View). The teacher reads the request and approves or rejects it. The IC number is masked so the full number is never shown.</figcaption>
+</figure>
+
+<!-- ==================================================== GUARD -->
+<h2>4.2.3 Security Guard (Tablet View)</h2>
+<p class="lead">The guard works at the gate on a tablet, so the buttons are large and the lists are easy to read.</p>
+
+<figure>
+  <div class="scroll"><div class="wrap">
+    <div class="tablet">
+      <div class="cam"></div>
+      <div class="screen">
+        <div class="appbar"><span class="ttl">VisitorPass &mdash; Gate</span><span class="avatar"></span></div>
+        <div class="ptitle">Today at the Gate</div>
+        <div class="body">
+          <div class="r3 anch">
+            <span class="note l">Daily totals</span>
+            <div class="stat"><b>14</b><span>Expected</span></div>
+            <div class="stat"><b>6</b><span>On Site</span></div>
+            <div class="stat"><b>2</b><span>Overdue</span></div>
+          </div>
+          <div class="r2 anch">
+            <span class="note r">Main actions</span>
+            <div class="btn dark">Scan Pass</div>
+            <div class="btn">Register Walk-In</div>
+          </div>
+          <div class="fld">Search Visitor Name or Badge</div>
+          <div class="tbl anch">
+            <span class="note l">Expected visitors</span>
+            <div class="hd"><span>Time</span><span>Visitor</span><span>Teacher</span><span>Status</span></div>
+            <div><span>09:30</span><span><i class="txt"></i></span><span><i class="txt"></i></span><span>Expected</span></div>
+            <div><span>10:00</span><span><i class="txt"></i></span><span><i class="txt"></i></span><span>Expected</span></div>
+            <div><span>11:15</span><span><i class="txt"></i></span><span><i class="txt"></i></span><span>On Site</span></div>
+            <div><span>13:00</span><span><i class="txt"></i></span><span><i class="txt"></i></span><span>Expected</span></div>
+          </div>
         </div>
       </div>
     </div>
-  </figure>
+  </div></div>
+  <figcaption><b>Figure 4.8</b> Today at the Gate (Tablet View). The main page for the security guard. It shows the daily totals, the list of expected visitors, and the buttons to scan a pass or register a walk-in.</figcaption>
+</figure>
 
-  <figure class="plate">
-    <div class="plate__head"><span class="no">V-02</span><h3>Appointment request</h3><span class="route">/visit/request</span></div>
-    <div class="frame-wrap">
-      <div class="wf">
-        <div class="wf__top"><span class="wf__logo"></span><span style="flex:1"><span class="bar" style="display:block;width:30%"></span></span><span class="pill">EN / BM</span></div>
-        <div class="wf__main">
-          <div><h4 style="margin:0 0 5px;font-size:14px">Request a visit</h4><div class="bar" style="width:45%"></div></div>
-
-          <div class="cardw">
-            <span class="lbl">About you</span>
-            <div class="stack">
-              <div class="fieldw"><span class="lbl">Full name</span><div class="box"></div></div>
-              <div class="grid2">
-                <div class="fieldw"><span class="lbl">Email</span><div class="box"></div></div>
-                <div class="fieldw"><span class="lbl">Phone</span><div class="box"></div></div>
-              </div>
-              <div class="grid2">
-                <div class="fieldw"><span class="lbl">ID type</span><div class="box box--select"></div></div>
-                <div class="fieldw"><span class="lbl">ID number</span><div class="box"></div></div>
-              </div>
-              <div class="fieldw"><span class="lbl">Visiting as</span><div class="box box--select"></div></div>
-              <div class="flex"><span class="btnw">Scan IC</span><div class="bar" style="width:34%"></div></div>
+<figure>
+  <div class="scroll"><div class="wrap">
+    <div class="tablet">
+      <div class="cam"></div>
+      <div class="screen">
+        <div class="appbar"><span class="ttl">VisitorPass &mdash; Gate</span><span class="avatar"></span></div>
+        <div class="ptitle">Scan Visitor Pass</div>
+        <div class="body">
+          <div class="r2">
+            <div class="ph anch" style="height:170px">
+              <span class="note l">Camera scanner</span>
+              <svg viewBox="0 0 48 40" aria-hidden="true"><rect x="1" y="1" width="46" height="38" fill="none" stroke="#777"/><circle cx="24" cy="20" r="9" fill="none" stroke="#777" stroke-width="3"/><rect x="18" y="4" width="12" height="5" fill="#777"/></svg>
             </div>
-          </div>
-
-          <div class="cardw">
-            <span class="lbl">The visit</span>
-            <div class="stack">
-              <div class="fieldw"><span class="lbl">Teacher</span><div class="box box--select"></div></div>
-              <div class="grid2">
-                <div class="fieldw"><span class="lbl">Visit type</span><div class="box box--select"></div></div>
-                <div class="fieldw"><span class="lbl">Destination</span><div class="box box--select"></div></div>
-              </div>
-              <div class="grid2">
-                <div class="fieldw"><span class="lbl">Date</span><div class="box"></div></div>
-                <div class="fieldw"><span class="lbl">Time</span><div class="box"></div></div>
-              </div>
-              <div class="fieldw"><span class="lbl">Reason</span><div class="box box--tall"></div></div>
-              <div class="grid2">
-                <div class="fieldw"><span class="lbl">People</span><div class="box"></div></div>
-                <div class="fieldw"><span class="lbl">Vehicle</span><div class="box"></div></div>
-              </div>
-            </div>
-          </div>
-
-          <div class="cardw">
-            <span class="lbl">Others attending</span>
-            <div class="grid4">
-              <div class="fieldw"><span class="lbl">Name</span><div class="box"></div></div>
-              <div class="fieldw"><span class="lbl">Relationship</span><div class="box"></div></div>
-              <div class="fieldw"><span class="lbl">ID number</span><div class="box"></div></div>
-              <div class="fieldw"><span class="lbl">Phone</span><div class="box"></div></div>
-            </div>
-            <div class="flex" style="margin-top:7px"><span class="btnw">+ Add person</span></div>
-          </div>
-
-          <div class="flex"><span class="check"></span><div class="bar" style="flex:1"></div></div>
-
-          <div class="flex flex--end"><span class="btnw">Cancel</span><span class="btnw btnw--solid">Submit</span></div>
-        </div>
-      </div>
-    </div>
-  </figure>
-
-  <figure class="plate">
-    <div class="plate__head"><span class="no">V-03</span><h3>Submitted</h3><span class="route">/visit/request/success</span></div>
-    <div class="frame-wrap">
-      <div class="wf wf--phone">
-        <div class="wf__top"><span class="wf__logo"></span><span style="flex:1"><span class="bar" style="display:block;width:55%"></span></span></div>
-        <div class="wf__main">
-          <div class="banner"><div class="bar" style="width:88%"></div></div>
-          <div class="cardw" style="text-align:center">
-            <span class="lbl">Reference number</span>
-            <div class="bar bar--d" style="width:58%;height:16px;margin:0 auto"></div>
-          </div>
-          <div class="cardw">
-            <span class="lbl">Next</span>
-            <div class="lines"><div class="bar"></div><div class="bar" style="width:76%"></div></div>
-          </div>
-          <span class="btnw">Back to home</span>
-        </div>
-      </div>
-    </div>
-  </figure>
-
-  <figure class="plate">
-    <div class="plate__head"><span class="no">V-04</span><h3>Pass and status</h3><span class="route">/v/[token]</span></div>
-    <div class="frame-wrap">
-      <div class="wf wf--phone">
-        <div class="wf__top"><span class="wf__logo"></span><span style="flex:1"><span class="bar" style="display:block;width:45%"></span></span><span class="pill pill--fill">Approved</span></div>
-        <div class="wf__main">
-          <div class="cardw" style="text-align:center">
-            <div class="qr" style="margin:0 auto"></div>
-            <div class="lbl" style="margin-top:6px">Show at the gate</div>
-            <div class="bar bar--d" style="width:62%;height:15px;margin:6px auto 0"></div>
-            <div class="bar" style="width:44%;margin:6px auto 0"></div>
-          </div>
-          <div class="cardw">
-            <div class="rows" style="border:0">
-              <div class="r" style="padding:4px 0"><span class="lbl" style="width:74px">Reference</span><span class="grow"><div class="bar" style="width:60%"></div></span></div>
-              <div class="r" style="padding:4px 0"><span class="lbl" style="width:74px">Host</span><span class="grow"><div class="bar" style="width:70%"></div></span></div>
-              <div class="r" style="padding:4px 0"><span class="lbl" style="width:74px">Destination</span><span class="grow"><div class="bar" style="width:64%"></div></span></div>
-              <div class="r" style="padding:4px 0"><span class="lbl" style="width:74px">ID</span><span class="grow"><div class="bar" style="width:48%"></div></span></div>
-              <div class="r" style="padding:4px 0;border:0"><span class="lbl" style="width:74px">People</span><span class="grow"><div class="bar" style="width:18%"></div></span></div>
-            </div>
-          </div>
-          <div class="banner"><div class="bar" style="width:80%"></div></div>
-          <div class="flex flex--end"><span class="btnw">Cancel visit</span></div>
-        </div>
-      </div>
-    </div>
-
-    <div class="grid3" style="margin-top:9px">
-      <div class="cardw"><span class="pill">Pending</span><div class="empty" style="margin-top:7px;padding:10px"><div class="bar" style="width:70%"></div></div></div>
-      <div class="cardw"><span class="pill">Rejected</span><div class="banner" style="margin-top:7px"><div class="bar" style="width:80%"></div></div></div>
-      <div class="cardw"><span class="pill">Unavailable</span><div class="empty" style="margin-top:7px;padding:10px"><div class="bar" style="width:75%"></div></div></div>
-    </div>
-  </figure>
-
-  <figure class="plate">
-    <div class="plate__head"><span class="no">V-05</span><h3>Staff login</h3><span class="route">/login</span></div>
-    <div class="frame-wrap">
-      <div class="wf wf--phone">
-        <div class="wf__top"><span class="wf__logo"></span><span style="flex:1"><span class="bar" style="display:block;width:40%"></span></span></div>
-        <div class="wf__main">
-          <div class="cardw">
-            <div class="stack">
-              <div class="fieldw"><span class="lbl">Email</span><div class="box"></div></div>
-              <div class="fieldw"><span class="lbl">Password</span><div class="box"></div></div>
-              <div class="banner"><div class="bar" style="width:72%"></div></div>
-              <span class="btnw btnw--solid btnw--big">Sign in</span>
-            </div>
-          </div>
-          <div class="bar" style="width:70%;margin:0 auto"></div>
-        </div>
-      </div>
-    </div>
-  </figure>
-
-  <!-- ============ GUARD ============ -->
-  <h2 class="group">Guard · tablet</h2>
-
-  <figure class="plate">
-    <div class="plate__head"><span class="no">G-01</span><h3>Today at the gate</h3><span class="route">/guard</span></div>
-    <div class="frame-wrap">
-      <div class="wf">
-        <div class="wf__top"><span class="wf__logo"></span><span style="flex:1"><span class="bar" style="display:block;width:24%"></span></span><span class="pill">BM</span><span class="pill">Dark</span><span class="pill pill--blank"></span></div>
-        <div class="wf__nav"><span class="on">Today</span><span>Scan</span><span>Walk-in</span><span>On site</span><span>Emergency</span></div>
-        <div class="wf__main">
-          <div class="hd">
-            <div style="flex:1"><h4>Today at the gate</h4><div class="bar" style="width:22%"></div></div>
-            <div class="flex"><span class="btnw btnw--solid btnw--big">Scan pass</span><span class="btnw btnw--big">Walk-in</span></div>
-          </div>
-
-          <div class="banner"><div class="bar" style="width:44%"></div></div>
-
-          <div class="grid3">
-            <div class="tile"><span class="lbl">Expected</span><div class="n">14</div></div>
-            <div class="tile"><span class="lbl">On site</span><div class="n">6</div></div>
-            <div class="tile"><span class="lbl">Overdue</span><div class="n">2</div></div>
-          </div>
-
-          <div class="fieldw"><span class="lbl">Search</span><div class="box"></div></div>
-
-          <div class="split">
-            <div class="rows">
-              <div class="r rhead">Expected today</div>
-              <div class="r"><span class="mono" style="width:42px">09:30</span><div class="grow"><div class="bar" style="width:62%"></div><div class="bar" style="width:44%"></div></div><span class="pill">Expected</span></div>
-              <div class="r"><span class="mono" style="width:42px">10:00</span><div class="grow"><div class="bar" style="width:56%"></div><div class="bar" style="width:38%"></div></div><span class="pill">Expected</span></div>
-              <div class="r"><span class="mono" style="width:42px">11:15</span><div class="grow"><div class="bar" style="width:60%"></div><div class="bar" style="width:40%"></div></div><span class="pill">Expected</span></div>
-              <div class="r"><span class="mono" style="width:42px">13:00</span><div class="grow"><div class="bar" style="width:52%"></div><div class="bar" style="width:34%"></div></div><span class="pill">Expected</span></div>
-            </div>
-
-            <div class="stack">
-              <div class="rows">
-                <div class="r rhead">On site</div>
-                <div class="r"><div class="grow"><div class="bar" style="width:58%"></div><div class="bar" style="width:40%"></div></div><span class="pill">In</span></div>
-                <div class="r"><div class="grow"><div class="bar" style="width:52%"></div><div class="bar" style="width:44%"></div></div><span class="pill pill--fill">Overdue</span></div>
-                <div class="r"><div class="grow"><div class="bar" style="width:60%"></div></div><span class="pill">In</span></div>
-              </div>
-              <div class="rows">
-                <div class="r rhead">Completed today</div>
-                <div class="r"><div class="grow"><div class="bar" style="width:56%"></div></div><span class="pill">Out</span></div>
-                <div class="r"><div class="grow"><div class="bar" style="width:42%"></div></div><span class="pill">Denied</span></div>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>
-  </figure>
-
-  <figure class="plate">
-    <div class="plate__head"><span class="no">G-02</span><h3>Scan pass</h3><span class="route">/guard/scan</span></div>
-    <div class="frame-wrap">
-      <div class="wf">
-        <div class="wf__top"><span class="wf__logo"></span><span style="flex:1"><span class="bar" style="display:block;width:24%"></span></span><span class="pill pill--blank"></span></div>
-        <div class="wf__nav"><span>Today</span><span class="on">Scan</span><span>Walk-in</span><span>On site</span><span>Emergency</span></div>
-        <div class="wf__main">
-          <div><h4 style="margin:0 0 4px;font-size:14px">Scan the pass</h4><div class="bar" style="width:38%"></div></div>
-          <div class="split">
-            <div class="stack">
-              <div class="cam"><div class="reticle"></div></div>
-              <div class="flex"><span class="btnw">Switch camera</span><span class="btnw">Stop</span></div>
-            </div>
-            <div class="stack">
-              <div class="cardw">
-                <span class="lbl">Or type the code</span>
-                <div class="fieldw"><div class="box" style="height:38px"></div></div>
-                <span class="btnw btnw--solid btnw--big" style="width:100%;margin-top:7px">Look up</span>
-              </div>
-              <div class="banner"><div class="lines"><div class="bar"></div><div class="bar" style="width:62%"></div></div></div>
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>
-  </figure>
-
-  <figure class="plate">
-    <div class="plate__head"><span class="no">G-03</span><h3>Scan result · check in</h3><span class="route">/guard/visits/[id]</span></div>
-    <div class="frame-wrap">
-      <div class="wf">
-        <div class="wf__top"><span class="wf__logo"></span><span style="flex:1"><span class="bar" style="display:block;width:24%"></span></span><span class="pill pill--blank"></span></div>
-        <div class="wf__main">
-          <div class="banner"><div class="bar" style="width:52%"></div></div>
-          <div class="split--wide split">
-            <div class="cardw">
-              <span class="lbl">Visitor</span>
-              <div class="hd" style="margin-bottom:8px">
-                <div style="flex:1"><div class="bar bar--d" style="width:64%;height:13px"></div><div class="bar" style="width:44%;margin-top:5px"></div></div>
-                <span class="pill">Clear</span>
-              </div>
-              <div class="grid2">
-                <div><span class="lbl">Host</span><div class="bar" style="width:76%"></div></div>
-                <div><span class="lbl">Destination</span><div class="bar" style="width:70%"></div></div>
-                <div><span class="lbl">Purpose</span><div class="bar" style="width:82%"></div></div>
-                <div><span class="lbl">People</span><div class="bar" style="width:20%"></div></div>
-                <div><span class="lbl">Window</span><div class="bar" style="width:56%"></div></div>
-                <div><span class="lbl">Vehicle</span><div class="bar" style="width:48%"></div></div>
-              </div>
-            </div>
-            <div class="stack">
-              <div class="cardw">
-                <div class="flex"><span class="check"></span><div class="bar" style="flex:1"></div></div>
-              </div>
-              <span class="btnw btnw--solid btnw--big">Check in</span>
-              <span class="btnw btnw--big">Deny entry</span>
+            <div class="card anch">
+              <span class="note r">Backup code entry</span>
+              <span class="h">Or Type the Backup Code</span>
+              <div class="fld">Backup Code</div>
+              <div class="btn dark">Check Pass</div>
+              <span class="txt"></span>
+              <span class="txt" style="width:70%"></span>
             </div>
           </div>
         </div>
       </div>
     </div>
+  </div></div>
+  <figcaption><b>Figure 4.9</b> Scan Visitor Pass (Tablet View). The guard scans the QR code with the tablet camera. If the code cannot be read, the backup code is typed instead.</figcaption>
+</figure>
 
-    <div class="grid4" style="margin-top:9px">
-      <div class="cardw"><span class="pill">Too early</span><div class="bar" style="margin-top:6px;width:70%"></div></div>
-      <div class="cardw"><span class="pill">Expired</span><div class="bar" style="margin-top:6px;width:64%"></div></div>
-      <div class="cardw"><span class="pill">Blocked</span><div class="bar" style="margin-top:6px;width:78%"></div></div>
-      <div class="cardw"><span class="pill">Already in</span><div class="bar" style="margin-top:6px;width:60%"></div></div>
-      <div class="cardw"><span class="pill">Checked out</span><div class="bar" style="margin-top:6px;width:68%"></div></div>
-      <div class="cardw"><span class="pill">Revoked</span><div class="bar" style="margin-top:6px;width:56%"></div></div>
-      <div class="cardw"><span class="pill">Rejected</span><div class="bar" style="margin-top:6px;width:62%"></div></div>
-      <div class="cardw"><span class="pill">Not found</span><div class="bar" style="margin-top:6px;width:72%"></div></div>
-    </div>
-  </figure>
-
-  <figure class="plate">
-    <div class="plate__head"><span class="no">G-04</span><h3>Active visit · check out</h3><span class="route">/guard/visits/[id]</span></div>
-    <div class="frame-wrap">
-      <div class="wf">
-        <div class="wf__top"><span class="wf__logo"></span><span style="flex:1"><span class="bar" style="display:block;width:24%"></span></span><span class="pill pill--blank"></span></div>
-        <div class="wf__main">
-          <div class="hd">
-            <div style="flex:1"><div class="bar bar--d" style="width:42%;height:12px"></div><div class="bar" style="width:30%;margin-top:5px"></div></div>
-            <span class="pill pill--fill">Overdue</span>
-          </div>
-          <div class="split--wide split">
-            <div class="cardw">
-              <div class="rows" style="border:0">
-                <div class="r" style="padding:5px 0"><span class="lbl" style="width:96px">Host</span><span class="grow"><div class="bar" style="width:56%"></div></span></div>
-                <div class="r" style="padding:5px 0"><span class="lbl" style="width:96px">Destination</span><span class="grow"><div class="bar" style="width:50%"></div></span></div>
-                <div class="r" style="padding:5px 0"><span class="lbl" style="width:96px">Checked in</span><span class="grow"><div class="bar" style="width:62%"></div></span></div>
-                <div class="r" style="padding:5px 0"><span class="lbl" style="width:96px">Expected until</span><span class="grow"><div class="bar" style="width:26%"></div></span></div>
-                <div class="r" style="padding:5px 0"><span class="lbl" style="width:96px">ID sighted</span><span class="grow"><div class="bar" style="width:58%"></div></span></div>
-                <div class="r" style="padding:5px 0;border:0"><span class="lbl" style="width:96px">ID</span><span class="grow"><div class="bar" style="width:40%"></div></span></div>
-              </div>
+<figure>
+  <div class="scroll"><div class="wrap">
+    <div class="tablet">
+      <div class="cam"></div>
+      <div class="screen">
+        <div class="appbar"><span class="ttl">VisitorPass &mdash; Gate</span><span class="avatar"></span></div>
+        <div class="ptitle">Visitor Details</div>
+        <div class="body">
+          <div class="card"><span class="h">Pass Valid &mdash; Blacklist Clear</span></div>
+          <div class="r2">
+            <div class="tbl anch">
+              <span class="note l">Visitor information</span>
+              <div><span>Name</span><span><i class="txt"></i></span></div>
+              <div><span>IC</span><span>******-**-1234</span></div>
+              <div><span>Teacher</span><span><i class="txt"></i></span></div>
+              <div><span>Place</span><span><i class="txt"></i></span></div>
+              <div><span>People</span><span>2</span></div>
             </div>
-            <div class="stack">
-              <span class="btnw btnw--solid btnw--big">Check out</span>
-              <span class="btnw btnw--big">Reprint badge</span>
-              <div class="cardw">
-                <span class="lbl">Events</span>
-                <div class="lines">
-                  <div class="bar" style="width:70%"></div>
-                  <div class="bar" style="width:64%"></div>
-                  <div class="bar" style="width:74%"></div>
-                  <div class="bar" style="width:60%"></div>
+            <div class="card anch">
+              <span class="note r">Check in or deny</span>
+              <span class="h">Confirm Entry</span>
+              <div class="chk"><i></i> I have seen the visitor's IC</div>
+              <div class="btn dark">Check In</div>
+              <div class="btn">Deny Entry</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div></div>
+  <figcaption><b>Figure 4.10</b> Visitor Details (Tablet View). After a valid scan the guard sees the visitor information and the blacklist result, confirms the IC was seen, then checks the visitor in or denies entry.</figcaption>
+</figure>
+
+<figure>
+  <div class="scroll"><div class="wrap">
+    <div class="tablet">
+      <div class="cam"></div>
+      <div class="screen">
+        <div class="appbar"><span class="ttl">VisitorPass &mdash; Gate</span><span class="avatar"></span></div>
+        <div class="ptitle">Walk-In Registration</div>
+        <div class="body">
+          <div class="r2">
+            <div class="card anch">
+              <span class="note l">Visitor details</span>
+              <span class="h">Visitor</span>
+              <div class="fld">Full Name</div>
+              <div class="fld">Phone Number</div>
+              <div class="fld">IC Number</div>
+            </div>
+            <div class="card anch">
+              <span class="note r">Visit details</span>
+              <span class="h">Visit</span>
+              <div class="fld drop">Teacher to Meet</div>
+              <div class="fld drop">Place</div>
+              <div class="fld tall">Reason for Visit</div>
+            </div>
+          </div>
+          <div class="chk anch">
+            <span class="note l">IC confirmation</span>
+            <i></i> I have seen the visitor's IC
+          </div>
+          <div class="btn dark">Register and Check In</div>
+        </div>
+      </div>
+    </div>
+  </div></div>
+  <figcaption><b>Figure 4.11</b> Walk-In Registration (Tablet View). For a visitor who arrives without an appointment. The guard records the details and checks the visitor in at the same time.</figcaption>
+</figure>
+
+<figure>
+  <div class="scroll"><div class="wrap">
+    <div class="tablet">
+      <div class="cam"></div>
+      <div class="screen">
+        <div class="appbar"><span class="ttl">VisitorPass &mdash; Gate</span><span class="avatar"></span></div>
+        <div class="ptitle">Visitors On Site</div>
+        <div class="body">
+          <div class="tbl anch">
+            <span class="note l">Visitors inside the school</span>
+            <div class="hd"><span>Badge</span><span>Visitor</span><span>Teacher</span><span>Time In</span><span>Action</span></div>
+            <div><span>V-0412</span><span><i class="txt"></i></span><span><i class="txt"></i></span><span>08:52</span><span>Check Out</span></div>
+            <div><span>V-0413</span><span><i class="txt"></i></span><span><i class="txt"></i></span><span>09:34</span><span>Check Out</span></div>
+            <div><span>V-0414</span><span><i class="txt"></i></span><span><i class="txt"></i></span><span>10:05</span><span>Check Out</span></div>
+            <div><span>V-0415</span><span><i class="txt"></i></span><span><i class="txt"></i></span><span>10:22</span><span>Check Out</span></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div></div>
+  <figcaption><b>Figure 4.12</b> Visitors On Site (Tablet View). Shows everyone currently inside the school. The guard checks out a visitor when the visit has finished.</figcaption>
+</figure>
+
+<figure>
+  <div class="scroll"><div class="wrap">
+    <div class="tablet">
+      <div class="cam"></div>
+      <div class="screen">
+        <div class="appbar"><span class="ttl">VisitorPass &mdash; Gate</span><span class="avatar"></span></div>
+        <div class="ptitle">Emergency List</div>
+        <div class="body">
+          <div class="r3 anch">
+            <span class="note l">People inside</span>
+            <div class="stat"><b>6</b><span>Visits</span></div>
+            <div class="stat"><b>9</b><span>People</span></div>
+            <div class="stat"><b>2</b><span>Overdue</span></div>
+          </div>
+          <div class="tbl">
+            <div class="hd"><span>Badge</span><span>Name</span><span>People</span><span>Teacher</span><span>Place</span></div>
+            <div><span>V-0412</span><span><i class="txt"></i></span><span>1</span><span><i class="txt"></i></span><span><i class="txt"></i></span></div>
+            <div><span>V-0413</span><span><i class="txt"></i></span><span>2</span><span><i class="txt"></i></span><span><i class="txt"></i></span></div>
+            <div><span>V-0414</span><span><i class="txt"></i></span><span>1</span><span><i class="txt"></i></span><span><i class="txt"></i></span></div>
+          </div>
+          <div class="btn dark anch">
+            <span class="note r">Print for the fire drill</span>
+            Print List
+          </div>
+        </div>
+      </div>
+    </div>
+  </div></div>
+  <figcaption><b>Figure 4.13</b> Emergency List (Tablet View). During a fire drill or an emergency this page is printed so the school knows exactly who is still inside.</figcaption>
+</figure>
+
+<!-- ==================================================== ADMIN -->
+<h2>4.2.4 Administrator (Laptop View)</h2>
+<p class="lead">The administrator uses a laptop in the office, so these pages use a side menu and wider tables.</p>
+
+<figure>
+  <div class="scroll"><div class="wrap">
+    <div class="laptop">
+      <div class="lid">
+        <div class="chrome"><i></i><i></i><i></i><u></u></div>
+        <div class="screen">
+          <div class="cols">
+            <div class="nav anch">
+              <span class="note l">Side menu</span>
+              <span class="brand"><i></i> VisitorPass</span>
+              <a href="#" class="on"><i></i> Dashboard</a>
+              <a href="#"><i></i> Appointments</a>
+              <a href="#"><i></i> Visit Records</a>
+              <a href="#"><i></i> Reports</a>
+              <a href="#"><i></i> Blacklist</a>
+              <a href="#"><i></i> Users</a>
+              <a href="#"><i></i> Audit Log</a>
+              <a href="#"><i></i> Settings</a>
+            </div>
+            <div class="main">
+              <div class="appbar" style="border:1px solid #999999"><span class="ttl">Dashboard</span><span class="avatar"></span></div>
+              <div class="r4 anch">
+                <span class="note r">Summary boxes</span>
+                <div class="stat"><b>14</b><span>Expected</span></div>
+                <div class="stat"><b>6</b><span>On Site</span></div>
+                <div class="stat"><b>5</b><span>Pending</span></div>
+                <div class="stat"><b>2</b><span>Overdue</span></div>
+              </div>
+              <div class="r2 anch">
+                <span class="note r">Activity graphs</span>
+                <div class="card"><span class="h">Visitors Per Day</span>
+                  <div class="ph" style="height:92px"><svg viewBox="0 0 48 40" aria-hidden="true"><polyline points="3,34 12,22 21,27 30,12 42,18" fill="none" stroke="#777" stroke-width="3"/></svg></div>
+                </div>
+                <div class="card"><span class="h">Busy Hours</span>
+                  <div class="ph" style="height:92px"><svg viewBox="0 0 48 40" aria-hidden="true"><rect x="5" y="22" width="7" height="14" fill="#777"/><rect x="16" y="12" width="7" height="24" fill="#777"/><rect x="27" y="18" width="7" height="18" fill="#777"/><rect x="38" y="27" width="7" height="9" fill="#777"/></svg></div>
+                </div>
+              </div>
+              <div class="card">
+                <span class="h">Recent Visits</span>
+                <div class="tbl">
+                  <div class="hd"><span>Badge</span><span>Visitor</span><span>Teacher</span><span>Date</span><span>Status</span></div>
+                  <div><span>V-0413</span><span><i class="txt"></i></span><span><i class="txt"></i></span><span>18/08</span><span>Out</span></div>
+                  <div><span>V-0412</span><span><i class="txt"></i></span><span><i class="txt"></i></span><span>18/08</span><span>In</span></div>
                 </div>
               </div>
             </div>
           </div>
         </div>
       </div>
+      <div class="base"></div>
     </div>
-  </figure>
+  </div></div>
+  <figcaption><b>Figure 4.14</b> Admin Dashboard (Laptop View). Shows the daily totals, the graphs of visitor activity, and the most recent visits. The side menu opens every other administrator page.</figcaption>
+</figure>
 
-  <figure class="plate">
-    <div class="plate__head"><span class="no">G-05</span><h3>Walk-in registration</h3><span class="route">/guard/walk-in</span></div>
-    <div class="frame-wrap">
-      <div class="wf">
-        <div class="wf__top"><span class="wf__logo"></span><span style="flex:1"><span class="bar" style="display:block;width:24%"></span></span><span class="pill">BM</span></div>
-        <div class="wf__nav"><span>Today</span><span>Scan</span><span class="on">Walk-in</span><span>On site</span><span>Emergency</span></div>
-        <div class="wf__main">
-          <div><h4 style="margin:0 0 4px;font-size:14px">Register a walk-in</h4><div class="bar" style="width:34%"></div></div>
-          <div class="split">
-            <div class="cardw">
-              <span class="lbl">Visitor</span>
-              <div class="stack">
-                <div class="fieldw"><span class="lbl">Name</span><div class="box" style="height:34px"></div></div>
-                <div class="grid2">
-                  <div class="fieldw"><span class="lbl">Phone</span><div class="box" style="height:34px"></div></div>
-                  <div class="fieldw"><span class="lbl">Email</span><div class="box" style="height:34px"></div></div>
-                </div>
-                <div class="grid2">
-                  <div class="fieldw"><span class="lbl">ID type</span><div class="box box--select" style="height:34px"></div></div>
-                  <div class="fieldw"><span class="lbl">ID number</span><div class="box" style="height:34px"></div></div>
-                </div>
-                <div class="fieldw"><span class="lbl">Category</span><div class="box box--select" style="height:34px"></div></div>
-              </div>
+<figure>
+  <div class="scroll"><div class="wrap">
+    <div class="laptop">
+      <div class="lid">
+        <div class="chrome"><i></i><i></i><i></i><u></u></div>
+        <div class="screen">
+          <div class="cols">
+            <div class="nav">
+              <span class="brand"><i></i> VisitorPass</span>
+              <a href="#"><i></i> Dashboard</a>
+              <a href="#"><i></i> Appointments</a>
+              <a href="#" class="on"><i></i> Visit Records</a>
+              <a href="#"><i></i> Reports</a>
+              <a href="#"><i></i> Blacklist</a>
+              <a href="#"><i></i> Users</a>
+              <a href="#"><i></i> Audit Log</a>
+              <a href="#"><i></i> Settings</a>
             </div>
-            <div class="cardw">
-              <span class="lbl">Visit</span>
-              <div class="stack">
-                <div class="fieldw"><span class="lbl">Host</span><div class="box box--select" style="height:34px"></div></div>
-                <div class="grid2">
-                  <div class="fieldw"><span class="lbl">Visit type</span><div class="box box--select" style="height:34px"></div></div>
-                  <div class="fieldw"><span class="lbl">Destination</span><div class="box box--select" style="height:34px"></div></div>
-                </div>
-                <div class="fieldw"><span class="lbl">Purpose</span><div class="box box--tall"></div></div>
-                <div class="grid2">
-                  <div class="fieldw"><span class="lbl">People</span><div class="box" style="height:34px"></div></div>
-                  <div class="fieldw"><span class="lbl">Duration</span><div class="box" style="height:34px"></div></div>
-                </div>
+            <div class="main">
+              <div class="appbar" style="border:1px solid #999999"><span class="ttl">Visit Records</span><span class="avatar"></span></div>
+              <div class="r4 anch">
+                <span class="note r">Search and filter</span>
+                <div class="fld">Search Name</div>
+                <div class="fld drop">Status</div>
+                <div class="fld">From Date</div>
+                <div class="fld">To Date</div>
               </div>
-            </div>
-          </div>
-          <div class="cardw"><div class="flex"><span class="check"></span><div class="bar" style="flex:1"></div></div></div>
-          <div class="flex flex--end"><span class="btnw btnw--big">Cancel</span><span class="btnw btnw--solid btnw--big">Register and check in</span></div>
-        </div>
-      </div>
-    </div>
-  </figure>
-
-  <figure class="plate">
-    <div class="plate__head"><span class="no">G-06</span><h3>On site now</h3><span class="route">/guard/active</span></div>
-    <div class="frame-wrap">
-      <div class="wf">
-        <div class="wf__top"><span class="wf__logo"></span><span style="flex:1"><span class="bar" style="display:block;width:24%"></span></span><span class="pill pill--blank"></span></div>
-        <div class="wf__nav"><span>Today</span><span>Scan</span><span>Walk-in</span><span class="on">On site</span><span>Emergency</span></div>
-        <div class="wf__main">
-          <div class="hd">
-            <div style="flex:1"><h4>On site now</h4><div class="bar" style="width:20%"></div></div>
-            <div class="flex"><span class="btnw">Print list</span><span class="btnw">Emergency view</span></div>
-          </div>
-          <div class="rows">
-            <div class="r rhead"><span style="width:52px">Badge</span><span class="grow">Visitor</span><span style="width:110px">Host</span><span style="width:92px">Destination</span><span style="width:44px">In</span><span style="width:44px">Due</span><span style="width:78px"></span></div>
-            <div class="r"><span class="mono" style="width:52px">V-0412</span><div class="grow"><div class="bar" style="width:56%"></div><div class="bar" style="width:24%"></div></div><span style="width:110px"><div class="bar" style="width:72%"></div></span><span style="width:92px"><div class="bar" style="width:68%"></div></span><span class="mono" style="width:44px">08:52</span><span class="mono" style="width:44px">10:00</span><span class="btnw" style="width:78px">Check out</span></div>
-            <div class="r"><span class="mono" style="width:52px">V-0413</span><div class="grow"><div class="bar" style="width:50%"></div><div class="bar" style="width:30%"></div></div><span style="width:110px"><div class="bar" style="width:80%"></div></span><span style="width:92px"><div class="bar" style="width:60%"></div></span><span class="mono" style="width:44px">09:34</span><span class="mono" style="width:44px;color:var(--ink);font-weight:700">11:00</span><span class="btnw" style="width:78px">Check out</span></div>
-            <div class="r"><span class="mono" style="width:52px">V-0414</span><div class="grow"><div class="bar" style="width:48%"></div></div><span style="width:110px"><div class="bar" style="width:76%"></div></span><span style="width:92px"><div class="bar" style="width:70%"></div></span><span class="mono" style="width:44px">10:05</span><span class="mono" style="width:44px">11:05</span><span class="btnw" style="width:78px">Check out</span></div>
-            <div class="r"><span class="mono" style="width:52px">V-0415</span><div class="grow"><div class="bar" style="width:58%"></div></div><span style="width:110px"><div class="bar" style="width:64%"></div></span><span style="width:92px"><div class="bar" style="width:72%"></div></span><span class="mono" style="width:44px">10:22</span><span class="mono" style="width:44px">12:00</span><span class="btnw" style="width:78px">Check out</span></div>
-          </div>
-        </div>
-      </div>
-    </div>
-  </figure>
-
-  <figure class="plate">
-    <div class="plate__head"><span class="no">G-07</span><h3>Emergency list · A4 print</h3><span class="route">/guard/emergency</span></div>
-    <div class="frame-wrap">
-      <div class="wf wf--print">
-        <div class="wf__main">
-          <div class="hd" style="border-bottom:2px solid var(--ink);padding-bottom:7px">
-            <div style="flex:1"><span class="lbl">School</span><h4 style="font-size:16px;margin:2px 0 0">Visitors on site</h4></div>
-            <div style="width:80px"><div class="bar" style="width:100%"></div><div class="bar" style="width:70%"></div></div>
-          </div>
-          <div class="flex" style="gap:16px">
-            <div><span class="lbl">Visits</span><div style="font-size:19px;font-weight:700">6</div></div>
-            <div><span class="lbl">People</span><div style="font-size:19px;font-weight:700">9</div></div>
-            <div><span class="lbl">Overdue</span><div style="font-size:19px;font-weight:700">2</div></div>
-          </div>
-          <div class="rows">
-            <div class="r rhead"><span style="width:46px">Badge</span><span class="grow">Name</span><span style="width:34px">Pax</span><span style="width:84px">Host</span><span style="width:70px">Location</span><span style="width:34px">In</span><span style="width:38px">Due</span></div>
-            <div class="r"><span class="mono" style="width:46px">V-0412</span><span class="grow"><div class="bar" style="width:62%"></div></span><span class="mono" style="width:34px">1</span><span style="width:84px"><div class="bar" style="width:76%"></div></span><span style="width:70px"><div class="bar" style="width:70%"></div></span><span class="mono" style="width:34px">0852</span><span class="mono" style="width:38px">1000</span></div>
-            <div class="r"><span class="mono" style="width:46px">V-0413</span><span class="grow"><div class="bar" style="width:54%"></div></span><span class="mono" style="width:34px">2</span><span style="width:84px"><div class="bar" style="width:68%"></div></span><span style="width:70px"><div class="bar" style="width:62%"></div></span><span class="mono" style="width:34px">0934</span><span class="mono" style="width:38px;font-weight:700">1100</span></div>
-            <div class="r"><span class="mono" style="width:46px">V-0414</span><span class="grow"><div class="bar" style="width:58%"></div></span><span class="mono" style="width:34px">1</span><span style="width:84px"><div class="bar" style="width:78%"></div></span><span style="width:70px"><div class="bar" style="width:74%"></div></span><span class="mono" style="width:34px">1005</span><span class="mono" style="width:38px">1105</span></div>
-            <div class="r"><span class="mono" style="width:46px">V-0415</span><span class="grow"><div class="bar" style="width:50%"></div></span><span class="mono" style="width:34px">3</span><span style="width:84px"><div class="bar" style="width:66%"></div></span><span style="width:70px"><div class="bar" style="width:64%"></div></span><span class="mono" style="width:34px">1022</span><span class="mono" style="width:38px">1200</span></div>
-          </div>
-        </div>
-      </div>
-    </div>
-  </figure>
-
-  <figure class="plate">
-    <div class="plate__head"><span class="no">G-08</span><h3>Visitor badge</h3><span class="route">/guard/badge/[id]</span></div>
-    <div class="frame-wrap">
-      <div class="wf wf--print" style="min-width:400px">
-        <div class="wf__main">
-          <div class="flex" style="justify-content:space-between">
-            <div class="bar bar--d" style="width:90px;height:11px"></div>
-            <div class="flex"><span class="btnw">Back</span><span class="btnw btnw--solid">Print</span></div>
-          </div>
-          <div style="border:2px solid var(--ink);padding:11px">
-            <div class="flex" style="justify-content:space-between;align-items:flex-start;border-bottom:2px solid var(--ink);padding-bottom:7px">
-              <div>
-                <span class="lbl">School</span>
-                <div style="font-size:22px;font-weight:800;line-height:1">VISITOR</div>
-              </div>
-              <div style="text-align:right"><span class="lbl">Badge</span><div class="bar bar--d" style="width:56px;height:13px;margin-top:3px"></div></div>
-            </div>
-            <div class="flex" style="gap:12px;align-items:flex-start;margin-top:10px">
-              <div style="flex:1;min-width:0">
-                <span class="lbl">Name</span>
-                <div class="bar bar--d" style="height:15px;width:82%;margin-top:3px"></div>
-                <div class="grid2" style="margin-top:9px">
-                  <div><span class="lbl">Host</span><div class="bar" style="width:76%"></div></div>
-                  <div><span class="lbl">Destination</span><div class="bar" style="width:70%"></div></div>
-                  <div><span class="lbl">Date</span><div class="bar" style="width:60%"></div></div>
-                  <div><span class="lbl">Until</span><div class="bar" style="width:40%"></div></div>
-                </div>
-              </div>
-              <div style="text-align:center;flex:none">
-                <div class="qr qr--sm"></div>
-                <div class="bar" style="width:100%;margin-top:4px"></div>
-              </div>
-            </div>
-            <div style="border-top:2px solid var(--ink);margin-top:10px;padding-top:6px">
-              <div class="bar" style="width:70%"></div>
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>
-  </figure>
-
-  <!-- ============ TEACHER ============ -->
-  <h2 class="group">Teacher</h2>
-
-  <figure class="plate">
-    <div class="plate__head"><span class="no">T-01</span><h3>Overview</h3><span class="route">/teacher</span></div>
-    <div class="frame-wrap">
-      <div class="wf">
-        <div class="wf__top"><span class="wf__logo"></span><span style="flex:1"><span class="bar" style="display:block;width:26%"></span></span><span class="pill pill--blank"></span></div>
-        <div class="wf__nav"><span class="on">Overview</span><span>Requests</span><span>My visits</span></div>
-        <div class="wf__main">
-          <div class="hd">
-            <div style="flex:1"><div class="bar bar--d" style="width:38%;height:12px"></div><div class="bar" style="width:24%;margin-top:5px"></div></div>
-            <span class="pill">Accepting visits</span>
-          </div>
-          <div class="grid3">
-            <div class="tile"><span class="lbl">Waiting for you</span><div class="n">3</div></div>
-            <div class="tile"><span class="lbl">Expected today</span><div class="n">2</div></div>
-            <div class="tile"><span class="lbl">On site</span><div class="n">1</div></div>
-          </div>
-          <div class="split">
-            <div class="rows">
-              <div class="r rhead">Waiting for your decision</div>
-              <div class="r"><div class="grow"><div class="bar" style="width:56%"></div><div class="bar" style="width:40%"></div></div><span class="btnw">Open</span></div>
-              <div class="r"><div class="grow"><div class="bar" style="width:52%"></div><div class="bar" style="width:38%"></div></div><span class="btnw">Open</span></div>
-              <div class="r"><div class="grow"><div class="bar" style="width:60%"></div><div class="bar" style="width:34%"></div></div><span class="btnw">Open</span></div>
-            </div>
-            <div class="stack">
-              <div class="rows">
-                <div class="r rhead">Today</div>
-                <div class="r"><span class="mono" style="width:40px">09:30</span><div class="grow"><div class="bar" style="width:60%"></div></div><span class="pill">On site</span></div>
-                <div class="r"><span class="mono" style="width:40px">14:00</span><div class="grow"><div class="bar" style="width:56%"></div></div><span class="pill">Expected</span></div>
-              </div>
-              <div class="rows">
-                <div class="r rhead">Recent decisions</div>
-                <div class="r"><div class="grow"><div class="bar" style="width:62%"></div></div><span class="pill">Approved</span></div>
-                <div class="r"><div class="grow"><div class="bar" style="width:48%"></div></div><span class="pill">Rejected</span></div>
+              <div class="tbl anch">
+                <span class="note r">Visit history</span>
+                <div class="hd"><span>Badge</span><span>Visitor</span><span>IC</span><span>Teacher</span><span>Date</span><span>Status</span></div>
+                <div><span>V-0413</span><span><i class="txt"></i></span><span>****1234</span><span><i class="txt"></i></span><span>18/08</span><span>Out</span></div>
+                <div><span>V-0412</span><span><i class="txt"></i></span><span>****5678</span><span><i class="txt"></i></span><span>18/08</span><span>In</span></div>
+                <div><span>V-0409</span><span><i class="txt"></i></span><span>****9012</span><span><i class="txt"></i></span><span>17/08</span><span>Out</span></div>
+                <div><span>V-0405</span><span><i class="txt"></i></span><span>****3456</span><span><i class="txt"></i></span><span>17/08</span><span>Out</span></div>
               </div>
             </div>
           </div>
         </div>
       </div>
+      <div class="base"></div>
     </div>
-  </figure>
+  </div></div>
+  <figcaption><b>Figure 4.15</b> Visit Records (Laptop View). The administrator searches the full visit history by name, status or date. The IC numbers stay masked in the list.</figcaption>
+</figure>
 
-  <figure class="plate">
-    <div class="plate__head"><span class="no">T-02</span><h3>Request queue</h3><span class="route">/teacher/requests</span></div>
-    <div class="frame-wrap">
-      <div class="wf">
-        <div class="wf__top"><span class="wf__logo"></span><span style="flex:1"><span class="bar" style="display:block;width:26%"></span></span><span class="pill pill--blank"></span></div>
-        <div class="wf__nav"><span>Overview</span><span class="on">Requests</span><span>My visits</span></div>
-        <div class="wf__main">
-          <div><h4 style="margin:0 0 4px;font-size:14px">Requests</h4><div class="bar" style="width:30%"></div></div>
-          <div class="flex"><span class="pill pill--fill">Pending</span><span class="pill">Approved</span><span class="pill">Rejected</span><span class="pill">Cancelled</span><span class="pill">All</span></div>
-          <div class="rows">
-            <div class="r rhead"><span style="width:88px">When</span><span class="grow">Visitor</span><span style="width:104px">Type</span><span style="width:38px">Pax</span><span style="width:74px">Status</span><span style="width:58px"></span></div>
-            <div class="r"><span class="mono" style="width:88px">21 Aug 09:30</span><div class="grow"><div class="bar" style="width:56%"></div><div class="bar" style="width:38%"></div></div><span style="width:104px"><div class="bar" style="width:70%"></div></span><span class="mono" style="width:38px">2</span><span style="width:74px"><span class="pill">Pending</span></span><span class="btnw" style="width:58px">Open</span></div>
-            <div class="r"><span class="mono" style="width:88px">21 Aug 11:00</span><div class="grow"><div class="bar" style="width:52%"></div><div class="bar" style="width:40%"></div></div><span style="width:104px"><div class="bar" style="width:66%"></div></span><span class="mono" style="width:38px">1</span><span style="width:74px"><span class="pill">Pending</span></span><span class="btnw" style="width:58px">Open</span></div>
-            <div class="r"><span class="mono" style="width:88px">22 Aug 08:00</span><div class="grow"><div class="bar" style="width:60%"></div><div class="bar" style="width:36%"></div></div><span style="width:104px"><div class="bar" style="width:62%"></div></span><span class="mono" style="width:38px">1</span><span style="width:74px"><span class="pill">Pending</span></span><span class="btnw" style="width:58px">Open</span></div>
-          </div>
-          <div class="empty"><div class="bar" style="width:34%"></div></div>
-        </div>
-      </div>
-    </div>
-  </figure>
-
-  <figure class="plate">
-    <div class="plate__head"><span class="no">T-03</span><h3>Decision</h3><span class="route">/teacher/requests/[id]</span></div>
-    <div class="frame-wrap">
-      <div class="wf">
-        <div class="wf__top"><span class="wf__logo"></span><span style="flex:1"><span class="bar" style="display:block;width:26%"></span></span><span class="pill pill--blank"></span></div>
-        <div class="wf__main">
-          <div class="hd">
-            <div style="flex:1"><div class="bar bar--d" style="width:44%;height:12px"></div><div class="bar" style="width:32%;margin-top:5px"></div></div>
-            <span class="pill">Pending</span>
-          </div>
-          <div class="split--wide split">
-            <div class="cardw">
-              <span class="lbl">Request</span>
-              <div class="grid2">
-                <div><span class="lbl">Date</span><div class="bar" style="width:70%"></div></div>
-                <div><span class="lbl">Time</span><div class="bar" style="width:56%"></div></div>
-                <div><span class="lbl">Type</span><div class="bar" style="width:64%"></div></div>
-                <div><span class="lbl">Destination</span><div class="bar" style="width:68%"></div></div>
-                <div><span class="lbl">People</span><div class="bar" style="width:18%"></div></div>
-                <div><span class="lbl">Category</span><div class="bar" style="width:52%"></div></div>
-                <div style="grid-column:1/-1"><span class="lbl">Purpose</span><div class="lines"><div class="bar"></div><div class="bar" style="width:64%"></div></div></div>
-              </div>
-              <div style="border-top:1px solid var(--rule);margin-top:9px;padding-top:9px">
-                <span class="lbl">Visitor</span>
-                <div class="grid2">
-                  <div><span class="lbl">ID</span><div class="bar" style="width:60%"></div></div>
-                  <div><span class="lbl">Email</span><div class="bar" style="width:66%"></div></div>
-                  <div><span class="lbl">Phone</span><div class="bar" style="width:54%"></div></div>
-                  <div><span class="lbl">Vehicle</span><div class="bar" style="width:46%"></div></div>
+<figure>
+  <div class="scroll"><div class="wrap">
+    <div class="laptop">
+      <div class="lid">
+        <div class="chrome"><i></i><i></i><i></i><u></u></div>
+        <div class="screen">
+          <div class="cols">
+            <div class="nav">
+              <span class="brand"><i></i> VisitorPass</span>
+              <a href="#"><i></i> Dashboard</a>
+              <a href="#"><i></i> Appointments</a>
+              <a href="#"><i></i> Visit Records</a>
+              <a href="#" class="on"><i></i> Reports</a>
+              <a href="#"><i></i> Blacklist</a>
+              <a href="#"><i></i> Users</a>
+              <a href="#"><i></i> Audit Log</a>
+              <a href="#"><i></i> Settings</a>
+            </div>
+            <div class="main">
+              <div class="appbar" style="border:1px solid #999999"><span class="ttl">Reports</span><span class="avatar"></span></div>
+              <div class="card anch">
+                <span class="note r">Report filter</span>
+                <span class="h">Filter</span>
+                <div class="r4">
+                  <div class="fld">From Date</div>
+                  <div class="fld">To Date</div>
+                  <div class="fld drop">Teacher</div>
+                  <div class="fld drop">Visit Type</div>
                 </div>
               </div>
-            </div>
-            <div class="stack">
-              <div class="cardw">
-                <span class="lbl">Decision</span>
-                <div class="fieldw" style="margin-bottom:7px"><span class="lbl">Note to visitor</span><div class="box box--tall"></div></div>
-                <div class="stack">
-                  <span class="btnw btnw--solid btnw--big">Approve and send pass</span>
-                  <span class="btnw btnw--big">Reject</span>
-                </div>
+              <div class="tbl">
+                <div class="hd"><span>Badge</span><span>Visitor</span><span>Teacher</span><span>Date</span><span>Duration</span></div>
+                <div><span>V-0413</span><span><i class="txt"></i></span><span><i class="txt"></i></span><span>18/08</span><span>1h 07m</span></div>
+                <div><span>V-0409</span><span><i class="txt"></i></span><span><i class="txt"></i></span><span>17/08</span><span>0h 56m</span></div>
               </div>
-              <div class="banner"><div class="bar" style="width:76%"></div></div>
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>
-  </figure>
-
-  <!-- ============ ADMIN ============ -->
-  <h2 class="group">Administrator</h2>
-
-  <figure class="plate">
-    <div class="plate__head"><span class="no">A-01</span><h3>Dashboard</h3><span class="route">/admin</span></div>
-    <div class="frame-wrap">
-      <div class="wf">
-        <div class="wf__top"><span class="wf__logo"></span><span style="flex:1"><span class="bar" style="display:block;width:28%"></span></span><span class="pill pill--blank"></span></div>
-        <div class="wf__nav"><span class="on">Dashboard</span><span>Appointments</span><span>Visits</span><span>Reports</span><span>Blacklist</span><span>Users</span><span>Destinations</span><span>Email</span><span>Audit</span><span>Settings</span></div>
-        <div class="wf__main">
-          <div class="hd">
-            <div style="flex:1"><h4>Dashboard</h4></div>
-            <div class="flex"><span class="pill">7 days</span><span class="pill pill--fill">30 days</span><span class="pill">90 days</span></div>
-          </div>
-          <div class="banner"><div class="bar" style="width:38%"></div></div>
-          <div class="grid6">
-            <div class="tile"><span class="lbl">Expected</span><div class="n">14</div></div>
-            <div class="tile"><span class="lbl">On site</span><div class="n">6</div></div>
-            <div class="tile"><span class="lbl">Out</span><div class="n">8</div></div>
-            <div class="tile"><span class="lbl">Overdue</span><div class="n">2</div></div>
-            <div class="tile"><span class="lbl">Pending</span><div class="n">5</div></div>
-            <div class="tile"><span class="lbl">Denied</span><div class="n">0</div></div>
-          </div>
-          <div class="grid4">
-            <div class="tile"><span class="lbl">Appointments</span><div class="n">412</div></div>
-            <div class="tile"><span class="lbl">Approval rate</span><div class="n">87%</div></div>
-            <div class="tile"><span class="lbl">No-show rate</span><div class="n">6%</div></div>
-            <div class="tile"><span class="lbl">Average visit</span><div class="n">48m</div></div>
-          </div>
-          <div class="grid2">
-            <div class="cardw">
-              <span class="lbl">Check-ins by day</span>
-              <div class="chart"><i style="height:40%"></i><i style="height:62%"></i><i style="height:48%"></i><i style="height:78%"></i><i style="height:90%"></i><i style="height:34%"></i><i style="height:20%"></i><i style="height:56%"></i><i style="height:70%"></i><i style="height:44%"></i><i style="height:66%"></i><i style="height:52%"></i></div>
-            </div>
-            <div class="cardw">
-              <span class="lbl">Busiest hours</span>
-              <div class="chart"><i style="height:14%"></i><i style="height:38%"></i><i style="height:86%"></i><i style="height:70%"></i><i style="height:44%"></i><i style="height:30%"></i><i style="height:58%"></i><i style="height:76%"></i><i style="height:40%"></i><i style="height:18%"></i></div>
-            </div>
-            <div class="rows">
-              <div class="r rhead">Visit types</div>
-              <div class="r"><span class="grow"><div class="bar" style="width:56%"></div></span><span class="mono">184</span></div>
-              <div class="r"><span class="grow"><div class="bar" style="width:44%"></div></span><span class="mono">96</span></div>
-              <div class="r"><span class="grow"><div class="bar" style="width:50%"></div></span><span class="mono">61</span></div>
-            </div>
-            <div class="rows">
-              <div class="r rhead">Top destinations</div>
-              <div class="r"><span class="grow"><div class="bar" style="width:52%"></div></span><span class="mono">203</span></div>
-              <div class="r"><span class="grow"><div class="bar" style="width:60%"></div></span><span class="mono">88</span></div>
-              <div class="r"><span class="grow"><div class="bar" style="width:40%"></div></span><span class="mono">54</span></div>
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>
-  </figure>
-
-  <figure class="plate">
-    <div class="plate__head"><span class="no">A-02</span><h3>Appointments and detail</h3><span class="route">/admin/appointments · /[id]</span></div>
-    <div class="frame-wrap">
-      <div class="wf">
-        <div class="wf__top"><span class="wf__logo"></span><span style="flex:1"><span class="bar" style="display:block;width:28%"></span></span><span class="pill pill--blank"></span></div>
-        <div class="wf__nav"><span>Dashboard</span><span class="on">Appointments</span><span>Visits</span><span>Reports</span><span>Blacklist</span><span>Users</span><span>Destinations</span><span>Email</span><span>Audit</span><span>Settings</span></div>
-        <div class="wf__main">
-          <div><h4 style="margin:0;font-size:14px">Appointments</h4></div>
-          <div class="flex"><span class="pill pill--fill">Review</span><span class="pill">Pending</span><span class="pill">Approved</span><span class="pill">Rejected</span><span class="pill">Cancelled</span><span class="pill">Expired</span><span class="pill">All</span></div>
-          <div class="rows">
-            <div class="r rhead"><span style="width:88px">Reference</span><span class="grow">Visitor</span><span style="width:100px">Host</span><span style="width:88px">When</span><span style="width:52px">Source</span><span style="width:78px">Status</span></div>
-            <div class="r"><span class="mono" style="width:88px">VP-0421</span><div class="grow"><div class="bar" style="width:52%"></div></div><span style="width:100px"><div class="bar" style="width:70%"></div></span><span class="mono" style="width:88px">23 Aug 10:00</span><span style="width:52px"><div class="bar" style="width:80%"></div></span><span style="width:78px"><span class="pill pill--fill">Review</span></span></div>
-            <div class="r"><span class="mono" style="width:88px">VP-0418</span><div class="grow"><div class="bar" style="width:60%"></div></div><span style="width:100px"><div class="bar" style="width:76%"></div></span><span class="mono" style="width:88px">21 Aug 09:30</span><span style="width:52px"><div class="bar" style="width:80%"></div></span><span style="width:78px"><span class="pill">Pending</span></span></div>
-            <div class="r"><span class="mono" style="width:88px">VP-0417</span><div class="grow"><div class="bar" style="width:48%"></div></div><span style="width:100px"><div class="bar" style="width:66%"></div></span><span class="mono" style="width:88px">18 Aug 08:40</span><span style="width:52px"><div class="bar" style="width:80%"></div></span><span style="width:78px"><span class="pill">Approved</span></span></div>
-          </div>
-
-          <div class="split--wide split">
-            <div class="cardw">
-              <span class="lbl">Detail</span>
-              <div class="banner" style="margin-bottom:9px"><div class="bar" style="width:56%"></div></div>
-              <div class="grid2">
-                <div><span class="lbl">Host</span><div class="bar" style="width:70%"></div></div>
-                <div><span class="lbl">Source</span><div class="bar" style="width:44%"></div></div>
-                <div><span class="lbl">ID</span><div class="bar" style="width:62%"></div></div>
-                <div><span class="lbl">Email</span><div class="bar" style="width:68%"></div></div>
-                <div style="grid-column:1/-1"><span class="lbl">Purpose</span><div class="bar" style="width:82%"></div></div>
-              </div>
-            </div>
-            <div class="stack">
-              <div class="cardw">
-                <span class="lbl">Actions</span>
-                <div class="stack">
-                  <span class="btnw btnw--solid">Release to teacher</span>
-                  <span class="btnw">Reject request</span>
-                  <span class="btnw">Reveal ID number</span>
-                  <span class="btnw">Revoke and reissue pass</span>
-                </div>
-              </div>
-              <div class="cardw">
-                <span class="lbl">QR credential</span>
-                <div class="rows" style="border:0">
-                  <div class="r" style="padding:4px 0"><span class="lbl" style="width:72px">Valid from</span><span class="grow"><div class="bar" style="width:56%"></div></span></div>
-                  <div class="r" style="padding:4px 0"><span class="lbl" style="width:72px">Expires</span><span class="grow"><div class="bar" style="width:56%"></div></span></div>
-                  <div class="r" style="padding:4px 0;border:0"><span class="lbl" style="width:72px">First used</span><span class="grow"><div class="bar" style="width:30%"></div></span></div>
-                </div>
+              <div class="r2 anch">
+                <span class="note r">Export buttons</span>
+                <div class="btn">Export to PDF</div>
+                <div class="btn">Export to Excel</div>
               </div>
             </div>
           </div>
         </div>
       </div>
+      <div class="base"></div>
     </div>
-  </figure>
+  </div></div>
+  <figcaption><b>Figure 4.16</b> Reports (Laptop View). The administrator chooses a date range and other filters, then exports the result to PDF or Excel for the school record.</figcaption>
+</figure>
 
-  <figure class="plate">
-    <div class="plate__head"><span class="no">A-03</span><h3>Visits and reports</h3><span class="route">/admin/visits · /admin/reports</span></div>
-    <div class="frame-wrap">
-      <div class="wf">
-        <div class="wf__top"><span class="wf__logo"></span><span style="flex:1"><span class="bar" style="display:block;width:28%"></span></span><span class="pill pill--blank"></span></div>
-        <div class="wf__nav"><span>Dashboard</span><span>Appointments</span><span>Visits</span><span class="on">Reports</span><span>Blacklist</span><span>Users</span><span>Destinations</span><span>Email</span><span>Audit</span><span>Settings</span></div>
-        <div class="wf__main">
-          <div class="hd">
-            <div style="flex:1"><h4>Reports</h4><div class="bar" style="width:22%"></div></div>
-            <div class="flex"><span class="btnw">Export PDF</span><span class="btnw">Export XLSX</span></div>
-          </div>
-          <div class="cardw">
-            <span class="lbl">Filters</span>
-            <div class="grid4">
-              <div class="fieldw"><span class="lbl">From</span><div class="box"></div></div>
-              <div class="fieldw"><span class="lbl">To</span><div class="box"></div></div>
-              <div class="fieldw"><span class="lbl">Status</span><div class="box box--select"></div></div>
-              <div class="fieldw"><span class="lbl">Source</span><div class="box box--select"></div></div>
-              <div class="fieldw"><span class="lbl">Host</span><div class="box box--select"></div></div>
-              <div class="fieldw"><span class="lbl">Destination</span><div class="box box--select"></div></div>
-              <div class="fieldw"><span class="lbl">Visit type</span><div class="box box--select"></div></div>
-              <div class="fieldw"><span class="lbl">Category</span><div class="box box--select"></div></div>
+<figure>
+  <div class="scroll"><div class="wrap">
+    <div class="laptop">
+      <div class="lid">
+        <div class="chrome"><i></i><i></i><i></i><u></u></div>
+        <div class="screen">
+          <div class="cols">
+            <div class="nav">
+              <span class="brand"><i></i> VisitorPass</span>
+              <a href="#"><i></i> Dashboard</a>
+              <a href="#"><i></i> Appointments</a>
+              <a href="#"><i></i> Visit Records</a>
+              <a href="#"><i></i> Reports</a>
+              <a href="#" class="on"><i></i> Blacklist</a>
+              <a href="#"><i></i> Users</a>
+              <a href="#"><i></i> Audit Log</a>
+              <a href="#"><i></i> Settings</a>
             </div>
-            <div class="flex flex--end" style="margin-top:7px"><span class="btnw">Clear</span><span class="btnw btnw--solid">Apply</span></div>
-          </div>
-          <div class="rows">
-            <div class="r rhead"><span style="width:52px">Badge</span><span class="grow">Visitor</span><span style="width:76px">ID</span><span style="width:96px">Host</span><span style="width:80px">In</span><span style="width:80px">Out</span><span style="width:56px">Duration</span><span style="width:52px">Status</span></div>
-            <div class="r"><span class="mono" style="width:52px">V-0413</span><span class="grow"><div class="bar" style="width:58%"></div></span><span style="width:76px"><div class="bar" style="width:72%"></div></span><span style="width:96px"><div class="bar" style="width:76%"></div></span><span class="mono" style="width:80px">18/08 09:34</span><span class="mono" style="width:80px">18/08 10:41</span><span class="mono" style="width:56px">1h 07m</span><span style="width:52px"><span class="pill">Out</span></span></div>
-            <div class="r"><span class="mono" style="width:52px">V-0412</span><span class="grow"><div class="bar" style="width:52%"></div></span><span style="width:76px"><div class="bar" style="width:72%"></div></span><span style="width:96px"><div class="bar" style="width:68%"></div></span><span class="mono" style="width:80px">18/08 08:52</span><span class="mono" style="width:80px">—</span><span class="mono" style="width:56px">—</span><span style="width:52px"><span class="pill">In</span></span></div>
-            <div class="r"><span class="mono" style="width:52px">V-0409</span><span class="grow"><div class="bar" style="width:60%"></div></span><span style="width:76px"><div class="bar" style="width:72%"></div></span><span style="width:96px"><div class="bar" style="width:64%"></div></span><span class="mono" style="width:80px">17/08 14:02</span><span class="mono" style="width:80px">17/08 14:58</span><span class="mono" style="width:56px">0h 56m</span><span style="width:52px"><span class="pill">Out</span></span></div>
-          </div>
-          <div class="flex flex--end"><span class="btnw">Previous</span><span class="mono">1 / 13</span><span class="btnw">Next</span></div>
-        </div>
-      </div>
-    </div>
-  </figure>
-
-  <figure class="plate">
-    <div class="plate__head"><span class="no">A-04</span><h3>Blacklist</h3><span class="route">/admin/blacklist</span></div>
-    <div class="frame-wrap">
-      <div class="wf">
-        <div class="wf__top"><span class="wf__logo"></span><span style="flex:1"><span class="bar" style="display:block;width:28%"></span></span><span class="pill pill--blank"></span></div>
-        <div class="wf__nav"><span>Dashboard</span><span>Appointments</span><span>Visits</span><span>Reports</span><span class="on">Blacklist</span><span>Users</span><span>Destinations</span><span>Email</span><span>Audit</span><span>Settings</span></div>
-        <div class="wf__main">
-          <div class="hd"><div style="flex:1"><h4>Blacklist</h4><div class="bar" style="width:26%"></div></div><span class="btnw">Add entry</span></div>
-          <div class="banner"><div class="lines"><div class="bar"></div><div class="bar" style="width:58%"></div></div></div>
-          <div class="split--wide split">
-            <div class="rows">
-              <div class="r rhead"><span class="grow">Name</span><span style="width:72px">Match on</span><span style="width:62px">Policy</span><span style="width:96px">Effective</span><span style="width:62px">Status</span></div>
-              <div class="r"><div class="grow"><div class="bar" style="width:50%"></div><div class="bar" style="width:36%"></div></div><span style="width:72px"><div class="bar" style="width:74%"></div></span><span style="width:62px"><span class="pill pill--fill">Block</span></span><span style="width:96px"><div class="bar" style="width:80%"></div></span><span style="width:62px"><span class="pill">Active</span></span></div>
-              <div class="r"><div class="grow"><div class="bar" style="width:46%"></div><div class="bar" style="width:40%"></div></div><span style="width:72px"><div class="bar" style="width:64%"></div></span><span style="width:62px"><span class="pill">Review</span></span><span style="width:96px"><div class="bar" style="width:88%"></div></span><span style="width:62px"><span class="pill">Active</span></span></div>
-              <div class="r"><div class="grow"><div class="bar" style="width:42%"></div></div><span style="width:72px"><div class="bar" style="width:58%"></div></span><span style="width:62px"><span class="pill">Review</span></span><span style="width:96px"><div class="bar" style="width:30%"></div></span><span style="width:62px"><span class="pill">Inactive</span></span></div>
-            </div>
-            <div class="cardw">
-              <span class="lbl">Add entry</span>
-              <div class="stack">
-                <div class="fieldw"><span class="lbl">Name</span><div class="box"></div></div>
-                <div class="grid2">
-                  <div class="fieldw"><span class="lbl">ID type</span><div class="box box--select"></div></div>
-                  <div class="fieldw"><span class="lbl">ID number</span><div class="box"></div></div>
+            <div class="main">
+              <div class="appbar" style="border:1px solid #999999"><span class="ttl">Blacklist</span><span class="avatar"></span></div>
+              <div class="tbl anch">
+                <span class="note r">Blocked visitors</span>
+                <div class="hd"><span>Name</span><span>Match On</span><span>Action</span><span>Valid Until</span><span>Status</span></div>
+                <div><span><i class="txt"></i></span><span>IC Number</span><span>Block</span><span>31/12</span><span>Active</span></div>
+                <div><span><i class="txt"></i></span><span>Phone</span><span>Review</span><span>30/09</span><span>Active</span></div>
+              </div>
+              <div class="card anch">
+                <span class="note r">Add new entry</span>
+                <span class="h">Add New Entry</span>
+                <div class="r4">
+                  <div class="fld">Name</div>
+                  <div class="fld">IC Number</div>
+                  <div class="fld drop">Action</div>
+                  <div class="fld">Valid Until</div>
                 </div>
-                <div class="grid2">
-                  <div class="fieldw"><span class="lbl">Phone</span><div class="box"></div></div>
-                  <div class="fieldw"><span class="lbl">Email</span><div class="box"></div></div>
-                </div>
-                <div class="grid2">
-                  <div class="fieldw"><span class="lbl">Policy</span><div class="box box--select"></div></div>
-                  <div class="fieldw"><span class="lbl">Category</span><div class="box box--select"></div></div>
-                </div>
-                <div class="fieldw"><span class="lbl">Effective until</span><div class="box"></div></div>
-                <div class="fieldw"><span class="lbl">Internal reason</span><div class="box box--tall"></div></div>
-                <span class="btnw btnw--solid">Create entry</span>
+                <div class="fld tall">Reason</div>
+                <div class="btn dark">Add to Blacklist</div>
               </div>
             </div>
           </div>
         </div>
       </div>
+      <div class="base"></div>
     </div>
-  </figure>
+  </div></div>
+  <figcaption><b>Figure 4.17</b> Blacklist (Laptop View). A visitor on this list cannot be approved or checked in. The reason is kept private and only the administrator can see it.</figcaption>
+</figure>
 
-  <figure class="plate">
-    <div class="plate__head"><span class="no">A-05</span><h3>Users, destinations, settings</h3><span class="route">/admin/users · /destinations · /settings</span></div>
-    <div class="frame-wrap">
-      <div class="wf">
-        <div class="wf__top"><span class="wf__logo"></span><span style="flex:1"><span class="bar" style="display:block;width:28%"></span></span><span class="pill pill--blank"></span></div>
-        <div class="wf__nav"><span>Dashboard</span><span>Appointments</span><span>Visits</span><span>Reports</span><span>Blacklist</span><span class="on">Users</span><span>Destinations</span><span>Email</span><span>Audit</span><span>Settings</span></div>
-        <div class="wf__main">
-          <div><h4 style="margin:0;font-size:14px">Staff accounts</h4></div>
-          <div class="banner"><div class="bar" style="width:52%"></div></div>
-          <div class="split--wide split">
-            <div class="rows">
-              <div class="r rhead"><span class="grow">Name</span><span style="width:128px">Email</span><span style="width:64px">Role</span><span style="width:80px">Last login</span><span style="width:88px"></span></div>
-              <div class="r"><div class="grow"><div class="bar" style="width:54%"></div><div class="bar" style="width:38%"></div></div><span style="width:128px"><div class="bar" style="width:84%"></div></span><span style="width:64px"><span class="pill">Teacher</span></span><span style="width:80px"><div class="bar" style="width:80%"></div></span><div class="flex" style="width:88px"><span class="btnw">Reset</span><span class="btnw">Off</span></div></div>
-              <div class="r"><div class="grow"><div class="bar" style="width:46%"></div></div><span style="width:128px"><div class="bar" style="width:78%"></div></span><span style="width:64px"><span class="pill">Guard</span></span><span style="width:80px"><div class="bar" style="width:80%"></div></span><div class="flex" style="width:88px"><span class="btnw">Reset</span><span class="btnw">Off</span></div></div>
-              <div class="r"><div class="grow"><div class="bar" style="width:50%"></div></div><span style="width:128px"><div class="bar" style="width:80%"></div></span><span style="width:64px"><span class="pill">Teacher</span></span><span style="width:80px"><div class="bar" style="width:30%"></div></span><div class="flex" style="width:88px"><span class="btnw">Reset</span><span class="btnw">On</span></div></div>
+<figure>
+  <div class="scroll"><div class="wrap">
+    <div class="laptop">
+      <div class="lid">
+        <div class="chrome"><i></i><i></i><i></i><u></u></div>
+        <div class="screen">
+          <div class="cols">
+            <div class="nav">
+              <span class="brand"><i></i> VisitorPass</span>
+              <a href="#"><i></i> Dashboard</a>
+              <a href="#"><i></i> Appointments</a>
+              <a href="#"><i></i> Visit Records</a>
+              <a href="#"><i></i> Reports</a>
+              <a href="#"><i></i> Blacklist</a>
+              <a href="#" class="on"><i></i> Users</a>
+              <a href="#"><i></i> Audit Log</a>
+              <a href="#"><i></i> Settings</a>
             </div>
-            <div class="cardw">
-              <span class="lbl">Add staff account</span>
-              <div class="stack">
-                <div class="fieldw"><span class="lbl">Full name</span><div class="box"></div></div>
-                <div class="fieldw"><span class="lbl">Email</span><div class="box"></div></div>
-                <div class="fieldw"><span class="lbl">Role</span><div class="box box--select"></div></div>
-                <div class="grid2">
-                  <div class="fieldw"><span class="lbl">Staff code</span><div class="box"></div></div>
-                  <div class="fieldw"><span class="lbl">Department</span><div class="box"></div></div>
+            <div class="main">
+              <div class="appbar" style="border:1px solid #999999"><span class="ttl">Manage Users</span><span class="avatar"></span></div>
+              <div class="tbl anch">
+                <span class="note r">Staff accounts</span>
+                <div class="hd"><span>Name</span><span>Email</span><span>Role</span><span>Status</span><span>Action</span></div>
+                <div><span><i class="txt"></i></span><span><i class="txt"></i></span><span>Teacher</span><span>Active</span><span>Edit</span></div>
+                <div><span><i class="txt"></i></span><span><i class="txt"></i></span><span>Guard</span><span>Active</span><span>Edit</span></div>
+                <div><span><i class="txt"></i></span><span><i class="txt"></i></span><span>Admin</span><span>Active</span><span>Edit</span></div>
+              </div>
+              <div class="card anch">
+                <span class="note r">Create account</span>
+                <span class="h">Add New User</span>
+                <div class="r4">
+                  <div class="fld">Full Name</div>
+                  <div class="fld">Email</div>
+                  <div class="fld drop">Role</div>
+                  <div class="fld">Password</div>
                 </div>
-                <div class="fieldw"><span class="lbl">Initial password</span><div class="box"></div></div>
-                <span class="btnw btnw--solid">Create account</span>
+                <div class="btn dark">Add User</div>
               </div>
-            </div>
-          </div>
-
-          <div class="grid2">
-            <div class="cardw">
-              <span class="lbl">Destinations and visit types</span>
-              <div class="rows">
-                <div class="r rhead"><span style="width:46px">Code</span><span class="grow">Name (EN / BM)</span><span style="width:58px">Status</span></div>
-                <div class="r"><span style="width:46px"><div class="bar" style="width:80%"></div></span><div class="grow"><div class="bar" style="width:56%"></div><div class="bar" style="width:40%"></div></div><span style="width:58px"><span class="pill">Active</span></span></div>
-                <div class="r"><span style="width:46px"><div class="bar" style="width:80%"></div></span><div class="grow"><div class="bar" style="width:62%"></div><div class="bar" style="width:44%"></div></div><span style="width:58px"><span class="pill">Active</span></span></div>
-              </div>
-              <div class="rows" style="margin-top:7px">
-                <div class="r rhead"><span class="grow">Visit type</span><span style="width:70px">ID sighting</span><span style="width:54px">Default</span></div>
-                <div class="r"><span class="grow"><div class="bar" style="width:50%"></div></span><span style="width:70px"><span class="pill">Required</span></span><span class="mono" style="width:54px">60 min</span></div>
-                <div class="r"><span class="grow"><div class="bar" style="width:44%"></div></span><span style="width:70px"><span class="pill">Required</span></span><span class="mono" style="width:54px">120 min</span></div>
-              </div>
-            </div>
-            <div class="cardw">
-              <span class="lbl">Settings</span>
-              <div class="grid2">
-                <div class="fieldw"><span class="lbl">School name</span><div class="box"></div></div>
-                <div class="fieldw"><span class="lbl">Timezone</span><div class="box"></div></div>
-                <div class="fieldw"><span class="lbl">Gate opens</span><div class="box"></div></div>
-                <div class="fieldw"><span class="lbl">Gate closes</span><div class="box"></div></div>
-                <div class="fieldw"><span class="lbl">QR opens before</span><div class="box"></div></div>
-                <div class="fieldw"><span class="lbl">QR closes after</span><div class="box"></div></div>
-                <div class="fieldw"><span class="lbl">Overdue grace</span><div class="box"></div></div>
-                <div class="fieldw"><span class="lbl">Badge prefix</span><div class="box"></div></div>
-                <div class="fieldw"><span class="lbl">Retention</span><div class="box"></div></div>
-                <div class="fieldw"><span class="lbl">Consent version</span><div class="box"></div></div>
-              </div>
-              <div class="flex flex--end" style="margin-top:7px"><span class="btnw btnw--solid">Save</span></div>
             </div>
           </div>
         </div>
       </div>
+      <div class="base"></div>
     </div>
-  </figure>
+  </div></div>
+  <figcaption><b>Figure 4.18</b> Manage Users (Laptop View). The administrator creates and edits the accounts for teachers and security guards, and sets the role of each account.</figcaption>
+</figure>
 
-  <figure class="plate">
-    <div class="plate__head"><span class="no">A-06</span><h3>Audit log and email</h3><span class="route">/admin/audit · /admin/notifications</span></div>
-    <div class="frame-wrap">
-      <div class="wf">
-        <div class="wf__top"><span class="wf__logo"></span><span style="flex:1"><span class="bar" style="display:block;width:28%"></span></span><span class="pill pill--blank"></span></div>
-        <div class="wf__nav"><span>Dashboard</span><span>Appointments</span><span>Visits</span><span>Reports</span><span>Blacklist</span><span>Users</span><span>Destinations</span><span>Email</span><span class="on">Audit</span><span>Settings</span></div>
-        <div class="wf__main">
-          <div class="hd">
-            <div style="flex:1"><h4>Audit log</h4><div class="bar" style="width:28%"></div></div>
-            <div class="flex"><span class="pill">Action</span><span class="pill">Actor</span></div>
-          </div>
-          <div class="rows">
-            <div class="r rhead"><span style="width:92px">When</span><span style="width:112px">Actor</span><span style="width:140px">Action</span><span class="grow">Target</span><span style="width:120px">Detail</span></div>
-            <div class="r"><span class="mono" style="width:92px">18/08 11:04</span><span style="width:112px"><div class="bar" style="width:60%"></div></span><span style="width:140px"><div class="bar bar--d" style="width:86%"></div></span><span class="grow"><div class="bar" style="width:52%"></div></span><span style="width:120px"><div class="bar" style="width:70%"></div></span></div>
-            <div class="r"><span class="mono" style="width:92px">18/08 09:34</span><span style="width:112px"><div class="bar" style="width:76%"></div></span><span style="width:140px"><div class="bar bar--d" style="width:78%"></div></span><span class="grow"><div class="bar" style="width:40%"></div></span><span style="width:120px"><div class="bar" style="width:58%"></div></span></div>
-            <div class="r"><span class="mono" style="width:92px">18/08 08:12</span><span style="width:112px"><div class="bar" style="width:82%"></div></span><span style="width:140px"><div class="bar bar--d" style="width:92%"></div></span><span class="grow"><div class="bar" style="width:56%"></div></span><span style="width:120px"><div class="bar" style="width:66%"></div></span></div>
-            <div class="r"><span class="mono" style="width:92px">18/08 07:41</span><span style="width:112px"><div class="bar" style="width:24%"></div></span><span style="width:140px"><div class="bar bar--d" style="width:62%"></div></span><span class="grow"><div class="bar" style="width:48%"></div></span><span style="width:120px"><div class="bar" style="width:72%"></div></span></div>
-            <div class="r"><span class="mono" style="width:92px">17/08 16:20</span><span style="width:112px"><div class="bar" style="width:60%"></div></span><span style="width:140px"><div class="bar bar--d" style="width:74%"></div></span><span class="grow"><div class="bar" style="width:60%"></div></span><span style="width:120px"><div class="bar" style="width:64%"></div></span></div>
-          </div>
-
-          <div class="cardw">
-            <span class="lbl">Email delivery</span>
-            <div class="grid3" style="margin-bottom:9px">
-              <div class="tile"><span class="lbl">Sent</span><div class="n">1284</div></div>
-              <div class="tile"><span class="lbl">Pending</span><div class="n">3</div></div>
-              <div class="tile"><span class="lbl">Failed</span><div class="n">2</div></div>
+<figure>
+  <div class="scroll"><div class="wrap">
+    <div class="laptop">
+      <div class="lid">
+        <div class="chrome"><i></i><i></i><i></i><u></u></div>
+        <div class="screen">
+          <div class="cols">
+            <div class="nav">
+              <span class="brand"><i></i> VisitorPass</span>
+              <a href="#"><i></i> Dashboard</a>
+              <a href="#"><i></i> Appointments</a>
+              <a href="#"><i></i> Visit Records</a>
+              <a href="#"><i></i> Reports</a>
+              <a href="#"><i></i> Blacklist</a>
+              <a href="#"><i></i> Users</a>
+              <a href="#" class="on"><i></i> Audit Log</a>
+              <a href="#"><i></i> Settings</a>
             </div>
-            <div class="rows">
-              <div class="r rhead"><span style="width:124px">Type</span><span class="grow">Recipient</span><span style="width:58px">Attempts</span><span style="width:92px">Last error</span><span style="width:56px">Status</span></div>
-              <div class="r"><span style="width:124px"><div class="bar bar--d" style="width:80%"></div></span><span class="grow"><div class="bar" style="width:56%"></div></span><span class="mono" style="width:58px">3</span><span style="width:92px"><div class="bar" style="width:78%"></div></span><span style="width:56px"><span class="pill pill--fill">Failed</span></span></div>
-              <div class="r"><span style="width:124px"><div class="bar bar--d" style="width:92%"></div></span><span class="grow"><div class="bar" style="width:62%"></div></span><span class="mono" style="width:58px">1</span><span style="width:92px"><div class="bar" style="width:20%"></div></span><span style="width:56px"><span class="pill">Sent</span></span></div>
+            <div class="main">
+              <div class="appbar" style="border:1px solid #999999"><span class="ttl">Audit Log</span><span class="avatar"></span></div>
+              <div class="r2 anch">
+                <span class="note r">Filter the log</span>
+                <div class="fld drop">Filter by Action</div>
+                <div class="fld drop">Filter by User</div>
+              </div>
+              <div class="tbl anch">
+                <span class="note r">Action history</span>
+                <div class="hd"><span>Date</span><span>Time</span><span>User</span><span>Action</span><span>Record</span></div>
+                <div><span>18/08</span><span>11:04</span><span><i class="txt"></i></span><span><i class="txt"></i></span><span><i class="txt"></i></span></div>
+                <div><span>18/08</span><span>09:34</span><span><i class="txt"></i></span><span><i class="txt"></i></span><span><i class="txt"></i></span></div>
+                <div><span>18/08</span><span>08:12</span><span><i class="txt"></i></span><span><i class="txt"></i></span><span><i class="txt"></i></span></div>
+                <div><span>17/08</span><span>16:20</span><span><i class="txt"></i></span><span><i class="txt"></i></span><span><i class="txt"></i></span></div>
+              </div>
             </div>
           </div>
         </div>
       </div>
+      <div class="base"></div>
     </div>
-  </figure>
+  </div></div>
+  <figcaption><b>Figure 4.19</b> Audit Log (Laptop View). Records every important action in the system, such as approvals, check-ins, blacklist changes and report exports. Entries can never be edited or deleted.</figcaption>
+</figure>
 
 </div>
+</body>
+</html>

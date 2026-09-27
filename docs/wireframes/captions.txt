@@ -1,0 +1,37 @@
+Figure 4.1 Home page (Mobile View). This is the first page a visitor sees. From here the visitor can request a visit, check an existing request, or go to the staff login page.
+
+Figure 4.2 Request a Visit page (Mobile View). The visitor fills in personal details and visit details, agrees to the use of the data, and submits the request to the teacher.
+
+Figure 4.3 Visitor Pass page (Mobile View). After the teacher approves the request, the visitor shows this QR code at the school gate. The backup code is used if the QR code cannot be scanned.
+
+Figure 4.4 Request Status page (Mobile View). The visitor checks whether the request is still pending, approved or rejected, and may cancel it before the visit.
+
+Figure 4.5 Staff Login page (Mobile View). The teacher, security guard and administrator all sign in through this page on their own device.
+
+Figure 4.6 Teacher Dashboard (Mobile View). The teacher sees how many requests are waiting for a decision, how many visitors are expected today, and who is already on site.
+
+Figure 4.7 Visit Request page (Mobile View). The teacher reads the request and approves or rejects it. The IC number is masked so the full number is never shown.
+
+Figure 4.8 Today at the Gate (Tablet View). The main page for the security guard. It shows the daily totals, the list of expected visitors, and the buttons to scan a pass or register a walk-in.
+
+Figure 4.9 Scan Visitor Pass (Tablet View). The guard scans the QR code with the tablet camera. If the code cannot be read, the backup code is typed instead.
+
+Figure 4.10 Visitor Details (Tablet View). After a valid scan the guard sees the visitor information and the blacklist result, confirms the IC was seen, then checks the visitor in or denies entry.
+
+Figure 4.11 Walk-In Registration (Tablet View). For a visitor who arrives without an appointment. The guard records the details and checks the visitor in at the same time.
+
+Figure 4.12 Visitors On Site (Tablet View). Shows everyone currently inside the school. The guard checks out a visitor when the visit has finished.
+
+Figure 4.13 Emergency List (Tablet View). During a fire drill or an emergency this page is printed so the school knows exactly who is still inside.
+
+Figure 4.14 Admin Dashboard (Laptop View). Shows the daily totals, the graphs of visitor activity, and the most recent visits. The side menu opens every other administrator page.
+
+Figure 4.15 Visit Records (Laptop View). The administrator searches the full visit history by name, status or date. The IC numbers stay masked in the list.
+
+Figure 4.16 Reports (Laptop View). The administrator chooses a date range and other filters, then exports the result to PDF or Excel for the school record.
+
+Figure 4.17 Blacklist (Laptop View). A visitor on this list cannot be approved or checked in. The reason is kept private and only the administrator can see it.
+
+Figure 4.18 Manage Users (Laptop View). The administrator creates and edits the accounts for teachers and security guards, and sets the role of each account.
+
+Figure 4.19 Audit Log (Laptop View). Records every important action in the system, such as approvals, check-ins, blacklist changes and report exports. Entries can never be edited or deleted.
