@@ -103,20 +103,47 @@ export async function StaffShell({
                 }
                 className="flex min-h-11 items-center gap-2 rounded-lg px-3 text-sm font-medium whitespace-nowrap text-[var(--text-body)] hover:bg-[var(--surface-muted)]"
               >
-                <svg
-                  aria-hidden="true"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="1.7"
-                  className="h-5 w-5"
-                >
-                  <path d="M18 8.5a6 6 0 1 0-12 0c0 5-2 6.5-2 6.5h16s-2-1.5-2-6.5Z" />
-                  <path d="M10.5 19a2 2 0 0 0 3 0" />
-                </svg>
+                <span className="relative flex">
+                  <svg
+                    aria-hidden="true"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="1.7"
+                    className="h-5 w-5"
+                  >
+                    <path d="M18 8.5a6 6 0 1 0-12 0c0 5-2 6.5-2 6.5h16s-2-1.5-2-6.5Z" />
+                    <path d="M10.5 19a2 2 0 0 0 3 0" />
+                  </svg>
+                  {/*
+                    The dot sits on the bell itself, not only beside the label,
+                    because the label is hidden on a narrow screen and a count
+                    that only appears next to hidden text is a count nobody
+                    sees. The ring is the header's own background, so the dot
+                    reads as sitting on top of the bell rather than as part of
+                    its outline.
+
+                    Decorative: `aria-hidden`, since the link's `aria-label`
+                    already says how many are unread. A screen reader hearing
+                    "seven unread" does not also need to hear about a dot.
+                  */}
+                  {unread > 0 ? (
+                    <span
+                      aria-hidden="true"
+                      className="absolute -top-0.5 -right-0.5 h-2.5 w-2.5 rounded-full bg-[var(--danger)] ring-2 ring-[var(--surface-card)]"
+                    />
+                  ) : null}
+                </span>
                 <span className="hidden sm:inline">{notificationsLabel}</span>
+                {/*
+                  The count takes the same soft fill the rest of the interface
+                  gives a pill, rather than solid red with white on it: in dark
+                  mode `--danger` is a pale pink, so white sat on it was barely
+                  legible. The dot above is what carries the urgency now, which
+                  leaves this free to simply be readable.
+                */}
                 {unread > 0 ? (
-                  <span className="inline-flex min-w-5 items-center justify-center rounded-full bg-[var(--danger)] px-1.5 text-xs font-semibold text-white tabular-nums">
+                  <span className="inline-flex min-w-5 items-center justify-center rounded-full bg-[var(--danger-soft)] px-1.5 text-xs font-semibold text-[var(--danger-text)] tabular-nums">
                     {unread > 99 ? '99+' : unread}
                   </span>
                 ) : null}
