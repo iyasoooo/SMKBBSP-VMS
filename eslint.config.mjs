@@ -46,7 +46,16 @@ const config = [
   {
     // Operational scripts and seeds legitimately write to stdout, and
     // lib/logger is the one module allowed to reach console directly.
-    files: ['scripts/**/*.ts', 'prisma/seed.ts', 'prisma/seed/**/*.ts', 'lib/logger.ts'],
+    files: [
+      'scripts/**/*.ts',
+      // A script is a script whatever it is written in. The glob was `.ts`
+      // only because every script was, until one needed to run under plain
+      // node without a loader.
+      'scripts/**/*.mjs',
+      'prisma/seed.ts',
+      'prisma/seed/**/*.ts',
+      'lib/logger.ts',
+    ],
     rules: { 'no-console': 'off' },
   },
   {
