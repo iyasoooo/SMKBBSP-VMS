@@ -28,7 +28,7 @@ export default async function WalkInPage() {
       <>
         <PageHeading title={t.walkInHeading} description={t.walkInSubtitle} />
         <Alert tone="warning" title="Registration unavailable">
-          No active host teachers or visit types are configured. Ask an administrator to set them up
+          No active host staff or visit types are configured. Ask an administrator to set them up
           before registering walk-in visitors.
         </Alert>
       </>

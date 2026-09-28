@@ -281,7 +281,7 @@ export default async function VisitorStatusPage({
       */}
       {justSubmitted && isAwaitingDecision ? (
         <Alert tone="success" title="Request submitted">
-          Your request has been sent to your host teacher. This page is your request.
+          Your request has been sent to the staff member you asked for. This page is your request.
         </Alert>
       ) : null}
 

@@ -669,7 +669,7 @@ export async function registerWalkIn(options: {
       : Promise.resolve(null),
   ]);
 
-  if (!teacher) throw new GateError('NOT_FOUND', 'Choose an active host teacher.');
+  if (!teacher) throw new GateError('NOT_FOUND', 'Choose an active host staff member.');
   if (!visitType) throw new GateError('NOT_FOUND', 'Choose an active visit type.');
 
   const identityType = input.identityType as IdentityType;

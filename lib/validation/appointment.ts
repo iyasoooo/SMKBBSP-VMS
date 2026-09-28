@@ -79,7 +79,7 @@ export const appointmentRequestSchema = z
       message: 'Choose the option that best describes you.',
     }),
 
-    teacherId: z.string().trim().min(1, 'Choose the teacher you wish to meet.'),
+    teacherId: z.string().trim().min(1, 'Choose the staff member you wish to meet.'),
     visitTypeId: z.string().trim().min(1, 'Choose the type of visit.'),
     destinationId: z.string().trim().optional(),
 
@@ -260,7 +260,7 @@ export const walkInSchema = z.object({
   identityNumber: z.string().trim().min(1, 'Enter the identification number.').max(30),
   visitorCategory: z.enum(visitorCategoryValues),
 
-  teacherId: z.string().trim().min(1, 'Choose the host teacher.'),
+  teacherId: z.string().trim().min(1, 'Choose the host staff member.'),
   visitTypeId: z.string().trim().min(1, 'Choose the visit type.'),
   destinationId: z.string().trim().optional(),
 

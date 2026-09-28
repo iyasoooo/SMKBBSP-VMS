@@ -40,8 +40,8 @@ export function CancelRequestForm({ token }: { token: string }) {
     <Card className="p-5">
       <h2 className="text-sm font-semibold">Need to cancel?</h2>
       <p className="mt-1 text-sm text-muted">
-        If your plans have changed, please cancel so your host teacher and the guard house are not
-        expecting you.
+        If your plans have changed, please cancel so the staff member you are meeting and the guard
+        house are not expecting you.
       </p>
 
       {state && !state.ok ? (

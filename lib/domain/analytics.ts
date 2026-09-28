@@ -282,7 +282,7 @@ export async function getOperationalAlerts(now: Date = new Date()): Promise<Oper
       id: 'review',
       severity: 'warning',
       title: `${reviewRequired} request${reviewRequired === 1 ? '' : 's'} awaiting review`,
-      detail: 'Held by a blacklist rule and not yet released to the host teacher.',
+      detail: 'Held by a blacklist rule and not yet released to the host staff member.',
       href: '/admin/appointments?status=REVIEW_REQUIRED',
     });
   }

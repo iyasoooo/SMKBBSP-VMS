@@ -88,7 +88,7 @@ export default async function AdminAppointmentDetailPage({
       {underReview ? (
         <div className="mb-5">
           <Alert tone="warning" title="Held for review">
-            A blacklist rule matched this submission, so it was not sent to the host teacher.
+            A blacklist rule matched this submission, so it was not sent to the host staff member.
             Release it only after checking the blacklist entry. The visitor has not been told.
           </Alert>
         </div>
@@ -189,7 +189,7 @@ export default async function AdminAppointmentDetailPage({
             <Card className="p-5">
               <h2 className="text-base font-semibold">Resolve review</h2>
               <p className="mt-1 text-sm text-muted">
-                Releasing sends the request to the host teacher for a normal decision.
+                Releasing sends the request to the host staff member for a normal decision.
               </p>
 
               <div className="mt-4 flex flex-col gap-3">
@@ -217,7 +217,7 @@ export default async function AdminAppointmentDetailPage({
             <Card className="p-5">
               <h2 className="text-base font-semibold">Administrator override</h2>
               <p className="mt-1 mb-4 text-sm text-muted">
-                Approve on the host teacher&apos;s behalf if they are unavailable.
+                Approve on the host staff member&apos;s behalf if they are unavailable.
               </p>
               <ActionForm
                 action={adminApproveAction}
