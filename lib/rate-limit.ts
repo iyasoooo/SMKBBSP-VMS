@@ -22,8 +22,26 @@ export interface RateLimitRule {
 export const RATE_LIMITS = {
   /** Staff login attempts, keyed by IP + submitted email. */
   login: { name: 'login', limit: 8, windowSeconds: 300 },
-  /** Public appointment submissions, keyed by IP. */
-  publicRequest: { name: 'public.request', limit: 5, windowSeconds: 900 },
+  /*
+   * Public appointment submissions, keyed by IP.
+   *
+   * The first setting - five in a quarter of an hour - assumed one household
+   * per address. A school is not that. Parents fill this form on the school's
+   * own wifi at pickup time, and a housing area behind one carrier address is
+   * a single IP as far as this code can tell, so the sixth parent of the
+   * afternoon was being told to come to the guard house instead.
+   *
+   * Fifteen in five minutes is the same protection with the assumption
+   * corrected. A burst of five back to back - a family group, or one person
+   * retrying after a validation error - now passes without touching the limit,
+   * and being blocked costs five minutes rather than fifteen.
+   *
+   * It stays bounded: a hundred and eighty an hour from one address, into a
+   * queue every entry of which a member of staff reads before it becomes a
+   * pass. Flooding that is noticed by a human long before it achieves
+   * anything.
+   */
+  publicRequest: { name: 'public.request', limit: 15, windowSeconds: 300 },
   /** Private status-link reads, keyed by IP. */
   tokenLookup: { name: 'public.token', limit: 60, windowSeconds: 300 },
   /** Guard pass verification, keyed by user. Generous: this is the hot path. */

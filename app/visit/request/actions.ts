@@ -17,6 +17,27 @@ import { MAX_PARTY_SIZE } from '@/lib/constants';
 const log = createLogger('visit-request');
 
 /**
+ * How long to tell a blocked visitor to wait.
+ *
+ * `retryAfterSeconds` has always been calculated, and `peekRateLimit` exists
+ * so a countdown could be shown without costing somebody an attempt. Neither
+ * was ever used here, so the form said "a few minutes" and left the visitor to
+ * guess. Guessing wrong means trying again, being refused again, and deciding
+ * the site is broken - which is how somebody ends up at the guard house over a
+ * five minute wait.
+ *
+ * Rounded up to the whole minute. A visitor is not watching a clock, and a
+ * countdown to the second would be precision this number does not have: the
+ * window ends on a fixed boundary, so the true wait is anything up to what is
+ * quoted, never more.
+ */
+function waitMessage(seconds: number): string {
+  if (seconds <= 60) return 'Please try again in less than a minute';
+  const minutes = Math.ceil(seconds / 60);
+  return `Please try again in about ${minutes} minute${minutes === 1 ? '' : 's'}`;
+}
+
+/**
  * Public appointment submission.
  *
  * On success the visitor is redirected straight to their private page,
@@ -42,7 +63,7 @@ export async function submitAppointmentRequest(
   const rate = await consumeRateLimit(RATE_LIMITS.publicRequest, ip);
   if (!rate.allowed) {
     return fail(
-      `Too many requests have been submitted from this connection. Please try again in a few minutes, or come to the guard house.`,
+      `Too many requests have been submitted from this connection. ${waitMessage(rate.retryAfterSeconds)}, or come to the guard house.`,
       { code: 'RATE_LIMITED' },
     );
   }
