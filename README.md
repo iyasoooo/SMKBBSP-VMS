@@ -399,6 +399,18 @@ The original build-pack specification is preserved alongside the code:
 
 ---
 
+## AI assistance disclosure
+
+This project was developed with the help of an AI coding assistant (Claude, by Anthropic), used through
+Claude Code. The assistant was used to draft and refactor code, write tests and help with
+documentation. The project's requirements, scope decisions, review and acceptance of the output, and
+testing in a real browser were done by the author, who is responsible for the final submission.
+
+`CLAUDE.md` and `docs/llms.txt` are the instruction files given to the assistant. Commits made with
+its help carry a `Co-Authored-By` trailer.
+
+---
+
 ## Academic note
 
 The report chapters must match what is implemented here. Do not claim MyDigitalID verification,
